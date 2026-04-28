@@ -1,16 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
 
-const _sb = createClient(
-  "https://mlxaljozizaarvdcssew.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1seGFsam96aXphYXJ2ZGNzc2V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNTc0MjQsImV4cCI6MjA5MjYzMzQyNH0.P1neFr85TyCtuJOmc83bG_bApWnuE2oyNKtnNT_OZ2A"
-);
-
-//  Constants 
+// ── Constants ──────────────────────────────────────────────────────────────────
 const CROPS_LIST = ["Cotton", "Corn", "Sorghum"];
 const WIND_DIRS  = ["N","NE","E","SE","S","SW","W","NW"];
 
-//  Responsive helpers 
+// ── Responsive helpers ────────────────────────────────────────────────────────
 function useIsMobile(bp = 640) {
   const [mobile, setMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < bp : false);
   useEffect(() => {
@@ -64,7 +58,7 @@ const DEFAULT_EQUIPMENT = [
 const DEFAULT_LICENSED = [];   // { id, name, license }
 const DEFAULT_NONLICENSED = []; // { id, name }
 
-//  Helpers 
+// ── Helpers ────────────────────────────────────────────────────────────────────
 const OZ_PER_GAL = 128;
 
 function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
@@ -73,7 +67,7 @@ function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
   const ta  = parseFloat(totalAcres)  || 0;
   const rpa = parseFloat(ratePerAcre) || 0;
   const acreLoads      = ts > 0 && gpa > 0 ? ts / gpa : 0;
-  // Use Math.round when ta/acreLoads is within 0.002 of a whole number  avoids
+  // Use Math.round when ta/acreLoads is within 0.002 of a whole number — avoids
   // floating-point errors when gal/acre was back-calculated from a whole-load target
   const rawLoadCount   = acreLoads > 0 ? ta / acreLoads : 0;
   const fullLoads      = ta > 0 && acreLoads > 0
@@ -82,14 +76,14 @@ function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
         : Math.floor(rawLoadCount))
     : 0;
   const partialAcresRaw = acreLoads > 0 ? ta - fullLoads * acreLoads : 0;
-  // Snap to zero if within 0.1 acres  floating-point artifact from back-calculated gal/acre
+  // Snap to zero if within 0.1 acres — floating-point artifact from back-calculated gal/acre
   const partialAcres   = Math.abs(partialAcresRaw) < 0.1 ? 0 : partialAcresRaw;
   const totalPerTankRaw   = rpa * acreLoads;
   const partialPerTankRaw = rpa * partialAcres;
   return {
-    acreLoads:          acreLoads    ? acreLoads.toFixed(2)    : "",
-    fullLoads:          fullLoads    || "",
-    totalPerTank:       totalPerTankRaw ? totalPerTankRaw.toFixed(2) : "",
+    acreLoads:          acreLoads    ? acreLoads.toFixed(2)    : "—",
+    fullLoads:          fullLoads    || "—",
+    totalPerTank:       totalPerTankRaw ? totalPerTankRaw.toFixed(2) : "—",
     acreLoadsRaw:       acreLoads,
     totalPerTankRaw,
     partialAcres:       partialAcres,
@@ -106,28 +100,17 @@ function fmtOzAsTankMeasure(totalOz) {
   return `${gals} gal`;
 }
 
-// Unified formatter: handles oz ( gal+oz) and other units
-function fmtDryOz(totalOz) {
-  if (!totalOz || isNaN(totalOz) || totalOz <= 0) return null;
-  const oz = Math.round(totalOz * 10) / 10;
-  if (oz < 16) return oz + " oz";
-  const lbs = Math.floor(oz / 16);
-  const remOz = Math.round((oz % 16) * 10) / 10;
-  return remOz > 0 ? (lbs + " lb " + remOz + " oz") : (lbs + " lb");
-}
-function fmtTankAmount(rawValue, unit, dryLiquid) {
+// Unified formatter: handles oz (→ gal+oz) and other units
+function fmtTankAmount(rawValue, unit) {
   const v = parseFloat(rawValue) || 0;
-  if (!v) return "-";
+  if (!v) return "—";
   const u = (unit||"oz").toLowerCase();
-  if (u === "oz") return (dryLiquid === "dry" ? fmtDryOz(v) : fmtOzAsTankMeasure(v)) || "-";
-  if (u === "gal") return (v % 1 === 0 ? v : v.toFixed(2)) + " gal";
-  if (u === "lb" || u === "lbs") {
-    const lbs = Math.floor(v); const remOz = Math.round((v-lbs)*16*10)/10;
-    return remOz > 0 ? (lbs + " lb " + remOz + " oz") : (lbs + " lb");
-  }
-  if (u === "pt")  return Math.round(v*10)/10 + " pt";
-  if (u === "qt")  return Math.round(v*10)/10 + " qt";
-  return Math.round(v*10)/10 + " " + unit;
+  if (u === "oz") return fmtOzAsTankMeasure(v) || "—";
+  if (u === "gal") return `${v % 1 === 0 ? v : v.toFixed(2)} gal`;
+  if (u === "lb" || u === "lbs") return `${Math.round(v * 10)/10} lb`;
+  if (u === "pt")  return `${Math.round(v * 10)/10} pt`;
+  if (u === "qt")  return `${Math.round(v * 10)/10} qt`;
+  return `${Math.round(v * 10)/10} ${unit}`;
 }
 
 // Back-calc rate/acre from gallons per tank
@@ -149,7 +132,7 @@ function addMinutes(timeStr, minutes) {
 }
 
 function fmtTime(t) {
-  if (!t) return "";
+  if (!t) return "—";
   const [h, m] = t.split(":").map(Number);
   const ampm = h >= 12 ? "PM" : "AM";
   const h12  = h % 12 || 12;
@@ -171,7 +154,7 @@ function buildFieldSchedule(fields, globalStart) {
 function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   const { acreLoads, fullLoads, acreLoadsRaw, partialAcres } = calcTotals({ ...form, totalAcres });
   const hasPartial      = parseFloat(partialAcres) > 0.01;
-  // Less acres than one full tank  only show the "this load" amount, no full-tank recipe
+  // Less acres than one full tank — only show the "this load" amount, no full-tank recipe
   const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
 
   // Build resolved chem data once
@@ -184,12 +167,12 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
     }
     const calc    = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
-    const fullFmt = fmtTankAmount(calc.totalPerTankRaw, chem.unit, chem.dryLiquid);
-    const partFmt = fmtTankAmount(calc.partialPerTankRaw, chem.unit, chem.dryLiquid);
+    const fullFmt = fmtTankAmount(calc.totalPerTankRaw, chem.unit);
+    const partFmt = fmtTankAmount(calc.partialPerTankRaw, chem.unit);
     return { chem, effRate, fullFmt, partFmt, calc };
   }).filter(Boolean);
 
-  // Field list rows  no times
+  // Field list rows — no times
   const fieldRows = (form.selectedFields || []).map((f, i) => `
     <tr>
       <td>${i+1}. ${f.name}</td>
@@ -201,7 +184,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     ? (parseFloat(totalAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2)
     : null;
 
-  // Chem rows for when total acres < one full tank  use partial calc (= total acres  rate)
+  // Chem rows for when total acres < one full tank — use partial calc (= total acres × rate)
   // Sort chems in WALES order for mixing sequence
   const walesOrder2 = ["A","L","E","S","WDG","WP","D"];
   const circleColors2 = { A:"#4a7a20",L:"#2a5c0f",E:"#6a3a00",S:"#1a4a6a",WDG:"#5a3a7a",WP:"#7a3a00",D:"#4a4a00" };
@@ -217,7 +200,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">REI</th>
   </tr>`;
   const fillRow2 = (target) => `<tr style="background:#e6f5d0">
-    <td style="text-align:center;padding:7px 4px"><div style="background:#2a5c0f;color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;"></div></td>
+    <td style="text-align:center;padding:7px 4px"><div style="background:#2a5c0f;color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">✓</div></td>
     <td colspan="4" style="padding:7px 10px;font-size:13px;font-weight:900;color:#2a5c0f">
       Fill to ${target} gal
       <div style="font-size:10px;color:#4a8a5a;font-weight:400;margin-top:1px">Llenar a ${target} galones</div>
@@ -228,8 +211,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     const water = `<tr style="background:#eef6ff">
       <td style="text-align:center;padding:7px 4px"><div style="background:#1a3a6a;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">1</div></td>
       <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:12px;color:#1a3a6a">
-        Fill tank  full  begin agitation
-        <div style="font-size:10px;color:#6a9aaa;font-weight:400;margin-top:1px">Llenar tanque a la mitad  iniciar agitacin</div>
+        Fill tank ½ full — begin agitation
+        <div style="font-size:10px;color:#6a9aaa;font-weight:400;margin-top:1px">Llenar tanque a la mitad — iniciar agitación</div>
       </td>
     </tr>`;
     return water + sorted.map(({ chem, effRate, ...rest }, i) => {
@@ -245,18 +228,18 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   };
 
   const thisLoadChemRows = buildRows(resolvedChems, ({partFmt,fullFmt}) => `<span style="color:#c05000">${partFmt||fullFmt}</span>`)
-    + fillRow2(thisLoadTankGal||"");
+    + fillRow2(thisLoadTankGal||"—");
   const fullChemRows     = buildRows(resolvedChems, ({fullFmt}) => `<span style="color:#2a5c0f">${fullFmt}</span>`)
-    + fillRow2(form.tankSize||"");
+    + fillRow2(form.tankSize||"—");
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
   const partialChemBody = hasPartial
-    ? buildRows(resolvedChems, ({partFmt}) => `<span style="color:#c05000">${partFmt||""}</span>`) + fillRow2(partialTankGal)
+    ? buildRows(resolvedChems, ({partFmt}) => `<span style="color:#c05000">${partFmt||"—"}</span>`) + fillRow2(partialTankGal)
     : "";
   const partialCard = hasPartial ? `
   <div class="partial-card">
     <div class="partial-card-hdr">
-       PARTIAL LOAD / CARGA PARCIAL &mdash; ${parseFloat(partialAcres).toFixed(1)} acres &mdash; Fill to ${partialTankGal} gal / Llenar a ${partialTankGal} galones
+      ⚠ PARTIAL LOAD / CARGA PARCIAL &mdash; ${parseFloat(partialAcres).toFixed(1)} acres &mdash; Fill to ${partialTankGal} gal / Llenar a ${partialTankGal} galones
     </div>
     <table><thead>${colHdr(true)}</thead><tbody>${partialChemBody}</tbody></table>
   </div>` : "";
@@ -266,7 +249,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   <div class="tank-grid" style="grid-template-columns:repeat(3,1fr)">
     <div class="tank-item">
       <label>Gal / Acre</label>
-      <div class="bigval">${form.galPerAcre||""}</div>
+      <div class="bigval">${form.galPerAcre||"—"}</div>
       <div class="sub">gal per acre</div>
     </div>
     <div class="tank-item">
@@ -283,11 +266,11 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   <div class="tank-grid">
     <div class="tank-item">
       <label>Tank Size</label>
-      <div class="bigval">${form.tankSize||""}<span style="font-size:12px;font-weight:400"> gal</span></div>
+      <div class="bigval">${form.tankSize||"—"}<span style="font-size:12px;font-weight:400"> gal</span></div>
     </div>
     <div class="tank-item">
       <label>Gal / Acre</label>
-      <div class="bigval">${form.galPerAcre||""}</div>
+      <div class="bigval">${form.galPerAcre||"—"}</div>
       <div class="sub">gal per acre</div>
     </div>
     <div class="tank-item">
@@ -318,14 +301,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     .filter(s => usedTypes.includes(s.key))
     .map((s, i) => {
       const chems = resolvedChems.filter(r => r.chem.formType === s.key);
-      const names = chems.map(r => `${r.chem.name}  ${fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit)}`).join("<br/>");
+      const names = chems.map(r => `${r.chem.name} — ${fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit)}`).join("<br/>");
       return `<tr>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #dde;vertical-align:middle;"><div style="background:${s.color};color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
         <td style="padding:7px 8px;border-bottom:1px solid #dde;font-size:12px;font-weight:700;" colspan="2">${names}</td>
       </tr>`;
     }).join("");
   const walesSectionHtml = usedTypes.length ? `
-  <h3 style="background:#1a3a6a;margin-top:14px">WALES MIXING ORDER  FOLLOW THIS SEQUENCE</h3>
+  <h3 style="background:#1a3a6a;margin-top:14px">WALES MIXING ORDER — FOLLOW THIS SEQUENCE</h3>
   <table style="width:100%;border-collapse:collapse;border:1.5px solid #b0c8e8;border-top:none;font-size:11px;">
     <thead><tr style="background:#e8f0ff;">
       <th style="width:44px;padding:5px 8px;font-size:9px;font-weight:900;color:#1a3a6a;text-transform:uppercase;text-align:center;">Step</th>
@@ -334,12 +317,12 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     <tbody>
       <tr style="background:#f0f8ff;">
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #dde;vertical-align:middle;"><div style="background:#1a3a6a;color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">1</div></td>
-        <td style="padding:7px 8px;border-bottom:1px solid #dde;vertical-align:middle;"><div style="font-size:10px;font-weight:900;color:#1a3a6a;text-transform:uppercase;letter-spacing:.05em;">WATER  Start Here</div><div style="font-size:9px;color:#888;margin-top:1px;">Fill tank  full &mdash; begin agitation</td>
+        <td style="padding:7px 8px;border-bottom:1px solid #dde;vertical-align:middle;"><div style="font-size:10px;font-weight:900;color:#1a3a6a;text-transform:uppercase;letter-spacing:.05em;">WATER — Start Here</div><div style="font-size:9px;color:#888;margin-top:1px;">Fill tank ½ full &mdash; begin agitation</td>
       </tr>
       ${walesRows}
       <tr style="background:#e6f5d0;">
-        <td style="padding:7px 8px;text-align:center;vertical-align:middle;"><div style="background:#2a5c0f;color:#fff;font-size:14px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;"></div></td>
-        <td style="padding:7px 8px;vertical-align:middle;"><div style="font-size:10px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.05em;">Fill to ${lessThanOneTank ? thisLoadTankGal : (form.tankSize||"")} gal</td>
+        <td style="padding:7px 8px;text-align:center;vertical-align:middle;"><div style="background:#2a5c0f;color:#fff;font-size:14px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">✓</div></td>
+        <td style="padding:7px 8px;vertical-align:middle;"><div style="font-size:10px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.05em;">Fill to ${lessThanOneTank ? thisLoadTankGal : (form.tankSize||"—")} gal</td>
       </tr>
     </tbody>
   </table>` : "";
@@ -348,7 +331,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   const chemSectionHtml = lessThanOneTank ? `
   <h3>Chemical Mix &mdash; This Load / Esta Carga (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
   <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>` : `
-  <h3>Chemical Mix / Orden de Mezcla &mdash; Full Tank (${form.tankSize||""} gal)</h3>
+  <h3>Chemical Mix / Orden de Mezcla &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
   <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
   ${partialCard}`;
 
@@ -356,7 +339,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 <html>
 <head>
 <meta charset="UTF-8"/>
-<title>Anaqua Farms  Application Ticket</title>
+<title>Anaqua Farms – Application Ticket</title>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:Arial,sans-serif; font-size:9.5px; color:#111; background:#fff; }
@@ -476,7 +459,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   </div>
 
   ${form.primeBoom ? `<div style="background:#fff8e0;border:1.5px solid #e0a020;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:10px;">
-    <strong style="color:#7a5000"> PRIME BOOM  Cebar antes de empezar:</strong> Fill boom with 20 gal of spray mix before entering the field. First tank will cover approximately ${form.galPerAcre ? Math.max(0,((parseFloat(form.tankSize)||0)-20)/(parseFloat(form.galPerAcre)||1)).toFixed(1) : ""} acres.
+    <strong style="color:#7a5000">⚠ PRIME BOOM — Cebar antes de empezar:</strong> Fill boom with 20 gal of spray mix before entering the field. First tank will cover approximately ${form.galPerAcre ? Math.max(0,((parseFloat(form.tankSize)||0)-20)/(parseFloat(form.galPerAcre)||1)).toFixed(1) : "—"} acres.
   </div>` : ""}
 
   <h3>Field List &mdash; ${totalAcres.toFixed(2)} Total Acres</h3>
@@ -487,14 +470,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   <h3>Tank Setup</h3>
   ${tankSetupHtml}
-  <div style="font-size:10px;color:#555;margin-bottom:4px;margin-top:4px">Pressure: <strong>${form.pressure||""} PSI</strong></div>
+  <div style="font-size:10px;color:#555;margin-bottom:4px;margin-top:4px">Pressure: <strong>${form.pressure||"—"} PSI</strong></div>
 
   ${chemSectionHtml}
 
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
 
   ${form.flushCleanout ? `<div style="background:#e8f4ff;border:2px solid #1a6a8a;border-radius:6px;padding:8px 12px;margin-top:10px;font-size:10px;">
-    <strong style="color:#0e3a5c"> FLUSH  Enjuague requerido:</strong> When application is complete, flush the system with onboard rinse water before leaving the field.
+    <strong style="color:#0e3a5c">🚿 FLUSH — Enjuague requerido:</strong> When application is complete, flush the system with onboard rinse water before leaving the field.
   </div>` : ""}
 
   <div class="footer">
@@ -536,7 +519,7 @@ function downloadCSV(tickets) {
         `"${c.name||""}"`, c.epa||"", c.rei||"",
         c.ratePerAcre||"", c.unit||"",
         `"${c.totalPerTankFmt || c.totalPerTank || ""}"`,
-        `"${c.partialPerTankFmt || ""}"`,
+        `"${c.partialPerTankFmt || "—"}"`,
         `"${t.notes||""}"`
       ].join(","))
     );
@@ -555,7 +538,7 @@ function downloadTDAReport(tickets) {
   if (!tickets.length) return;
   const rows = tickets.flatMap(t => {
     const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart);
-    const chems    = t.chemicals.length ? t.chemicals : [{ name:"", epa:"", rei:"", ratePerAcre:"", unit:"", totalPerTank:"" }];
+    const chems    = t.chemicals.length ? t.chemicals : [{ name:"—", epa:"—", rei:"—", ratePerAcre:"—", unit:"—", totalPerTank:"—" }];
     return schedule.flatMap(fs =>
       chems.map(c => `
       <tr>
@@ -564,17 +547,18 @@ function downloadTDAReport(tickets) {
         <td><strong>${fs.name}</strong><br/><span class="sub">${fs.acres} ac</span></td>
         <td>${fs.acres} ac</td>
         <td>${t.crop}</td>
-        <td>${t.targetPest||""}</td>
-        <td>${c.name||""}</td>
-        <td>${c.epa||""}</td>
-        <td>${c.ratePerAcre||""} ${c.unit||""}/ac</td>
-        <td>${c.rei||""}</td>
-        <td class="nowrap">${t.windSpeed||""} mph ${t.windDir||""}</td>
-        <td>${t.airTemp||""}F</td>
-        <td>${t.equipmentType||""}</td>
-        <td>${t.licensedApplicant||""}<br/><span class="sub">${t.licensedApplicantLicense||""}</span></td>
-        <td>${t.nonLicensedApplicant||""}</td>
-        <td>${t.notes||""}</td>
+        <td>${t.targetPest||"—"}</td>
+        <td>${c.name||"—"}</td>
+        <td>${c.epa||"—"}</td>
+        <td>${c.ratePerAcre||"—"} ${c.unit||""}/ac</td>
+        <td><strong>${c.totalPerTankFmt || c.totalPerTank || "—"}</strong></td>
+        <td style="color:#c05000">${c.partialPerTankFmt || "—"}</td>
+        <td class="nowrap">${t.windSpeed||"—"} mph ${t.windDir||""}</td>
+        <td>${t.airTemp||"—"}°F</td>
+        <td>${t.equipmentType||"—"}</td>
+        <td>${t.licensedApplicant||"—"}<br/><span class="sub">${t.licensedApplicantLicense||""}</span></td>
+        <td>${t.nonLicensedApplicant||"—"}</td>
+        <td>${t.notes||"—"}</td>
       </tr>`)
     );
   }).join("");
@@ -583,7 +567,7 @@ function downloadTDAReport(tickets) {
 <html>
 <head>
 <meta charset="UTF-8"/>
-<title>Anaqua Farms  TDA Pesticide Application Records</title>
+<title>Anaqua Farms – TDA Pesticide Application Records</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; }
@@ -610,15 +594,15 @@ function downloadTDAReport(tickets) {
   <div class="header">
     <div>
       <div class="farm-name">ANAQUA FARMS</div>
-      <div class="farm-sub">(956) 465-6430  (956) 535-0482</div>
+      <div class="farm-sub">(956) 465-6430 · (956) 535-0482</div>
     </div>
     <div>
       <div class="report-title">TDA Pesticide Application Records</div>
-      <div class="report-meta">Generated: ${new Date().toLocaleDateString()}  ${tickets.length} application(s)</div>
+      <div class="report-meta">Generated: ${new Date().toLocaleDateString()} · ${tickets.length} application(s)</div>
     </div>
   </div>
   <div class="tda-note">
-     Texas Department of Agriculture (TDA) Recordkeeping Report  Chapter 76, Texas Agriculture Code.
+    ⚠ Texas Department of Agriculture (TDA) Recordkeeping Report — Chapter 76, Texas Agriculture Code.
     Records must be retained for <strong>2 years</strong> from date of application.
   </div>
   <table>
@@ -633,7 +617,8 @@ function downloadTDAReport(tickets) {
         <th>Product Name</th>
         <th>EPA Reg #</th>
         <th>Rate/Acre</th>
-        <th>REI</th>
+        <th>Full Tank</th>
+        <th>Partial Load</th>
         <th>Wind</th>
         <th>Air Temp</th>
         <th>Equipment</th>
@@ -645,7 +630,7 @@ function downloadTDAReport(tickets) {
     <tbody>${rows}</tbody>
   </table>
   <div class="footer">
-    <span>Anaqua Farms  TDA Pesticide Application Records</span>
+    <span>Anaqua Farms · TDA Pesticide Application Records</span>
     <span>Printed: ${new Date().toLocaleString()}</span>
   </div>
 </div>
@@ -661,7 +646,7 @@ function downloadTDAReport(tickets) {
   URL.revokeObjectURL(url);
 }
 
-//  Styles 
+// ── Styles ─────────────────────────────────────────────────────────────────────
 const inp = {
   border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 10px",
   fontSize:16, fontFamily:"inherit", background:"#f9fdf5", outline:"none", width:"100%",
@@ -674,16 +659,8 @@ const labelStyle  = { fontSize:14, fontWeight:700, color:"#3a6b1a", display:"blo
 const card = { border:"1.5px solid #c8dbb0", borderRadius:8, padding:"14px 16px", background:"#f4fbee", marginBottom:16 };
 const sectionTitle = { fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10, borderBottom:"2px solid #c8dbb0", paddingBottom:4 };
 
-//  Sub-components 
-function FieldTag({ field, onRemove, onAcresChange, editingId, setEditingId, editVal, setEditVal }) {
-  const isEditing = editingId === field.id;
-  const originalAcres = field._origAcres || field.acres;
-  const modified = parseFloat(field.acres) !== parseFloat(originalAcres);
-  const commit = () => {
-    const parsed = parseFloat(editVal);
-    if (!isNaN(parsed) && parsed > 0) onAcresChange(parsed);
-    setEditingId(null); setEditVal("");
-  };
+// ── Sub-components ─────────────────────────────────────────────────────────────
+function FieldTag({ field, onRemove }) {
   return (
     <span style={{
       display:"inline-flex", alignItems:"center", gap:4,
@@ -691,29 +668,11 @@ function FieldTag({ field, onRemove, onAcresChange, editingId, setEditingId, edi
       padding:"3px 9px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
     }}>
       <span>{field.name}</span>
-      {isEditing ? (
-        <input value={editVal} onChange={e => setEditVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setEditingId(null); setEditVal(""); } }}
-          autoFocus
-          style={{ width:52, fontSize:12, fontWeight:700, color:"#1a4a08",
-            border:"1.5px solid #2a5c0f", borderRadius:4, padding:"1px 4px",
-            background:"#fff", outline:"none", textAlign:"center" }}
-          type="number" min="0.1" step="0.1"
-        />
-      ) : (
-        <span onClick={() => { setEditingId(field.id); setEditVal(String(field.acres)); }}
-          title={modified ? ("Original: " + originalAcres + " ac") : "Tap to edit acres"}
-          style={{ opacity: modified ? 1 : 0.7, fontSize:11,
-            color: modified ? "#c07000" : "#2a5c0f",
-            cursor:"pointer", textDecoration:"underline dotted" }}>
-          ({field.acres} ac{modified ? " *" : ""})
-        </span>
-      )}
+      <span style={{ opacity:0.65, fontSize:11 }}>({field.acres} ac)</span>
       <button onClick={onRemove} style={{
         background:"none", border:"none", cursor:"pointer",
         color:"#2a5c0f", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:2
-      }}>x</button>
+      }}>×</button>
     </span>
   );
 }
@@ -730,7 +689,7 @@ function ChemTag({ chem, onRemove }) {
       <button onClick={onRemove} style={{
         background:"none", border:"none", cursor:"pointer",
         color:"#0e3a6a", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:2
-      }}></button>
+      }}>×</button>
     </span>
   );
 }
@@ -741,7 +700,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
-  // Effective rate/acre  either entered directly or back-calculated from gal/tank
+  // Effective rate/acre — either entered directly or back-calculated from gal/tank
   let effectiveRate = chem.ratePerAcre;
   if (inputMode === "galtank" && chem.galPerTank) {
     effectiveRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw);
@@ -753,8 +712,8 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const partialAc   = calc.partialAcres;
 
   // Display: full tank and partial tank
-  const tankDisplay    = fmtTankAmount(tankRaw, baseUnit, selected?.dryLiquid);
-  const partialDisplay = partialAc > 0.01 ? fmtTankAmount(partialRaw, baseUnit, selected?.dryLiquid) : null;
+  const tankDisplay    = fmtTankAmount(tankRaw,    baseUnit);
+  const partialDisplay = partialAc > 0.01 ? fmtTankAmount(partialRaw, baseUnit) : null;
   const ozSubline      = baseUnit.toLowerCase() === "oz" && tankRaw > 0
     ? `${Math.round(tankRaw)} oz` : null;
 
@@ -763,7 +722,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
       {/* Chemical select */}
       <td style={td}>
         <select value={chem.chemId || ""} onChange={e => onChange("chemId", parseInt(e.target.value))} style={sel}>
-          <option value=""> select </option>
+          <option value="">— select —</option>
           {chemicals.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </td>
@@ -806,13 +765,13 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
         )}
       </td>
 
-      {/* Total per tank  full + partial */}
+      {/* Total per tank — full + partial */}
       {(() => {
         const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
         return (
           <td style={{ ...td, minWidth:130 }} colSpan={2}>
             {lessThanOneTank ? (
-              // Total acres < one full tank  show only the partial (actual) amount
+              // Total acres < one full tank — show only the partial (actual) amount
               <div>
                 <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>This Load ({parseFloat(totalAcres).toFixed(1)} ac)</div>
                 <div style={{ fontWeight:700, color:"#e07020", fontSize:14, lineHeight:1.2 }}>{partialDisplay || tankDisplay}</div>
@@ -836,31 +795,30 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
         );
       })()}
 
-      <td style={td}><span style={{fontSize:12, color:"#555"}}>{selected?.rei || ""}</span></td>
-      <td style={td}><span style={{fontSize:12, color:"#555"}}>{selected?.epa || ""}</span></td>
+      <td style={td}><span style={{fontSize:12, color:"#555"}}>{selected?.rei || "—"}</span></td>
+      <td style={td}><span style={{fontSize:12, color:"#555"}}>{selected?.epa || "—"}</span></td>
       <td style={td}>
-        <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:18 }}></button>
+        <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:18 }}>×</button>
       </td>
     </tr>
   );
 }
 
-//  Main App 
+// ── Main App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const isMobile        = useIsMobile();
-  const [fieldLibrary,  setFieldLibrary]  = useState([]);
-  const [chemicals,     setChemicals]     = useState([]);
-  const [equipment,     setEquipment]     = useState([]);
-  const [licensed,      setLicensed]      = useState([]);
-  const [nonLicensed,   setNonLicensed]   = useState([]);
+  const [fieldLibrary,  setFieldLibrary]  = useState(DEFAULT_FIELDS);
+  const [chemicals,     setChemicals]     = useState(DEFAULT_CHEMICALS);
+  const [equipment,     setEquipment]     = useState(DEFAULT_EQUIPMENT);
+  const [licensed,      setLicensed]      = useState(DEFAULT_LICENSED);
+  const [nonLicensed,   setNonLicensed]   = useState(DEFAULT_NONLICENSED);
   const [tickets,       setTickets]       = useState([]);
   const [view,          setView]          = useState("form");
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
   const [tdaFrom,       setTdaFrom]       = useState("");
   const [tdaTo,         setTdaTo]         = useState("");
-  const [dbLoading,     setDbLoading]     = useState(true);
 
-  //  Form state
+  // ── Form state
   const blank = () => ({
     date: new Date().toISOString().slice(0,10),
     timeStart: (() => {
@@ -893,60 +851,12 @@ export default function App() {
   const [chemSearch,  setChemSearch]  = useState({});   // keyed by chemRow.id
   const [showChemDrop,setShowChemDrop]= useState({});   // keyed by chemRow.id
   const [manualTank,  setManualTank]  = useState(false);
-  const [fieldEditId,  setFieldEditId]  = useState(null);
-  const [fieldEditVal, setFieldEditVal] = useState("");
   const [manualGpa,      setManualGpa]      = useState(false);
   const [acresOverride,  setAcresOverride]  = useState("");   // empty = use auto-sum
   const [showAcresInput, setShowAcresInput] = useState(false);
   const [wxLoading,   setWxLoading]   = useState(false);
   const [wxError,     setWxError]     = useState("");
   const [editingId,   setEditingId]   = useState(null);
-
-  useEffect(() => {
-    async function loadAll() {
-      setDbLoading(true);
-      const [f, c, e, la, nla, t] = await Promise.all([
-        _sb.from("fields").select("*").order("name"),
-        _sb.from("chemicals").select("*").order("name"),
-        _sb.from("equipment").select("*").order("name"),
-        _sb.from("licensed_applicators").select("*").order("name"),
-        _sb.from("non_licensed_applicators").select("*").order("name"),
-        _sb.from("tickets").select("*").order("created_at", { ascending: false }),
-      ]);
-      setFieldLibrary(f.data?.length ? f.data : DEFAULT_FIELDS);
-      setChemicals(c.data?.length ? c.data : DEFAULT_CHEMICALS);
-      setEquipment(e.data?.length ? e.data : DEFAULT_EQUIPMENT);
-      setLicensed(la.data || []);
-      setNonLicensed(nla.data || []);
-      setTickets((t.data || []).map(tk => ({
-        ...tk,
-        ticketNumber:             tk.ticket_number   || tk.ticketNumber,
-        selectedFields:           tk.selected_fields || tk.selectedFields || [],
-        chemRows:                 tk.chem_rows       || tk.chemRows       || [],
-        fieldSchedule:            tk.field_schedule  || tk.fieldSchedule  || [],
-        chemicals:                tk.chemicals       || [],
-        timeStart:                tk.time_start      || tk.timeStart      || "",
-        timeEnd:                  tk.time_end        || tk.timeEnd        || "",
-        galPerAcre:               tk.gal_per_acre    || tk.galPerAcre     || "",
-        tankSize:                 tk.tank_size       || tk.tankSize       || "",
-        windSpeed:                tk.wind_speed      || tk.windSpeed      || "",
-        windDir:                  tk.wind_dir        || tk.windDir        || "",
-        airTemp:                  tk.air_temp        || tk.airTemp        || "",
-        primeBoom:                tk.prime_boom      ?? tk.primeBoom      ?? false,
-        flushCleanout:            tk.flush_cleanout  ?? tk.flushCleanout  ?? false,
-        equipmentType:            tk.equipment_type  || tk.equipmentType  || "",
-        licensedApplicant:        tk.licensed_applicant         || tk.licensedApplicant        || "",
-        licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense || "",
-        nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant     || "",
-        totalAcres:               tk.total_acres     || tk.totalAcres     || "0",
-        fullLoads:                tk.full_loads      || tk.fullLoads      || "—",
-        partialAcres:             tk.partial_acres   || tk.partialAcres   || null,
-        acreLoads:                tk.acre_loads      || tk.acreLoads      || "—",
-      })));
-      setDbLoading(false);
-    }
-    loadAll();
-  }, []);
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
@@ -960,10 +870,7 @@ export default function App() {
     set("selectedFields", [...form.selectedFields, field]);
     setFieldSearch(""); setShowDrop(false);
   };
-  const removeField      = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
-  const updateFieldAcres = (id, acres) => set("selectedFields", form.selectedFields.map(f =>
-    f.id === id ? { ...f, acres, _origAcres: f._origAcres || f.acres } : f
-  ));
+  const removeField = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
 
   const addChemRow    = (chemId)   => setForm(f => ({ ...f, chemRows: [...f.chemRows, { id: Date.now(), chemId: chemId||'', ratePerAcre:"", inputMode:"rate", galPerTank:"" }] }));
   const removeChemRow = (id)       => setForm(f => ({ ...f, chemRows: f.chemRows.filter(r => r.id !== id) }));
@@ -977,25 +884,28 @@ export default function App() {
     return dirs[Math.round(deg / 45) % 8];
   };
 
-  // 78569 = Mission/McAllen TX area  geocoded coords
-  const WX_LAT = 26.2159;
-  const WX_LON = -98.3253;
+  // Rio Grande City / Zapata TX area coords
+  const WX_LAT = 26.3795;
+  const WX_LON = -98.8200;
 
   const fetchWeather = async () => {
     setWxLoading(true);
     setWxError("");
     try {
-      // wttr.in: public weather service, no API key, CORS-friendly
-      const res  = await fetch("https://wttr.in/78569?format=j1&_=" + Date.now(), { headers: { "Accept": "application/json" }, cache: "no-store" });
+      // Open-Meteo: free, no API key, CORS-open
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${WX_LAT}&longitude=${WX_LON}` +
+        `&current=temperature_2m,wind_speed_10m,wind_direction_10m` +
+        `&wind_speed_unit=mph&temperature_unit=fahrenheit&timezone=America%2FChicago&forecast_days=1`;
+      const res  = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const cur  = data.current_condition[0];
-      // windspeedMiles, winddirDegree, temp_F
-      set("windSpeed", cur.windspeedMiles);
-      set("windDir",   degreesToDir(parseInt(cur.winddirDegree)));
-      set("airTemp",   cur.temp_F);
+      const cur  = data.current;
+      set("windSpeed", Math.round(cur.wind_speed_10m));
+      set("windDir",   degreesToDir(Math.round(cur.wind_direction_10m)));
+      set("airTemp",   Math.round(cur.temperature_2m));
       setWxError("");
     } catch (err) {
-      setWxError("Weather unavailable in preview. Works in the downloaded HTML file.");
+      setWxError("Weather fetch failed — check connection and try again.");
     } finally {
       setWxLoading(false);
     }
@@ -1048,37 +958,6 @@ export default function App() {
       ? t.map(x => x.id === editingId ? finalTicket : x)
       : [finalTicket, ...t]
     );
-    _sb.from("tickets").upsert({
-      id:                         finalTicket.id,
-      ticket_number:              finalTicket.ticketNumber,
-      date:                       finalTicket.date,
-      time_start:                 finalTicket.timeStart,
-      time_end:                   finalTicket.timeEnd,
-      crop:                       finalTicket.crop,
-      target_pest:                finalTicket.targetPest,
-      wind_speed:                 finalTicket.windSpeed,
-      wind_dir:                   finalTicket.windDir,
-      air_temp:                   finalTicket.airTemp,
-      tank_size:                  finalTicket.tankSize,
-      pressure:                   finalTicket.pressure,
-      gal_per_acre:               finalTicket.galPerAcre,
-      prime_boom:                 finalTicket.primeBoom,
-      flush_cleanout:             finalTicket.flushCleanout,
-      equipment_type:             finalTicket.equipmentType,
-      licensed_applicant:         finalTicket.licensedApplicant,
-      licensed_applicant_license: finalTicket.licensedApplicantLicense,
-      non_licensed_applicant:     finalTicket.nonLicensedApplicant,
-      notes:                      finalTicket.notes,
-      total_acres:                String(finalTicket.totalAcres),
-      full_loads:                 String(finalTicket.fullLoads),
-      partial_loads:              finalTicket.partialLoads,
-      partial_acres:              finalTicket.partialAcres ? String(finalTicket.partialAcres) : null,
-      acre_loads:                 String(finalTicket.acreLoads),
-      selected_fields:            finalTicket.selectedFields,
-      chemicals:                  finalTicket.chemicals,
-      chem_rows:                  finalTicket.chemRows,
-      field_schedule:             finalTicket.fieldSchedule,
-    }).then(({ error }) => { if (error) console.error("Ticket save error:", error.message); });
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -1088,7 +967,7 @@ export default function App() {
     setView("log");
   };
 
-  //  Field Manager
+  // ── Field Manager
   const fieldFileRef = useRef();
   const [fieldUpMsg, setFieldUpMsg] = useState("");
   const [newField,   setNewField]   = useState({ name:"", acres:"", crop:"" });
@@ -1108,8 +987,7 @@ export default function App() {
         imported++;
       });
       setFieldLibrary(fl => [...fl, ...added]);
-      _sb.from("fields").upsert(added).then(({ error }) => { if (error) console.error("Field import:", error.message); });
-      setFieldUpMsg(` Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
+      setFieldUpMsg(`✓ Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setFieldUpMsg(""), 4000);
     };
     reader.readAsText(file);
@@ -1119,14 +997,12 @@ export default function App() {
   const addManualField = () => {
     if (!newField.name || !newField.acres) return alert("Field name and acres are required.");
     const nextId = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) + 1 : 1;
-    const _nf = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" };
-    setFieldLibrary(fl => [...fl, _nf]);
-    _sb.from("fields").upsert(_nf).then(({ error }) => { if (error) console.error("Add field:", error.message); });
+    setFieldLibrary(fl => [...fl, { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" }]);
     setNewField({ name:"", acres:"", crop:"" });
   };
-  const deleteField = (id) => { setFieldLibrary(fl => fl.filter(f => f.id !== id)); _sb.from("fields").delete().eq("id", id).then(({ error }) => { if (error) console.error("Del field:", error.message); }); };
+  const deleteField = (id) => setFieldLibrary(fl => fl.filter(f => f.id !== id));
 
-  //  Chemical Manager
+  // ── Chemical Manager
   const chemFileRef  = useRef();
   const [chemUpMsg,  setChemUpMsg]  = useState("");
   const [newChem,    setNewChem]    = useState({ name:"", epa:"", rei:"", unit:"oz", rateMin:"", rateMax:"" });
@@ -1145,8 +1021,7 @@ export default function App() {
         imported++;
       });
       setChemicals(c => [...c, ...added]);
-      _sb.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, rate_min: a.rateMin, rate_max: a.rateMax }))).then(({ error }) => { if (error) console.error("Chem import:", error.message); });
-      setChemUpMsg(` Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
+      setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
     reader.readAsText(file);
@@ -1155,12 +1030,10 @@ export default function App() {
 
   const addManualChem = () => {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
-    const _nc = { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 };
-    setChemicals(c => [...c, _nc]);
-    _sb.from("chemicals").upsert({ ..._nc, form_type: _nc.formType, rate_min: _nc.rateMin, rate_max: _nc.rateMax }).then(({ error }) => { if (error) console.error("Add chem:", error.message); });
+    setChemicals(c => [...c, { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 }]);
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", rateMin:"", rateMax:"" });
   };
-  const deleteChem = (id) => { setChemicals(c => c.filter(x => x.id !== id)); _sb.from("chemicals").delete().eq("id", id).then(({ error }) => { if (error) console.error("Del chem:", error.message); }); };
+  const deleteChem = (id) => setChemicals(c => c.filter(x => x.id !== id));
 
   const filteredFields = fieldLibrary.filter(f =>
     f.name.toLowerCase().includes(fieldSearch.toLowerCase()) &&
@@ -1168,14 +1041,7 @@ export default function App() {
     (!form.crop || !f.crop || f.crop === form.crop)
   );
 
-  //  Render 
-  if (dbLoading) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
-      <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
-      <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>Anaqua Farms</div>
-      <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading data…</div>
-    </div>
-  );
+  // ── Render ─────────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight:"100vh", background:"#f0f7e8", fontFamily:"'Georgia','Times New Roman',serif" }}>
 
@@ -1185,12 +1051,12 @@ export default function App() {
           <div>
             <div style={{ color:"#a8d878", fontSize:isMobile?9:11, letterSpacing:"0.15em", fontWeight:700, textTransform:"uppercase" }}>ANAQUA FARMS</div>
             <div style={{ color:"#fff", fontSize:isMobile?16:22, fontWeight:700, lineHeight:1.2 }}>Application Ticket System</div>
-            {!isMobile && <div style={{ color:"#c8e8a0", fontSize:12, marginTop:2 }}>(956) 465-6430  (956) 535-0482</div>}
+            {!isMobile && <div style={{ color:"#c8e8a0", fontSize:12, marginTop:2 }}>(956) 465-6430 · (956) 535-0482</div>}
           </div>
         </div>
         {/* Tab nav: scrollable row on mobile */}
         <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
-          {[["form"," Ticket"],["log"," Saved"],["fieldMgr"," Fields"],["equipMgr"," Equip"],["chemMgr"," Chems"]].map(([v,l]) => (
+          {[["form","🌱 Ticket"],["log","📋 Saved"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"]].map(([v,l]) => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: isMobile ? "8px 12px" : "8px 16px",
               border:"none", cursor:"pointer",
@@ -1208,7 +1074,7 @@ export default function App() {
 
       <div style={{ maxWidth:880, margin:"0 auto", padding: isMobile ? "12px 10px 80px" : "24px 16px 40px" }}>
 
-        {/*  NEW TICKET  */}
+        {/* ══ NEW TICKET ══════════════════════════════════════════════════════════ */}
         {view === "form" && (
           <div>
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
@@ -1223,16 +1089,16 @@ export default function App() {
                   boxShadow:"0 2px 8px rgba(14,58,92,0.20)"
                 }}>
                   {wxLoading
-                    ? <><span style={{ fontSize:16 }}></span> Getting weather</>
-                    : <><span style={{ fontSize:16 }}></span> Get Current Weather</>
+                    ? <><span style={{ fontSize:16 }}>⏳</span> Getting weather…</>
+                    : <><span style={{ fontSize:16 }}>📍</span> Get Current Weather</>
                   }
                 </button>
                 {wxError && (
-                  <span style={{ fontSize:12, color:"#c03020", fontWeight:600 }}> {wxError}</span>
+                  <span style={{ fontSize:12, color:"#c03020", fontWeight:600 }}>⚠ {wxError}</span>
                 )}
                 {!wxLoading && !wxError && form.windSpeed && (
                   <span style={{ fontSize:12, color:"#2a8a10", fontWeight:600 }}>
-                     {form.windSpeed} mph {form.windDir}, {form.airTemp}F
+                    ✓ {form.windSpeed} mph {form.windDir}, {form.airTemp}°F
                   </span>
                 )}
               </div>
@@ -1254,7 +1120,7 @@ export default function App() {
                     <span style={{ fontSize:14, fontWeight:700, color:"#2a5c0f" }}>
                       {form.timeStart && form.selectedFields.length
                         ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart).slice(-1)[0]?.timeEnd)
-                        : ""}
+                        : "—"}
                     </span>
                   </div>
                 </div>
@@ -1265,23 +1131,23 @@ export default function App() {
                 <div>
                   <label style={labelStyle}>Wind Direction</label>
                   <select value={form.windDir} onChange={e => set("windDir",e.target.value)} style={sel}>
-                    <option value=""></option>
+                    <option value="">—</option>
                     {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>Air Temp (F)</label>
+                  <label style={labelStyle}>Air Temp (°F)</label>
                   <input type="number" value={form.airTemp} onChange={e => set("airTemp",e.target.value)} style={inp} placeholder="e.g. 85" min="0"/>
                 </div>
               </div>
-              {/* Equipment / Applicator  2x2 grid */}
+              {/* Equipment / Applicator — 2x2 grid */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
                 <div>
                   <label style={labelStyle}>Equipment</label>
                   <select value={form.equipmentType} onChange={e => set("equipmentType",e.target.value)} style={sel}>
-                    <option value=""> select </option>
+                    <option value="">— select —</option>
                     {equipment.map(eq => <option key={eq.id} value={eq.name}>{eq.name}</option>)}
-                    <option value="__other__">Other</option>
+                    <option value="__other__">Other…</option>
                   </select>
                   {form.equipmentType === "__other__" && (
                     <input value={form.equipmentTypeCustom||""} onChange={e => set("equipmentTypeCustom",e.target.value)}
@@ -1295,7 +1161,7 @@ export default function App() {
                     set("licensedApplicant", e.target.value);
                     set("licensedApplicantLicense", op ? op.license : "");
                   }} style={sel}>
-                    <option value=""> select </option>
+                    <option value="">— select —</option>
                     {licensed.map(op => <option key={op.id} value={op.name}>{op.name}</option>)}
                   </select>
                 </div>
@@ -1306,20 +1172,20 @@ export default function App() {
                     background:"#e6f5d0", minHeight:46, display:"flex", alignItems:"center"
                   }}>
                     <span style={{ fontSize:13, fontWeight:700, color:"#2a5c0f" }}>
-                      {form.licensedApplicantLicense || ""}
+                      {form.licensedApplicantLicense || "—"}
                     </span>
                   </div>
                 </div>
                 <div>
                   <label style={labelStyle}>Non-Licensed Applicator</label>
                   <select value={form.nonLicensedApplicant} onChange={e => set("nonLicensedApplicant", e.target.value)} style={sel}>
-                    <option value=""> select / optional </option>
+                    <option value="">— select / optional —</option>
                     {nonLicensed.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* Crop / Site  button presets above fields */}
+              {/* Crop / Site — button presets above fields */}
               <div style={{ marginBottom:12 }}>
                 <label style={labelStyle}>Crop / Site</label>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
@@ -1351,7 +1217,7 @@ export default function App() {
                   )}
                   {form.selectedFields.length > 0 && (
                     <span style={{ marginLeft:8, color:"#2a5c0f", fontWeight:400, fontSize:11 }}>
-                       {form.selectedFields.length} selected  <strong>{totalAcresDisplay} total acres</strong>
+                      — {form.selectedFields.length} selected · <strong>{totalAcresDisplay} total acres</strong>
                     </span>
                   )}
                 </label>
@@ -1362,18 +1228,13 @@ export default function App() {
                     cursor:"text"
                   }} onClick={() => setShowDrop(true)}>
                     {form.selectedFields.map(f => (
-                      <FieldTag key={f.id} field={f}
-                        onRemove={() => removeField(f.id)}
-                        onAcresChange={(a) => updateFieldAcres(f.id, a)}
-                        editingId={fieldEditId} setEditingId={setFieldEditId}
-                        editVal={fieldEditVal} setEditVal={setFieldEditVal}
-                      />
+                      <FieldTag key={f.id} field={f} onRemove={() => removeField(f.id)}/>
                     ))}
                     <input
                       value={fieldSearch}
                       onChange={e => { setFieldSearch(e.target.value); setShowDrop(true); }}
                       onFocus={() => setShowDrop(true)}
-                      placeholder={form.selectedFields.length ? "Add more fields" : "Search or select fields"}
+                      placeholder={form.selectedFields.length ? "Add more fields…" : "Search or select fields…"}
                       style={{ border:"none", background:"transparent", outline:"none", fontSize:16, flex:1, minWidth:140, WebkitAppearance:"none" }}
                     />
                   </div>
@@ -1398,7 +1259,7 @@ export default function App() {
                         </div>
                       ))}
                       <div onClick={() => setShowDrop(false)} style={{ padding:"6px 12px", fontSize:11, color:"#aaa", cursor:"pointer", textAlign:"right" }}>
-                        close 
+                        close ×
                       </div>
                     </div>
                   )}
@@ -1484,7 +1345,7 @@ export default function App() {
                       />
                       <button onClick={() => { setAcresOverride(""); setShowAcresInput(false); }}
                         style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}>
-                         auto
+                        ↺ auto
                       </button>
                     </div>
                   ) : (
@@ -1498,7 +1359,7 @@ export default function App() {
                         {totalAcresDisplay}
                       </span>
                       <span style={{ fontSize:11, color: acresOverride ? "#c08000" : "#6aaa30" }}>
-                        {acresOverride ? "override " : "auto "}
+                        {acresOverride ? "override ✏" : "auto ✏"}
                       </span>
                     </div>
                   )}
@@ -1588,7 +1449,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Prime boom + Flush checkboxes  compact side by side */}
+              {/* Prime boom + Flush checkboxes — compact side by side */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
                 <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer",
                   background: form.primeBoom ? "#fff8e0" : "#f4fbee",
@@ -1616,7 +1477,7 @@ export default function App() {
                 </label>
               </div>
 
-              {/*  Full-loads optimizer  */}
+              {/* ── Full-loads optimizer ── */}
               {(() => {
                 const ts  = parseFloat(form.tankSize)   || 0;
                 const gpa = parseFloat(form.galPerAcre) || 0;
@@ -1627,7 +1488,7 @@ export default function App() {
                 // Candidate whole-load counts: round and round+1
                 const suggestions = [];
                 // Precision helper: round gal/acre to enough decimals that the math stays clean
-                // We use 4 decimal places  enough precision that ts/gpa*n  ta within 0.05 ac
+                // We use 4 decimal places — enough precision that ts/gpa*n ≈ ta within 0.05 ac
                 const preciseGpa = (tankGal, acres, loads) => {
                   const raw = tankGal / (acres / loads);
                   // Round to at most 4 decimal places
@@ -1654,14 +1515,14 @@ export default function App() {
                 const filtered = suggestions.filter(s => Math.abs(s.idealGpa - gpa) > 0.005);
                 if (!filtered.length) return (
                   <div style={{ background:"#d4e8c2", borderRadius:6, padding:"7px 12px", fontSize:12, color:"#2a5c0f", fontWeight:600, marginBottom:12 }}>
-                     Current gal/acre already makes exact full loads
+                    ✓ Current gal/acre already makes exact full loads
                   </div>
                 );
 
                 return (
                   <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"10px 12px", marginBottom:12 }}>
                     <div style={{ fontSize:11, fontWeight:800, color:"#7a5800", letterSpacing:"0.06em", marginBottom:7 }}>
-                       ADJUST GAL/ACRE FOR FULL LOADS ONLY
+                      🎯 ADJUST GAL/ACRE FOR FULL LOADS ONLY
                     </div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:8, flexDirection: isMobile ? "column" : "row" }}>
                       {filtered.map(s => {
@@ -1677,17 +1538,17 @@ export default function App() {
                               {s.idealGpa.toFixed(2) === String(s.idealGpa) ? s.idealGpa : s.idealGpa.toFixed(4)} gal/ac
                             </span>
                             <span style={{ fontSize:10, color:"#7a5800" }}>
-                              {s.n} full load{s.n!==1?"s":""}  {(ts/s.idealGpa).toFixed(1)} ac/tank
+                              {s.n} full load{s.n!==1?"s":""} · {(ts/s.idealGpa).toFixed(1)} ac/tank
                             </span>
                             <span style={{ fontSize:10, color: Math.abs(partAc) < 0.1 ? "#2a8a10" : "#c07000" }}>
-                              {Math.abs(partAc) < 0.1 ? " no partial" : `~${partAc.toFixed(1)} ac partial`}
+                              {Math.abs(partAc) < 0.1 ? "✓ no partial" : `~${partAc.toFixed(1)} ac partial`}
                             </span>
                           </button>
                         );
                       })}
                     </div>
                     <div style={{ fontSize:10, color:"#999", marginTop:6 }}>
-                      Click any option to apply  or keep your current value.
+                      Click any option to apply — or keep your current value.
                     </div>
                   </div>
                 );
@@ -1695,7 +1556,7 @@ export default function App() {
 
               <div style={{ marginBottom:12 }}>
                 <label style={labelStyle}>Notes</label>
-                <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional"/>
+                <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
               </div>
               {(() => {
                 const mainCalcLive = calcTotals({ ...form, totalAcres });
@@ -1706,13 +1567,13 @@ export default function App() {
                       <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}>ACRES / LOAD</div>
                       <div style={{ fontSize: isMobile ? 22 : 28, fontWeight:700, color:"#2a5c0f" }}>{acreLoads}</div>
                       <div style={{ fontSize:11, color:"#7aaa40" }}>
-                        Tank  {form.galPerAcre ? <strong style={{ color:"#2a5c0f" }}>{form.galPerAcre} gal/ac</strong> : "Gal/Acre"}
+                        Tank ÷ {form.galPerAcre ? <strong style={{ color:"#2a5c0f" }}>{form.galPerAcre} gal/ac</strong> : "Gal/Acre"}
                       </div>
                     </div>
                     <div>
                       <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}># FULL LOADS</div>
                       <div style={{ fontSize: isMobile ? 22 : 28, fontWeight:700, color:"#2a5c0f" }}>{fullLoads}</div>
-                      <div style={{ fontSize:11, color:"#7aaa40" }}>Total Acres  Acres/Load</div>
+                      <div style={{ fontSize:11, color:"#7aaa40" }}>Total Acres ÷ Acres/Load</div>
                     </div>
                     <div>
                       <div style={{ fontSize:11, color: partAcLive > 0.01 ? "#c07000" : "#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}>PARTIAL LOAD</div>
@@ -1723,7 +1584,7 @@ export default function App() {
                         </>
                       ) : (
                         <>
-                          <div style={{ fontSize:20, fontWeight:700, color:"#2a8a10", marginTop:4 }}> None</div>
+                          <div style={{ fontSize:20, fontWeight:700, color:"#2a8a10", marginTop:4 }}>✓ None</div>
                           <div style={{ fontSize:11, color:"#7aaa40" }}>all full loads</div>
                         </>
                       )}
@@ -1737,7 +1598,7 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Chemical Mix</div>
 
-              {/*  Recently used chemicals  quick-pick chips  */}
+              {/* ── Recently used chemicals — quick-pick chips ── */}
               {(() => {
                 // Collect last 4 unique chemicals used across saved tickets (most recent first)
                 const seen = new Set();
@@ -1768,14 +1629,14 @@ export default function App() {
                           fontFamily:"inherit", background:"#f0f6ff", color:"#1a3a6a",
                           whiteSpace:"nowrap"
                         }}
-                        title={`${c.epa}  REI ${c.rei}`}
+                        title={`${c.epa} · REI ${c.rei}`}
                       >+ {c.name}</button>
                     ))}
                   </div>
                 );
               })()}
 
-              {/*  Searchable picker  adds a row to the table  */}
+              {/* ── Searchable picker — adds a row to the table ── */}
               <div style={{ position:"relative", marginBottom:10 }}>
                 <input
                   id="chemSearchInput"
@@ -1785,7 +1646,7 @@ export default function App() {
                     setShowChemDrop(s => ({...s, __main__: true}));
                   }}
                   onFocus={() => setShowChemDrop(s => ({...s, __main__: true}))}
-                  placeholder="Search chemicals to add"
+                  placeholder="Search chemicals to add…"
                   style={{...inp, fontSize:16}}
                 />
                 {showChemDrop.__main__ && (() => {
@@ -1820,12 +1681,12 @@ export default function App() {
                           onMouseLeave={e => e.currentTarget.style.background="transparent"}
                         >
                           <span style={{ fontWeight:600 }}>{c.name}</span>
-                          <span style={{ fontSize:11, color:"#888" }}>{c.epa}  REI {c.rei}</span>
+                          <span style={{ fontSize:11, color:"#888" }}>{c.epa} · REI {c.rei}</span>
                         </div>
                       ))}
                       <div onClick={() => setShowChemDrop(s=>({...s,__main__:false}))}
                         style={{ padding:"6px 12px", fontSize:11, color:"#aaa", cursor:"pointer", textAlign:"right" }}>
-                        close 
+                        close ×
                       </div>
                     </div>
                   );
@@ -1833,7 +1694,7 @@ export default function App() {
               </div>
 
               <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-                {isMobile && <div style={{ fontSize:10, color:"#888", marginBottom:3, textAlign:"right" }}> swipe to scroll </div>}
+                {isMobile && <div style={{ fontSize:10, color:"#888", marginBottom:3, textAlign:"right" }}>← swipe to scroll →</div>}
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 11 : 13, minWidth: isMobile ? 540 : "auto" }}>
                   <thead>
                     <tr>
@@ -1876,7 +1737,7 @@ export default function App() {
             }}>
               {editingId && (
                 <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"6px 12px", fontSize:12, color:"#7a5800", marginBottom:8 }}>
-                   Editing saved ticket  Save will update the existing record.
+                  ✏ Editing saved ticket — Save will update the existing record.
                   <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); }}
                     style={{ marginLeft:12, background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:12 }}>Cancel Edit</button>
                 </div>
@@ -1888,7 +1749,7 @@ export default function App() {
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
                   cursor:"pointer", fontSize:15, fontWeight:700,
                   boxShadow:"0 2px 8px rgba(30,90,8,0.2)", flex:1
-                }}>{editingId ? " Update Ticket" : " Save Ticket"}</button>
+                }}>{editingId ? "✏ Update Ticket" : "💾 Save Ticket"}</button>
                 <button onClick={() => {
                   const sched = buildFieldSchedule(form.selectedFields, form.timeStart);
                   printTicket(form, chemicals, totalAcres, sched);
@@ -1898,7 +1759,7 @@ export default function App() {
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 22px",
                   cursor:"pointer", fontSize:15, fontWeight:700,
                   boxShadow:"0 2px 8px rgba(14,42,92,0.25)", whiteSpace:"nowrap"
-                }}> Save & Print</button>
+                }}>🖨 Save & Print</button>
                 <button onClick={() => { setForm(blank()); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setEditingId(null); }} style={{
                   background:"#f0f7e8", color:"#555", border:"1.5px solid #c8dbb0",
                   borderRadius:7, padding:"11px 20px", cursor:"pointer", fontSize:14
@@ -1908,7 +1769,7 @@ export default function App() {
           </div>
         )}
 
-        {/*  SAVED TICKETS  */}
+        {/* ══ SAVED TICKETS ══════════════════════════════════════════════════════ */}
                 {view === "log" && (
           <div>
             {/* Header row */}
@@ -1921,7 +1782,7 @@ export default function App() {
                   background: tickets.length ? "#2a5c0f" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding: isMobile ? "10px 14px" : "8px 16px",
                   cursor: tickets.length ? "pointer" : "default", fontSize:13, fontWeight:700
-                }}> CSV</button>
+                }}>⬇ CSV</button>
                 <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
                   <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
                     style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding: isMobile?"8px 6px":"5px 8px", fontSize: isMobile?14:12, fontFamily:"inherit" }}
@@ -1943,7 +1804,7 @@ export default function App() {
                     color:"#fff", border:"none", borderRadius:6,
                     padding: isMobile ? "10px 14px" : "8px 14px",
                     cursor: tickets.length ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                  }}> TDA Report</button>
+                  }}>📋 TDA Report</button>
                 </div>
               </div>
             </div>
@@ -1964,7 +1825,7 @@ export default function App() {
                   overflow:"hidden", transition:"box-shadow 0.15s"
                 }}>
 
-                  {/*  Collapsed row  always visible, tap to toggle */}
+                  {/* ── Collapsed row — always visible, tap to toggle */}
                   <div onClick={() => setExpandedTicket(isOpen ? null : t.id)}
                     style={{
                       display:"flex", alignItems:"center", gap:10, padding: isMobile ? "10px 12px" : "12px 16px",
@@ -1983,26 +1844,26 @@ export default function App() {
                         {pestStr && <span style={{ fontSize:11, color:"#888" }}>{pestStr}</span>}
                       </div>
                       <div style={{ fontSize:11, color:"#666", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                        {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"}  {t.totalAcres} ac  {t.fullLoads} load{t.fullLoads!=="1"?"s":""}
+                        {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"} · {t.totalAcres} ac · {t.fullLoads} load{t.fullLoads!=="1"?"s":""}
                         {t.partialAcres ? ` + partial` : ""}
                       </div>
                     </div>
-                    <div style={{ color:"#888", fontSize:18, flexShrink:0 }}>{isOpen ? "" : ""}</div>
+                    <div style={{ color:"#888", fontSize:18, flexShrink:0 }}>{isOpen ? "▲" : "▼"}</div>
                   </div>
 
-                  {/*  Expanded detail */}
+                  {/* ── Expanded detail */}
                   {isOpen && (
                     <div style={{ padding: isMobile ? "10px 12px" : "14px 16px", borderTop:"1.5px solid #eef5e8" }}>
 
                       {/* Summary row */}
                       <div style={{ display:"flex", gap:12, fontSize:12, color:"#555", flexWrap:"wrap", marginBottom:10 }}>
-                        <span> {t.totalAcres} ac</span>
-                        <span> {t.windSpeed} mph {t.windDir}</span>
-                        <span> {t.airTemp}F</span>
-                        <span> {t.tankSize} gal</span>
-                        <span> {t.fullLoads} full{t.partialAcres?` + 1 partial (${t.partialAcres} ac)`:""}</span>
-                        {t.equipmentType && <span> {t.equipmentType}</span>}
-                        {t.licensedApplicant && <span> {t.licensedApplicant} {t.licensedApplicantLicense ? `(${t.licensedApplicantLicense})` : ""}</span>}
+                        <span>🌾 {t.totalAcres} ac</span>
+                        <span>💨 {t.windSpeed} mph {t.windDir}</span>
+                        <span>🌡 {t.airTemp}°F</span>
+                        <span>⛽ {t.tankSize} gal</span>
+                        <span>📦 {t.fullLoads} full{t.partialAcres?` + 1 partial (${t.partialAcres} ac)`:""}</span>
+                        {t.equipmentType && <span>🚜 {t.equipmentType}</span>}
+                        {t.licensedApplicant && <span>👤 {t.licensedApplicant} {t.licensedApplicantLicense ? `(${t.licensedApplicantLicense})` : ""}</span>}
                       </div>
 
                       {/* Field schedule */}
@@ -2046,7 +1907,7 @@ export default function App() {
                                 <td style={td}>{c.ratePerAcre}</td>
                                 <td style={td}>{c.unit}</td>
                                 <td style={{ ...td, fontWeight:700, color:"#2a5c0f" }}>{c.totalPerTankFmt || c.totalPerTank}</td>
-                                <td style={{ ...td, fontWeight:700, color:"#e07020" }}>{c.partialPerTankFmt || ""}</td>
+                                <td style={{ ...td, fontWeight:700, color:"#e07020" }}>{c.partialPerTankFmt || "—"}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2073,7 +1934,7 @@ export default function App() {
                         }} style={{
                           background:"#2a5c0f", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700
-                        }}> Edit</button>
+                        }}>✏ Edit</button>
                       </div>
                     </div>
                   )}
@@ -2088,7 +1949,7 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Upload Field List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10, lineHeight:1.7 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Field Name, Acres, Crop</code>  first row is a header and will be skipped.<br/>
+                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Field Name, Acres, Crop</code> — first row is a header and will be skipped.<br/>
                 Example rows:<br/>
                 <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>North 40, 40.5</code><br/>
                 <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>South Pivot, 128.0</code>
@@ -2097,7 +1958,7 @@ export default function App() {
                 <button onClick={() => fieldFileRef.current.click()} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
-                }}> Upload CSV</button>
+                }}>📂 Upload CSV</button>
                 <input ref={fieldFileRef} type="file" accept=".csv" onChange={handleFieldCSV} style={{ display:"none" }}/>
                 {fieldUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{fieldUpMsg}</span>}
               </div>
@@ -2123,7 +1984,7 @@ export default function App() {
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>
-                Field Library  {fieldLibrary.length} fields  {fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0).toFixed(1)} total acres
+                Field Library — {fieldLibrary.length} fields · {fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0).toFixed(1)} total acres
               </div>
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
@@ -2134,13 +1995,13 @@ export default function App() {
                     {fieldLibrary.map(f => (
                       <tr key={f.id}>
                         <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
-                       <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}></span>}</td>
-                       <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}></span>}</td>
+                       <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
+                       <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
                         <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{f.acres}</td>
                         <td style={td}>
                           <button onClick={() => deleteField(f.id)} style={{
                             background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                          }}></button>
+                          }}>×</button>
                         </td>
                       </tr>
                     ))}
@@ -2151,7 +2012,7 @@ export default function App() {
           </div>
         )}
 
-        {/*  EQUIPMENT & OPERATORS MANAGER  */}
+        {/* ══ EQUIPMENT & OPERATORS MANAGER ════════════════════════════════════ */}
         {view === "equipMgr" && (
           <div>
             {/* Equipment */}
@@ -2167,9 +2028,7 @@ export default function App() {
                   const name = el.value.trim();
                   if (!name) return alert("Enter an equipment name.");
                   const nextId = equipment.length ? Math.max(...equipment.map(e=>e.id))+1 : 1;
-                  const _ne = { id: nextId, name };
-                  setEquipment(eq => [...eq, _ne]);
-                  _sb.from("equipment").upsert(_ne).then(({ error }) => { if (error) console.error("Add equip:", error.message); });
+                  setEquipment(eq => [...eq, { id: nextId, name }]);
                   el.value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2186,9 +2045,9 @@ export default function App() {
                     <tr key={eq.id}>
                       <td style={{ ...td, fontWeight:600 }}>{eq.name}</td>
                       <td style={td}>
-                        <button onClick={() => { setEquipment(e=>e.filter(x=>x.id!==eq.id)); _sb.from("equipment").delete().eq("id",eq.id).then(({error})=>{if(error)console.error("Del equip:",error.message);}); }} style={{
+                        <button onClick={() => setEquipment(e=>e.filter(x=>x.id!==eq.id))} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}></button>
+                        }}>×</button>
                       </td>
                     </tr>
                   ))}
@@ -2216,9 +2075,7 @@ export default function App() {
                   const lic  = document.getElementById("newLicNum").value.trim();
                   if (!name) return alert("Name is required.");
                   const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
-                  const _nl = { id: nextId, name, license: lic };
-                  setLicensed(ops => [...ops, _nl]);
-                  _sb.from("licensed_applicators").upsert(_nl).then(({error})=>{if(error)console.error("Add lic:",error.message);});
+                  setLicensed(ops => [...ops, { id: nextId, name, license: lic }]);
                   document.getElementById("newLicName").value = "";
                   document.getElementById("newLicNum").value  = "";
                 }} style={{
@@ -2236,11 +2093,11 @@ export default function App() {
                   {licensed.map(op => (
                     <tr key={op.id}>
                       <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
-                      <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{op.license || ""}</td>
+                      <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{op.license || "—"}</td>
                       <td style={td}>
-                        <button onClick={() => { setLicensed(ops=>ops.filter(x=>x.id!==op.id)); _sb.from("licensed_applicators").delete().eq("id",op.id).then(({error})=>{if(error)console.error("Del lic:",error.message);}); }} style={{
+                        <button onClick={() => setLicensed(ops=>ops.filter(x=>x.id!==op.id))} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}></button>
+                        }}>×</button>
                       </td>
                     </tr>
                   ))}
@@ -2263,9 +2120,7 @@ export default function App() {
                   const name = document.getElementById("newNonLicName").value.trim();
                   if (!name) return alert("Name is required.");
                   const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
-                  const _nnl = { id: nextId, name };
-                  setNonLicensed(ops => [...ops, _nnl]);
-                  _sb.from("non_licensed_applicators").upsert(_nnl).then(({error})=>{if(error)console.error("Add nonlic:",error.message);});
+                  setNonLicensed(ops => [...ops, { id: nextId, name }]);
                   document.getElementById("newNonLicName").value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2282,9 +2137,9 @@ export default function App() {
                     <tr key={p.id}>
                       <td style={{ ...td, fontWeight:600 }}>{p.name}</td>
                       <td style={td}>
-                        <button onClick={() => { setNonLicensed(ops=>ops.filter(x=>x.id!==p.id)); _sb.from("non_licensed_applicators").delete().eq("id",p.id).then(({error})=>{if(error)console.error("Del nonlic:",error.message);}); }} style={{
+                        <button onClick={() => setNonLicensed(ops=>ops.filter(x=>x.id!==p.id))} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}></button>
+                        }}>×</button>
                       </td>
                     </tr>
                   ))}
@@ -2297,19 +2152,19 @@ export default function App() {
           </div>
         )}
 
-                {/*  CHEMICAL MANAGER  */}
+                {/* ══ CHEMICAL MANAGER ═══════════════════════════════════════════════════ */}
         {view === "chemMgr" && (
           <div>
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Rate Min, Rate Max</code>  first row is header.
+                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Rate Min, Rate Max</code> — first row is header.
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <button onClick={() => chemFileRef.current.click()} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
-                }}> Upload CSV</button>
+                }}>📂 Upload CSV</button>
                 <input ref={chemFileRef} type="file" accept=".csv" onChange={handleChemCSV} style={{ display:"none" }}/>
                 {chemUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{chemUpMsg}</span>}
               </div>
@@ -2330,13 +2185,13 @@ export default function App() {
               <div style={{ marginTop:10 }}>
                 <label style={labelStyle}>Formulation Type (WALES mixing order)</label>
                 <select value={newChem.formType||"L"} onChange={e => setNewChem(c=>({...c,formType:e.target.value}))} style={sel}>
-                  <option value="L">L  Liquid Flowable / SC / CS</option>
-                  <option value="E">E  Emulsifiable Concentrate (EC)</option>
-                  <option value="S">S  Soluble Liquid (SL) e.g. glyphosate</option>
-                  <option value="WDG">WDG  Water Dispersible Granule / DF</option>
-                  <option value="WP">WP  Wettable Powder</option>
-                  <option value="D">D  Dry Flowable</option>
-                  <option value="A">A  Adjuvant / Surfactant</option>
+                  <option value="L">L — Liquid Flowable / SC / CS</option>
+                  <option value="E">E — Emulsifiable Concentrate (EC)</option>
+                  <option value="S">S — Soluble Liquid (SL) e.g. glyphosate</option>
+                  <option value="WDG">WDG — Water Dispersible Granule / DF</option>
+                  <option value="WP">WP — Wettable Powder</option>
+                  <option value="D">D — Dry Flowable</option>
+                  <option value="A">A — Adjuvant / Surfactant</option>
                 </select>
               </div>
               <button onClick={addManualChem} style={{
@@ -2361,11 +2216,11 @@ export default function App() {
                         <td style={td}>{c.epa}</td>
                         <td style={td}>{c.rei}</td>
                         <td style={td}>{c.unit}</td>
-                        <td style={td}>{c.rateMin}{c.rateMax} {c.unit}/ac</td>
+                        <td style={td}>{c.rateMin}–{c.rateMax} {c.unit}/ac</td>
                         <td style={td}>
                           <button onClick={() => deleteChem(c.id)} style={{
                             background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                          }}></button>
+                          }}>×</button>
                         </td>
                       </tr>
                     ))}
