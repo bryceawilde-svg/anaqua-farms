@@ -1,4 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const _sb = createClient(
+  "https://mlxaljozizaarvdcssew.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1seGFsam96aXphYXJ2ZGNzc2V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNTc0MjQsImV4cCI6MjA5MjYzMzQyNH0.y12h5nARqHOPuUA3ePAI3Pdfx2J_V3bOOUiibv9d8ts"
+);
 
 //  Constants 
 const CROPS_LIST = ["Cotton", "Corn", "Sorghum"];
@@ -842,16 +848,17 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
 //  Main App 
 export default function App() {
   const isMobile        = useIsMobile();
-  const [fieldLibrary,  setFieldLibrary]  = useState(DEFAULT_FIELDS);
-  const [chemicals,     setChemicals]     = useState(DEFAULT_CHEMICALS);
-  const [equipment,     setEquipment]     = useState(DEFAULT_EQUIPMENT);
-  const [licensed,      setLicensed]      = useState(DEFAULT_LICENSED);
-  const [nonLicensed,   setNonLicensed]   = useState(DEFAULT_NONLICENSED);
+  const [fieldLibrary,  setFieldLibrary]  = useState([]);
+  const [chemicals,     setChemicals]     = useState([]);
+  const [equipment,     setEquipment]     = useState([]);
+  const [licensed,      setLicensed]      = useState([]);
+  const [nonLicensed,   setNonLicensed]   = useState([]);
   const [tickets,       setTickets]       = useState([]);
   const [view,          setView]          = useState("form");
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
   const [tdaFrom,       setTdaFrom]       = useState("");
   const [tdaTo,         setTdaTo]         = useState("");
+  const [dbLoading,     setDbLoading]     = useState(true);
 
   //  Form state
   const blank = () => ({
@@ -894,6 +901,52 @@ export default function App() {
   const [wxLoading,   setWxLoading]   = useState(false);
   const [wxError,     setWxError]     = useState("");
   const [editingId,   setEditingId]   = useState(null);
+
+  useEffect(() => {
+    async function loadAll() {
+      setDbLoading(true);
+      const [f, c, e, la, nla, t] = await Promise.all([
+        _sb.from("fields").select("*").order("name"),
+        _sb.from("chemicals").select("*").order("name"),
+        _sb.from("equipment").select("*").order("name"),
+        _sb.from("licensed_applicators").select("*").order("name"),
+        _sb.from("non_licensed_applicators").select("*").order("name"),
+        _sb.from("tickets").select("*").order("created_at", { ascending: false }),
+      ]);
+      setFieldLibrary(f.data?.length ? f.data : DEFAULT_FIELDS);
+      setChemicals(c.data?.length ? c.data : DEFAULT_CHEMICALS);
+      setEquipment(e.data?.length ? e.data : DEFAULT_EQUIPMENT);
+      setLicensed(la.data || []);
+      setNonLicensed(nla.data || []);
+      setTickets((t.data || []).map(tk => ({
+        ...tk,
+        ticketNumber:             tk.ticket_number   || tk.ticketNumber,
+        selectedFields:           tk.selected_fields || tk.selectedFields || [],
+        chemRows:                 tk.chem_rows       || tk.chemRows       || [],
+        fieldSchedule:            tk.field_schedule  || tk.fieldSchedule  || [],
+        chemicals:                tk.chemicals       || [],
+        timeStart:                tk.time_start      || tk.timeStart      || "",
+        timeEnd:                  tk.time_end        || tk.timeEnd        || "",
+        galPerAcre:               tk.gal_per_acre    || tk.galPerAcre     || "",
+        tankSize:                 tk.tank_size       || tk.tankSize       || "",
+        windSpeed:                tk.wind_speed      || tk.windSpeed      || "",
+        windDir:                  tk.wind_dir        || tk.windDir        || "",
+        airTemp:                  tk.air_temp        || tk.airTemp        || "",
+        primeBoom:                tk.prime_boom      ?? tk.primeBoom      ?? false,
+        flushCleanout:            tk.flush_cleanout  ?? tk.flushCleanout  ?? false,
+        equipmentType:            tk.equipment_type  || tk.equipmentType  || "",
+        licensedApplicant:        tk.licensed_applicant         || tk.licensedApplicant        || "",
+        licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense || "",
+        nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant     || "",
+        totalAcres:               tk.total_acres     || tk.totalAcres     || "0",
+        fullLoads:                tk.full_loads      || tk.fullLoads      || "—",
+        partialAcres:             tk.partial_acres   || tk.partialAcres   || null,
+        acreLoads:                tk.acre_loads      || tk.acreLoads      || "—",
+      })));
+      setDbLoading(false);
+    }
+    loadAll();
+  }, []);
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
@@ -995,6 +1048,37 @@ export default function App() {
       ? t.map(x => x.id === editingId ? finalTicket : x)
       : [finalTicket, ...t]
     );
+    _sb.from("tickets").upsert({
+      id:                         finalTicket.id,
+      ticket_number:              finalTicket.ticketNumber,
+      date:                       finalTicket.date,
+      time_start:                 finalTicket.timeStart,
+      time_end:                   finalTicket.timeEnd,
+      crop:                       finalTicket.crop,
+      target_pest:                finalTicket.targetPest,
+      wind_speed:                 finalTicket.windSpeed,
+      wind_dir:                   finalTicket.windDir,
+      air_temp:                   finalTicket.airTemp,
+      tank_size:                  finalTicket.tankSize,
+      pressure:                   finalTicket.pressure,
+      gal_per_acre:               finalTicket.galPerAcre,
+      prime_boom:                 finalTicket.primeBoom,
+      flush_cleanout:             finalTicket.flushCleanout,
+      equipment_type:             finalTicket.equipmentType,
+      licensed_applicant:         finalTicket.licensedApplicant,
+      licensed_applicant_license: finalTicket.licensedApplicantLicense,
+      non_licensed_applicant:     finalTicket.nonLicensedApplicant,
+      notes:                      finalTicket.notes,
+      total_acres:                String(finalTicket.totalAcres),
+      full_loads:                 String(finalTicket.fullLoads),
+      partial_loads:              finalTicket.partialLoads,
+      partial_acres:              finalTicket.partialAcres ? String(finalTicket.partialAcres) : null,
+      acre_loads:                 String(finalTicket.acreLoads),
+      selected_fields:            finalTicket.selectedFields,
+      chemicals:                  finalTicket.chemicals,
+      chem_rows:                  finalTicket.chemRows,
+      field_schedule:             finalTicket.fieldSchedule,
+    }).then(({ error }) => { if (error) console.error("Ticket save error:", error.message); });
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -1024,6 +1108,7 @@ export default function App() {
         imported++;
       });
       setFieldLibrary(fl => [...fl, ...added]);
+      _sb.from("fields").upsert(added).then(({ error }) => { if (error) console.error("Field import:", error.message); });
       setFieldUpMsg(` Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setFieldUpMsg(""), 4000);
     };
@@ -1034,10 +1119,12 @@ export default function App() {
   const addManualField = () => {
     if (!newField.name || !newField.acres) return alert("Field name and acres are required.");
     const nextId = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) + 1 : 1;
-    setFieldLibrary(fl => [...fl, { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" }]);
+    const _nf = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" };
+    setFieldLibrary(fl => [...fl, _nf]);
+    _sb.from("fields").upsert(_nf).then(({ error }) => { if (error) console.error("Add field:", error.message); });
     setNewField({ name:"", acres:"", crop:"" });
   };
-  const deleteField = (id) => setFieldLibrary(fl => fl.filter(f => f.id !== id));
+  const deleteField = (id) => { setFieldLibrary(fl => fl.filter(f => f.id !== id)); _sb.from("fields").delete().eq("id", id).then(({ error }) => { if (error) console.error("Del field:", error.message); }); };
 
   //  Chemical Manager
   const chemFileRef  = useRef();
@@ -1058,6 +1145,7 @@ export default function App() {
         imported++;
       });
       setChemicals(c => [...c, ...added]);
+      _sb.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, rate_min: a.rateMin, rate_max: a.rateMax }))).then(({ error }) => { if (error) console.error("Chem import:", error.message); });
       setChemUpMsg(` Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
@@ -1067,10 +1155,12 @@ export default function App() {
 
   const addManualChem = () => {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
-    setChemicals(c => [...c, { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 }]);
+    const _nc = { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 };
+    setChemicals(c => [...c, _nc]);
+    _sb.from("chemicals").upsert({ ..._nc, form_type: _nc.formType, rate_min: _nc.rateMin, rate_max: _nc.rateMax }).then(({ error }) => { if (error) console.error("Add chem:", error.message); });
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", rateMin:"", rateMax:"" });
   };
-  const deleteChem = (id) => setChemicals(c => c.filter(x => x.id !== id));
+  const deleteChem = (id) => { setChemicals(c => c.filter(x => x.id !== id)); _sb.from("chemicals").delete().eq("id", id).then(({ error }) => { if (error) console.error("Del chem:", error.message); }); };
 
   const filteredFields = fieldLibrary.filter(f =>
     f.name.toLowerCase().includes(fieldSearch.toLowerCase()) &&
@@ -1079,6 +1169,13 @@ export default function App() {
   );
 
   //  Render 
+  if (dbLoading) return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
+      <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
+      <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>Anaqua Farms</div>
+      <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading data…</div>
+    </div>
+  );
   return (
     <div style={{ minHeight:"100vh", background:"#f0f7e8", fontFamily:"'Georgia','Times New Roman',serif" }}>
 
@@ -2070,7 +2167,9 @@ export default function App() {
                   const name = el.value.trim();
                   if (!name) return alert("Enter an equipment name.");
                   const nextId = equipment.length ? Math.max(...equipment.map(e=>e.id))+1 : 1;
-                  setEquipment(eq => [...eq, { id: nextId, name }]);
+                  const _ne = { id: nextId, name };
+                  setEquipment(eq => [...eq, _ne]);
+                  _sb.from("equipment").upsert(_ne).then(({ error }) => { if (error) console.error("Add equip:", error.message); });
                   el.value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2087,7 +2186,7 @@ export default function App() {
                     <tr key={eq.id}>
                       <td style={{ ...td, fontWeight:600 }}>{eq.name}</td>
                       <td style={td}>
-                        <button onClick={() => setEquipment(e=>e.filter(x=>x.id!==eq.id))} style={{
+                        <button onClick={() => { setEquipment(e=>e.filter(x=>x.id!==eq.id)); _sb.from("equipment").delete().eq("id",eq.id).then(({error})=>{if(error)console.error("Del equip:",error.message);}); }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}></button>
                       </td>
@@ -2117,7 +2216,9 @@ export default function App() {
                   const lic  = document.getElementById("newLicNum").value.trim();
                   if (!name) return alert("Name is required.");
                   const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
-                  setLicensed(ops => [...ops, { id: nextId, name, license: lic }]);
+                  const _nl = { id: nextId, name, license: lic };
+                  setLicensed(ops => [...ops, _nl]);
+                  _sb.from("licensed_applicators").upsert(_nl).then(({error})=>{if(error)console.error("Add lic:",error.message);});
                   document.getElementById("newLicName").value = "";
                   document.getElementById("newLicNum").value  = "";
                 }} style={{
@@ -2137,7 +2238,7 @@ export default function App() {
                       <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
                       <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{op.license || ""}</td>
                       <td style={td}>
-                        <button onClick={() => setLicensed(ops=>ops.filter(x=>x.id!==op.id))} style={{
+                        <button onClick={() => { setLicensed(ops=>ops.filter(x=>x.id!==op.id)); _sb.from("licensed_applicators").delete().eq("id",op.id).then(({error})=>{if(error)console.error("Del lic:",error.message);}); }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}></button>
                       </td>
@@ -2162,7 +2263,9 @@ export default function App() {
                   const name = document.getElementById("newNonLicName").value.trim();
                   if (!name) return alert("Name is required.");
                   const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
-                  setNonLicensed(ops => [...ops, { id: nextId, name }]);
+                  const _nnl = { id: nextId, name };
+                  setNonLicensed(ops => [...ops, _nnl]);
+                  _sb.from("non_licensed_applicators").upsert(_nnl).then(({error})=>{if(error)console.error("Add nonlic:",error.message);});
                   document.getElementById("newNonLicName").value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2179,7 +2282,7 @@ export default function App() {
                     <tr key={p.id}>
                       <td style={{ ...td, fontWeight:600 }}>{p.name}</td>
                       <td style={td}>
-                        <button onClick={() => setNonLicensed(ops=>ops.filter(x=>x.id!==p.id))} style={{
+                        <button onClick={() => { setNonLicensed(ops=>ops.filter(x=>x.id!==p.id)); _sb.from("non_licensed_applicators").delete().eq("id",p.id).then(({error})=>{if(error)console.error("Del nonlic:",error.message);}); }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}></button>
                       </td>
