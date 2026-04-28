@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const _sb = createClient(
   "https://mlxaljozizaarvdcssew.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1seGFsam96aXphYXJ2ZGNzc2V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNTc0MjQsImV4cCI6MjA5MjYzMzQyNH0.y12h5nARqHOPuUA3ePAI3Pdfx2J_V3bOOUiibv9d8ts"
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1seGFsam96aXphYXJ2ZGNzc2V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNTc0MjQsImV4cCI6MjA5MjYzMzQyNH0.P1neFr85TyCtuJOmc83bG_bApWnuE2oyNKtnNT_OZ2A"
 );
 
 //  Constants 
