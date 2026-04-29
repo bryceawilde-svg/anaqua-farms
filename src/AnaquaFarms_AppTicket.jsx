@@ -1018,6 +1018,11 @@ export default function App() {
         imported++;
       });
       setChemicals(c => [...c, ...added]);
+      supabase.from("chemicals").upsert(added.map(a => ({
+        id: a.id, name: a.name, epa: a.epa, rei: a.rei, unit: a.unit,
+        rate_min: a.rateMin, rate_max: a.rateMax, form_type: a.formType,
+        "formType": a.formType, "rateMin": a.rateMin, "rateMax": a.rateMax
+      }))).then(({ error }) => { if (error) console.error("Chem CSV save error:", error.message); });
       setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
@@ -1027,10 +1032,16 @@ export default function App() {
 
   const addManualChem = () => {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
-    setChemicals(c => [...c, { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 }]);
+    const _nc = { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 };
+    setChemicals(c => [...c, _nc]);
+    supabase.from("chemicals").upsert({
+      id: _nc.id, name: _nc.name, epa: _nc.epa, rei: _nc.rei, unit: _nc.unit,
+      rate_min: _nc.rateMin, rate_max: _nc.rateMax, form_type: _nc.formType||"L",
+      "formType": _nc.formType||"L", "rateMin": _nc.rateMin, "rateMax": _nc.rateMax
+    }).then(({ error }) => { if (error) console.error("Add chem error:", error.message); });
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", rateMin:"", rateMax:"" });
   };
-  const deleteChem = (id) => setChemicals(c => c.filter(x => x.id !== id));
+  const deleteChem = (id) => { setChemicals(c => c.filter(x => x.id !== id)); supabase.from("chemicals").delete().eq("id", id).then(({ error }) => { if (error) console.error("Del chem error:", error.message); }); };
 
   const filteredFields = fieldLibrary.filter(f =>
     f.name.toLowerCase().includes(fieldSearch.toLowerCase()) &&
