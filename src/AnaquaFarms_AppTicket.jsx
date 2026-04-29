@@ -859,9 +859,9 @@ export default function App() {
     flushCleanout: false,
     equipmentType: "4440 Sprayer",
     equipmentTypeCustom: "",
-    licensedApplicant: "",
+    licensedApplicant: "Glenn Wilde",
     licensedApplicantLicense: "",
-    nonLicensedApplicant: "",
+    nonLicensedApplicant: "Bryce",
     notes: "",
     chemRows: [{ id: Date.now(), chemId: "", ratePerAcre: "", inputMode: "rate", galPerTank: "" }],
   });
