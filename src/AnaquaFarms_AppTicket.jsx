@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -661,7 +661,9 @@ const card = { border:"1.5px solid #c8dbb0", borderRadius:8, padding:"14px 16px"
 const sectionTitle = { fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10, borderBottom:"2px solid #c8dbb0", paddingBottom:4 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function FieldTag({ field, onRemove }) {
+function FieldTag({ field, onRemove, onAcresChange }) {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState(String(field.acres));
   return (
     <span style={{
       display:"inline-flex", alignItems:"center", gap:4,
@@ -669,7 +671,23 @@ function FieldTag({ field, onRemove }) {
       padding:"3px 9px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
     }}>
       <span>{field.name}</span>
-      <span style={{ opacity:0.65, fontSize:11 }}>({field.acres} ac)</span>
+      {editing ? (
+        <input
+          autoFocus
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={() => { setEditing(false); const n = parseFloat(val); if (!isNaN(n) && n > 0) onAcresChange(n); else setVal(String(field.acres)); }}
+          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { setVal(String(field.acres)); setEditing(false); } }}
+          style={{ width:52, fontSize:11, border:"1px solid #2a5c0f", borderRadius:3, padding:"1px 3px", background:"#fff", color:"#2a5c0f", fontWeight:700 }}
+          onClick={e => e.stopPropagation()}
+        />
+      ) : (
+        <span
+          style={{ opacity:0.75, fontSize:11, cursor:"text", borderBottom:"1px dashed #2a5c0f" }}
+          onClick={e => { e.stopPropagation(); setEditing(true); }}
+          title="Tap to edit acres"
+        >({field.acres} ac)</span>
+      )}
       <button onClick={onRemove} style={{
         background:"none", border:"none", cursor:"pointer",
         color:"#2a5c0f", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:2
@@ -1320,7 +1338,8 @@ export default function App() {
                     cursor:"text"
                   }} onClick={() => setShowDrop(true)}>
                     {form.selectedFields.map(f => (
-                      <FieldTag key={f.id} field={f} onRemove={() => removeField(f.id)}/>
+                      <FieldTag key={f.id} field={f} onRemove={() => removeField(f.id)}
+                        onAcresChange={acres => set("selectedFields", form.selectedFields.map(sf => sf.id===f.id ? {...sf, acres} : sf))}/>
                     ))}
                     <input
                       value={fieldSearch}
