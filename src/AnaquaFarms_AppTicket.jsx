@@ -198,13 +198,12 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   const colHdr = (isPartial) => `<tr>
     <th style="width:36px;text-align:center;padding:5px 4px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Step</th>
     <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Product</th>
-    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-align:right;text-transform:uppercase;">Rate</th>
     <th style="padding:5px 8px;font-size:9px;color:${isPartial?"#c05000":"#1a7a20"};background:#e6f5d0;text-align:right;text-transform:uppercase;">Add to Tank</th>
     <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">REI</th>
   </tr>`;
   const fillRow2 = (target) => `<tr style="background:#e6f5d0">
     <td style="text-align:center;padding:7px 4px"><div style="background:#2a5c0f;color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">✓</div></td>
-    <td colspan="4" style="padding:7px 10px;font-size:13px;font-weight:900;color:#2a5c0f">
+    <td colspan="3" style="padding:7px 10px;font-size:13px;font-weight:900;color:#2a5c0f">
       Fill to ${target} gal
     </td>
   </tr>`;
@@ -212,7 +211,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     const sorted = sortByWales2(chems);
     const water = `<tr style="background:#eef6ff">
       <td style="text-align:center;padding:7px 4px"><div style="background:#1a3a6a;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">1</div></td>
-      <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:12px;color:#1a3a6a">
+      <td colspan="3" style="padding:7px 10px;font-weight:700;font-size:12px;color:#1a3a6a">
         Fill tank ½ full — begin agitation
       </td>
     </tr>`;
@@ -221,7 +220,6 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       return `<tr>
         <td style="text-align:center;padding:7px 4px"><div style="background:${cc};color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
         <td style="padding:7px 8px;font-weight:700;font-size:12px">${chem.name}</td>
-        <td style="padding:7px 8px;text-align:right;font-size:10px;color:#888">${parseFloat(effRate||0).toFixed(2)} ${chem.unit}/ac</td>
         <td style="padding:7px 8px;text-align:right;font-size:18px;font-weight:900">${amtFn({ chem, effRate, ...rest })}</td>
         <td style="padding:7px 8px;font-size:10px;color:#c05000;font-weight:700">${chem.rei}</td>
       </tr>`;
@@ -474,52 +472,45 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     </div>
   </div>
 
-  ${form.primeBoom ? `<div style="background:#fff8e0;border:1.5px solid #e0a020;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:10px;">
-    <strong style="color:#7a5000">⚠ PRIME BOOM:</strong> Fill boom with 20 gal of spray mix before entering the field. First tank will cover approximately ${form.galPerAcre ? Math.max(0,((parseFloat(form.tankSize)||0)-20)/(parseFloat(form.galPerAcre)||1)).toFixed(1) : "—"} acres.
+  ${(form.primeBoom || form.flushCleanout) ? `<div style="display:flex;gap:8px;margin-bottom:8px;">
+    ${form.primeBoom ? `<div style="background:#fff8e0;border:1.5px solid #e0a020;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:900;color:#7a5000;">⚠ PRIME BOOM</div>` : ""}
+    ${form.flushCleanout ? `<div style="background:#e8f4ff;border:1.5px solid #1a6a8a;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:900;color:#0e3a5c;">🚿 FLUSH REQUIRED</div>` : ""}
   </div>` : ""}
 
-  <h3>Field List &mdash; ${totalAcres.toFixed(2)} Total Acres</h3>
-  <table>
-    <thead><tr><th>Field</th><th style="text-align:right">Acres</th></tr></thead>
-    <tbody>${fieldRows}</tbody>
-  </table>
+  <div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;">
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:8px;font-weight:900;color:#fff;background:#2a5c0f;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Field List &mdash; ${totalAcres.toFixed(2)} ac</div>
+      <table style="border:1px solid #c8dbb0;border-top:none;">
+        <thead><tr><th>Field</th><th style="text-align:right">Acres</th></tr></thead>
+        <tbody>${fieldRows}</tbody>
+      </table>
+    </div>
+    ${resolvedChems.length ? `<div style="flex:1;min-width:0;">
+      <div style="font-size:8px;font-weight:900;color:#fff;background:#1a3a6a;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Total Chemical Needed</div>
+      <table style="border-collapse:collapse;width:100%;border:1.5px solid #b0c8e8;border-top:none;">
+        <thead><tr>
+          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:left;">Product</th>
+          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;">Total</th>
+        </tr></thead>
+        <tbody>${resolvedChems.map(r => {
+          const allLoadsOz = r.calc.totalPerTankRaw * (parseInt(fullLoads)||0) + (hasPartial ? r.calc.partialPerTankRaw : 0);
+          const fmt = fmtTankAmount(allLoadsOz, r.chem.unit);
+          return `<tr>
+            <td style="padding:4px 8px;font-weight:700;font-size:11px;">${r.chem.name}</td>
+            <td style="padding:4px 8px;text-align:right;font-size:13px;font-weight:900;color:#2a5c0f;">${fmt}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    </div>` : ""}
+  </div>
 
   <h3>Tank Setup</h3>
   ${tankSetupHtml}
   <div style="font-size:10px;color:#555;margin-bottom:4px;margin-top:4px">Pressure: <strong>${form.pressure||"—"} PSI</strong></div>
 
-  ${(() => {
-    if (!resolvedChems.length) return "";
-    const rows = resolvedChems.map(r => {
-      const totalOz = r.calc.totalPerTankRaw * (lessThanOneTank ? 1 : (parseInt(fullLoads)||1));
-      // Use partialPerTankRaw too if partial exists
-      const allLoadsOz = r.calc.totalPerTankRaw * (parseInt(fullLoads)||0) + (hasPartial ? r.calc.partialPerTankRaw : 0);
-      const fmt = fmtTankAmount(allLoadsOz, r.chem.unit);
-      return `<tr>
-        <td style="padding:4px 8px;font-weight:700;font-size:11px;">${r.chem.name}</td>
-        <td style="padding:4px 8px;text-align:right;font-size:9px;color:#888;">${parseFloat(r.effRate||0).toFixed(2)} ${r.chem.unit}/ac</td>
-        <td style="padding:4px 8px;text-align:right;font-size:13px;font-weight:900;color:#2a5c0f;">${fmt}</td>
-      </tr>`;
-    }).join("");
-    return `<div style="margin-bottom:8px;">
-      <div style="font-size:8px;font-weight:900;color:#fff;background:#1a3a6a;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Total Chemical Needed — ${typeof totalAcres==="number"?totalAcres.toFixed(2):totalAcres} Acres</div>
-      <table style="width:100%;border-collapse:collapse;border:1.5px solid #b0c8e8;border-top:none;">
-        <thead><tr>
-          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:left;">Product</th>
-          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;">Rate/Acre</th>
-          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;">Total Needed</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-  })()}
   ${chemSectionHtml}
 
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
-
-  ${form.flushCleanout ? `<div style="background:#e8f4ff;border:2px solid #1a6a8a;border-radius:6px;padding:8px 12px;margin-top:10px;font-size:10px;">
-    <strong style="color:#0e3a5c">🚿 FLUSH REQUIRED:</strong> When application is complete, flush the system with onboard rinse water before leaving the field.
-  </div>` : ""}
 
   <div class="footer">
     <span>Anaqua Farms &mdash; Application Ticket</span>
