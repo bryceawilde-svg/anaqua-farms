@@ -118,17 +118,37 @@ function fmtOzAsTankMeasure(totalOz) {
   return `${gals} gal ${oz} oz`;
 }
 
-// Unified formatter: handles oz (→ gal+oz) and other units
+// Format dry-oz value as "X lb Y oz" (16 dry oz = 1 lb)
+function fmtDryOzAsLbOz(totalDryOz) {
+  if (!totalDryOz || isNaN(totalDryOz) || totalDryOz <= 0) return null;
+  const lbs = Math.floor(totalDryOz / 16);
+  const oz  = Math.round(totalDryOz % 16);
+  if (lbs === 0) return `${oz} dry oz`;
+  if (oz  === 0) return `${lbs} lb`;
+  return `${lbs} lb ${oz} oz`;
+}
+
+// Unified formatter: handles oz (→ gal+oz), dry oz (→ lb+oz), and other units
 function fmtTankAmount(rawValue, unit) {
   const v = parseFloat(rawValue) || 0;
   if (!v) return "—";
-  const u = (unit||"oz").toLowerCase();
-  if (u === "oz") return fmtOzAsTankMeasure(v) || "—";
-  if (u === "gal") return `${v % 1 === 0 ? v : v.toFixed(2)} gal`;
+  const u = (unit||"oz").toLowerCase().replace(/\s+/g,"");
+  if (u === "oz")      return fmtOzAsTankMeasure(v) || "—";
+  if (u === "dryoz")   return fmtDryOzAsLbOz(v) || "—";
+  if (u === "gal")     return `${v % 1 === 0 ? v : v.toFixed(2)} gal`;
   if (u === "lb" || u === "lbs") return `${Math.round(v * 10)/10} lb`;
   if (u === "pt")  return `${Math.round(v * 10)/10} pt`;
   if (u === "qt")  return `${Math.round(v * 10)/10} qt`;
   return `${Math.round(v * 10)/10} ${unit}`;
+}
+
+// Normalise a unit string to a canonical lowercase key
+function canonicalUnit(u) {
+  const s = (u||"oz").trim().toLowerCase().replace(/\s+/g,"");
+  if (s === "dryoz" || s === "dry oz" || s === "dry_oz") return "dry oz";
+  if (s === "oz") return "oz";
+  if (s === "lb" || s === "lbs") return "lb";
+  return u; // pass through anything else
 }
 
 // Back-calc rate/acre from gallons per tank
@@ -180,7 +200,9 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   const resolvedChems = chemRows.map(r => {
     const chem = chemicals.find(c => c.id === r.chemId);
     if (!chem) return null;
-    const isOzUnit = (chem.unit || "oz").toLowerCase() === "oz";
+    const unitNorm  = (chem.unit || "oz").toLowerCase().replace(/\s+/g,"");
+    const isOzUnit  = unitNorm === "oz";
+    const isDryOzUnit = unitNorm === "dryoz";
     let effRate = r.ratePerAcre;
     if (r.inputMode === "galtank" && r.galPerTank) {
       effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
@@ -199,7 +221,10 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     const fmtFull = (oz) => roundQtr && isOzUnit ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, chem.unit);
     const fullFmt = fmtFull(calc.totalPerTankRaw);
     const partFmt = fmtFull(calc.partialPerTankRaw);
-    return { chem, effRate, fullFmt, partFmt, calc, roundQtr, isOzUnit };
+    // For dry oz: compute the lbs+oz sub-line shown under the amount
+    const fullLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.totalPerTankRaw) : null;
+    const partLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.partialPerTankRaw) : null;
+    return { chem, effRate, fullFmt, partFmt, fullLbOz, partLbOz, calc, roundQtr, isOzUnit, isDryOzUnit };
   }).filter(Boolean);
 
   // Field list rows — no times
@@ -234,7 +259,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       Fill to ${target} gal
     </td>
   </tr>`;
-  const buildRows = (chems, amtFn) => {
+  const buildRows = (chems, amtFn, lbOzFn) => {
     const sorted = sortByWales2(chems);
     const water = `<tr style="background:#eef6ff">
       <td style="text-align:center;padding:7px 4px"><div style="background:#1a3a6a;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">1</div></td>
@@ -242,33 +267,47 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
         Fill tank ½ full — begin agitation
       </td>
     </tr>`;
-    return water + sorted.map(({ chem, effRate, roundQtr, isOzUnit, ...rest }, i) => {
+    return water + sorted.map(({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }, i) => {
       const cc = circleColors2[chem.formType] || "#555";
       const rateLabel = parseFloat(effRate||0).toFixed(2) + " " + chem.unit + "/ac"
         + (roundQtr && isOzUnit ? " ↑¼gal" : "");
+      const lbOzLine = lbOzFn ? lbOzFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }) : null;
       return `<tr>
         <td style="text-align:center;padding:7px 4px"><div style="background:${cc};color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
         <td style="padding:7px 8px;font-weight:700;font-size:12px">${chem.name}<div style="font-size:9px;font-weight:400;color:#aaa;margin-top:1px">${rateLabel}</div></td>
-        <td style="padding:7px 8px;text-align:right;font-size:18px;font-weight:900">${amtFn({ chem, effRate, roundQtr, isOzUnit, ...rest })}</td>
+        <td style="padding:7px 8px;text-align:right;font-size:18px;font-weight:900">
+          ${amtFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest })}
+          ${lbOzLine ? `<div style="font-size:10px;font-weight:400;color:#888;margin-top:1px">${lbOzLine}</div>` : ""}
+        </td>
         <td style="padding:7px 8px;font-size:10px;color:#c05000;font-weight:700">${chem.rei}</td>
       </tr>`;
     }).join("");
   };
 
-  const thisLoadChemRows = buildRows(resolvedChems, ({partFmt,fullFmt}) => `<span style="color:#c05000">${partFmt||fullFmt}</span>`)
-    + fillRow2(thisLoadTankGal||"—");
-  const fullChemRows     = buildRows(resolvedChems, ({fullFmt}) => `<span style="color:#2a5c0f">${fullFmt}</span>`)
-    + fillRow2(form.tankSize||"—");
+  const thisLoadChemRows = buildRows(
+    resolvedChems,
+    ({partFmt,fullFmt}) => `<span style="color:#c05000">${partFmt||fullFmt}</span>`,
+    ({isDryOzUnit,partLbOz,fullLbOz}) => isDryOzUnit ? (partLbOz||fullLbOz) : null
+  ) + fillRow2(thisLoadTankGal||"—");
+  const fullChemRows = buildRows(
+    resolvedChems,
+    ({fullFmt}) => `<span style="color:#2a5c0f">${fullFmt}</span>`,
+    ({isDryOzUnit,fullLbOz}) => isDryOzUnit ? fullLbOz : null
+  ) + fillRow2(form.tankSize||"—");
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
   const partialChemCompact = hasPartial
-    ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit }) => {
+    ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit, isDryOzUnit }) => {
         const amt = roundQtr && isOzUnit
           ? (fmtOzAsDecimalGal(calc.partialPerTankRaw) || "—")
           : fmtTankAmount(calc.partialPerTankRaw, chem.unit);
+        const lbOzSub = isDryOzUnit ? fmtDryOzAsLbOz(calc.partialPerTankRaw) : null;
         return `<tr>
           <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;border-bottom:1px solid #ddd">${chem.name}</td>
-          <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">${amt}</td>
+          <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">
+            ${amt}
+            ${lbOzSub ? `<div style="font-size:9px;font-weight:400;color:#888">${lbOzSub}</div>` : ""}
+          </td>
         </tr>`;
       }).join("")
     : "";
@@ -348,7 +387,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
         const fmtAmt = r.roundQtr && r.isOzUnit
           ? (fmtOzAsDecimalGal(r.calc.totalPerTankRaw) || "—")
           : fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit);
-        return `${r.chem.name} — ${fmtAmt}`;
+        const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(r.calc.totalPerTankRaw) : null;
+        return `${r.chem.name} — ${fmtAmt}${lbOzSub ? ` <span style="font-size:9px;color:#888">(${lbOzSub})</span>` : ""}`;
       }).join("<br/>");
       return `<tr>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #dde;vertical-align:middle;"><div style="background:${s.color};color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
@@ -538,9 +578,13 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
           const fmt = r.roundQtr && r.isOzUnit
             ? (fmtOzAsDecimalGal(allLoadsOz) || "—")
             : fmtTankAmount(allLoadsOz, r.chem.unit);
+          const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(allLoadsOz) : null;
           return `<tr>
             <td style="padding:4px 6px;font-weight:400;font-size:9.5px;color:#111;">${r.chem.name}</td>
-            <td style="padding:4px 6px;text-align:right;font-size:9.5px;font-weight:400;color:#111;">${fmt}</td>
+            <td style="padding:4px 6px;text-align:right;font-size:9.5px;font-weight:400;color:#111;">
+              ${fmt}
+              ${lbOzSub ? `<div style="font-size:8px;color:#888">${lbOzSub}</div>` : ""}
+            </td>
           </tr>`;
         }).join("")}</tbody>
       </table>
@@ -823,7 +867,9 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const baseUnit    = selected?.unit || "oz";          // library unit
   const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
   const roundQtr    = !!chem.roundQtrGal;              // ¼ gal rounding toggle
-  const isOzUnit    = baseUnit.toLowerCase() === "oz";
+  const unitNorm    = (baseUnit||"oz").toLowerCase().replace(/\s+/g,"");
+  const isOzUnit    = unitNorm === "oz";               // liquid oz → gal+oz display
+  const isDryOzUnit = unitNorm === "dryoz";            // dry oz → lb+oz display
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
   // Effective rate/acre — either entered directly or back-calculated from gal/tank
@@ -853,17 +899,21 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const partialAc   = calc.partialAcres;
 
   // Display helpers
-  const fmtFull    = (rawOz) => roundQtr && isOzUnit
-    ? (fmtOzAsDecimalGal(rawOz) || "—")
-    : fmtTankAmount(rawOz, baseUnit);
-  const fmtPartial = (rawOz) => roundQtr && isOzUnit
-    ? (fmtOzAsDecimalGal(rawOz) || "—")
-    : fmtTankAmount(rawOz, baseUnit);
+  const fmtFull    = (rawVal) => roundQtr && isOzUnit
+    ? (fmtOzAsDecimalGal(rawVal) || "—")
+    : fmtTankAmount(rawVal, baseUnit);
+  const fmtPartial = (rawVal) => roundQtr && isOzUnit
+    ? (fmtOzAsDecimalGal(rawVal) || "—")
+    : fmtTankAmount(rawVal, baseUnit);
 
   const tankDisplay    = fmtFull(tankRaw);
   const partialDisplay = partialAc > 0.01 ? fmtPartial(partialRaw) : null;
+  // For liquid oz: show raw oz count as sub-line when displayed as gal+oz
   const ozSubline      = isOzUnit && tankRaw > 0 && !roundQtr
     ? `${Math.round(tankRaw)} oz` : null;
+  // For dry oz: show lbs+oz conversion as sub-line
+  const dryOzSubline   = isDryOzUnit && tankRaw > 0
+    ? fmtDryOzAsLbOz(tankRaw) : null;
 
   return (
     <tr>
@@ -912,7 +962,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
           </div>
         )}
 
-        {/* ¼ Gal rounding toggle — only shown for oz-unit chemicals */}
+        {/* ¼ Gal rounding toggle — only shown for liquid oz-unit chemicals */}
         {isOzUnit && (
           <label
             title="Round up to nearest ¼ gallon — displays amount in decimal gallons"
@@ -963,6 +1013,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
                   {roundQtr && isOzUnit && tankRaw > 0 && (
                     <div style={{ fontSize:10, color:"#aaa" }}>{Math.round(tankRaw)} oz total</div>
                   )}
+                  {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
                 </div>
                 {partialDisplay && (
                   <div style={{ borderTop:"1px dashed #c8dbb0", paddingTop:3 }}>
@@ -2490,7 +2541,8 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Rate Min, Rate Max</code> — first row is header.
+                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Rate Min, Rate Max</code> — first row is header.<br/>
+                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong></span>
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <button onClick={() => chemFileRef.current.click()} style={{
@@ -2505,9 +2557,21 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Add Chemical Manually</div>
               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
-                {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"],
-                  ["unit","Unit","text"],["rateMin","Rate Min","number"],["rateMax","Rate Max","number"]
-                ].map(([k,lbl,type]) => (
+                {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
+                  <div key={k}>
+                    <label style={labelStyle}>{lbl}</label>
+                    <input type={type} value={newChem[k]} onChange={e => setNewChem(c=>({...c,[k]:e.target.value}))} style={inp} placeholder={lbl}/>
+                  </div>
+                ))}
+                <div>
+                  <label style={labelStyle}>Unit</label>
+                  <select value={newChem.unit||"oz"} onChange={e => setNewChem(c=>({...c,unit:e.target.value}))} style={sel}>
+                    <option value="oz">Oz (liquid)</option>
+                    <option value="dry oz">Dry Oz</option>
+                    <option value="lb">Lb</option>
+                  </select>
+                </div>
+                {[["rateMin","Rate Min","number"],["rateMax","Rate Max","number"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelStyle}>{lbl}</label>
                     <input type={type} value={newChem[k]} onChange={e => setNewChem(c=>({...c,[k]:e.target.value}))} style={inp} placeholder={lbl}/>
@@ -2542,20 +2606,28 @@ export default function App() {
                     ))}</tr>
                   </thead>
                   <tbody>
-                    {chemicals.map(c => (
-                      <tr key={c.id}>
-                        <td style={{ ...td, fontWeight:600 }}>{c.name}</td>
-                        <td style={td}>{c.epa}</td>
-                        <td style={td}>{c.rei}</td>
-                        <td style={td}>{c.unit}</td>
-                        <td style={td}>{c.rateMin}–{c.rateMax} {c.unit}/ac</td>
-                        <td style={td}>
-                          <button onClick={() => deleteChem(c.id)} style={{
-                            background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                          }}>×</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {chemicals.map(c => {
+                      const unitNorm = (c.unit||"oz").toLowerCase().replace(/\s+/g,"");
+                      const isDryOz  = unitNorm === "dryoz";
+                      const unitBadge = isDryOz
+                        ? <span style={{ background:"#fff3cc", color:"#7a5000", borderRadius:3, padding:"1px 4px", fontSize:10, fontWeight:700, marginLeft:3 }}>→ lb+oz</span>
+                        : null;
+                      return (
+                        <tr key={c.id}>
+                          <td style={{ ...td, fontWeight:600 }}>{c.name}</td>
+                          <td style={td}>{c.formType||"—"}</td>
+                          <td style={td}>{c.epa}</td>
+                          <td style={td}>{c.rei}</td>
+                          <td style={td}>{c.unit}{unitBadge}</td>
+                          <td style={td}>{c.rateMin}–{c.rateMax} {c.unit}/ac</td>
+                          <td style={td}>
+                            <button onClick={() => deleteChem(c.id)} style={{
+                              background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
+                            }}>×</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
