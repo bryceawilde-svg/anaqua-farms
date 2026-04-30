@@ -2208,7 +2208,6 @@ export default function App() {
                   <label style={labelStyle}>Name</label>
                   <input id="newLicName" style={inp} placeholder="Full name"/>
                 </div>
-                <div>
                 <button onClick={() => {
                   const name = document.getElementById("newLicName").value.trim();
                   if (!name) return alert("Name is required.");
@@ -2239,7 +2238,7 @@ export default function App() {
                     </tr>
                   ))}
                   {licensed.length === 0 && (
-                    <tr><td colSpan={3} style={{ ...td, color:"#aaa", fontStyle:"italic" }}>No licensed applicators added yet.</td></tr>
+                    <tr><td colSpan={2} style={{ ...td, color:"#aaa", fontStyle:"italic" }}>No licensed applicators added yet.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -2291,7 +2290,7 @@ export default function App() {
           </div>
         )}
 
-                {/* ══ CHEMICAL MANAGER ═══════════════════════════════════════════════════ */}
+        {/* ══ CHEMICAL MANAGER ═══════════════════════════════════════════════════ */}
         {view === "chemMgr" && (
           <div>
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
