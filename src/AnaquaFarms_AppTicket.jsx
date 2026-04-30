@@ -196,17 +196,16 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     return (ai===-1?99:ai) - (bi===-1?99:bi);
   });
   const colHdr = (isPartial) => `<tr>
-    <th style="width:36px;text-align:center;padding:5px 4px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Paso</th>
-    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Producto / Product</th>
-    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-align:right;text-transform:uppercase;">Dosis / Rate</th>
-    <th style="padding:5px 8px;font-size:9px;color:${isPartial?"#c05000":"#1a7a20"};background:#e6f5d0;text-align:right;text-transform:uppercase;">Agregar / Add to Tank</th>
+    <th style="width:36px;text-align:center;padding:5px 4px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Step</th>
+    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Product</th>
+    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-align:right;text-transform:uppercase;">Rate</th>
+    <th style="padding:5px 8px;font-size:9px;color:${isPartial?"#c05000":"#1a7a20"};background:#e6f5d0;text-align:right;text-transform:uppercase;">Add to Tank</th>
     <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">REI</th>
   </tr>`;
   const fillRow2 = (target) => `<tr style="background:#e6f5d0">
     <td style="text-align:center;padding:7px 4px"><div style="background:#2a5c0f;color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">✓</div></td>
     <td colspan="4" style="padding:7px 10px;font-size:13px;font-weight:900;color:#2a5c0f">
       Fill to ${target} gal
-      <div style="font-size:10px;color:#4a8a5a;font-weight:400;margin-top:1px">Llenar a ${target} galones</div>
     </td>
   </tr>`;
   const buildRows = (chems, amtFn) => {
@@ -215,7 +214,6 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       <td style="text-align:center;padding:7px 4px"><div style="background:#1a3a6a;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">1</div></td>
       <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:12px;color:#1a3a6a">
         Fill tank ½ full — begin agitation
-        <div style="font-size:10px;color:#6a9aaa;font-weight:400;margin-top:1px">Llenar tanque a la mitad — iniciar agitación</div>
       </td>
     </tr>`;
     return water + sorted.map(({ chem, effRate, ...rest }, i) => {
@@ -236,15 +234,30 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     + fillRow2(form.tankSize||"—");
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
-  const partialChemBody = hasPartial
-    ? buildRows(resolvedChems, ({partFmt}) => `<span style="color:#c05000">${partFmt||"—"}</span>`) + fillRow2(partialTankGal)
+  const partialChemCompact = hasPartial
+    ? resolvedChems.map(({ chem, effRate, calc }) => {
+        const amt = fmtTankAmount(calc.partialPerTankRaw, chem.unit);
+        return `<tr>
+          <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;border-bottom:1px solid #ddd">${chem.name}</td>
+          <td style="padding:3px 6px;font-size:10px;color:#555;text-align:right;border-bottom:1px solid #ddd">${parseFloat(effRate||0).toFixed(2)} ${chem.unit}/ac</td>
+          <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">${amt}</td>
+        </tr>`;
+      }).join("")
     : "";
   const partialCard = hasPartial ? `
-  <div class="partial-card">
-    <div class="partial-card-hdr">
-      ⚠ PARTIAL LOAD / CARGA PARCIAL &mdash; ${parseFloat(partialAcres).toFixed(1)} acres &mdash; Fill to ${partialTankGal} gal / Llenar a ${partialTankGal} galones
+  <div style="border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;">
+    <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;">
+      <span>⚠ PARTIAL LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac</span>
+      <span>Fill to ${partialTankGal} gal</span>
     </div>
-    <table><thead>${colHdr(true)}</thead><tbody>${partialChemBody}</tbody></table>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr>
+        <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:left;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Product</th>
+        <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:right;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Rate</th>
+        <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:right;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Amount</th>
+      </tr></thead>
+      <tbody>${partialChemCompact}</tbody>
+    </table>
   </div>` : "";
 
   // Tank Setup section: when < 1 full tank, show actual fill amount instead of # of loads
@@ -332,9 +345,9 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   // Chem section heading and content depend on scenario
   const chemSectionHtml = lessThanOneTank ? `
-  <h3>Chemical Mix &mdash; This Load / Esta Carga (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
+  <h3>Chemical Mix &mdash; This Load (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
   <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>` : `
-  <h3>Chemical Mix / Orden de Mezcla &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
+  <h3>Chemical Mix &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
   <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
   ${partialCard}`;
 
@@ -462,7 +475,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   </div>
 
   ${form.primeBoom ? `<div style="background:#fff8e0;border:1.5px solid #e0a020;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:10px;">
-    <strong style="color:#7a5000">⚠ PRIME BOOM — Cebar antes de empezar:</strong> Fill boom with 20 gal of spray mix before entering the field. First tank will cover approximately ${form.galPerAcre ? Math.max(0,((parseFloat(form.tankSize)||0)-20)/(parseFloat(form.galPerAcre)||1)).toFixed(1) : "—"} acres.
+    <strong style="color:#7a5000">⚠ PRIME BOOM:</strong> Fill boom with 20 gal of spray mix before entering the field. First tank will cover approximately ${form.galPerAcre ? Math.max(0,((parseFloat(form.tankSize)||0)-20)/(parseFloat(form.galPerAcre)||1)).toFixed(1) : "—"} acres.
   </div>` : ""}
 
   <h3>Field List &mdash; ${totalAcres.toFixed(2)} Total Acres</h3>
@@ -505,7 +518,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
 
   ${form.flushCleanout ? `<div style="background:#e8f4ff;border:2px solid #1a6a8a;border-radius:6px;padding:8px 12px;margin-top:10px;font-size:10px;">
-    <strong style="color:#0e3a5c">🚿 FLUSH — Enjuague requerido:</strong> When application is complete, flush the system with onboard rinse water before leaving the field.
+    <strong style="color:#0e3a5c">🚿 FLUSH REQUIRED:</strong> When application is complete, flush the system with onboard rinse water before leaving the field.
   </div>` : ""}
 
   <div class="footer">
