@@ -56,8 +56,8 @@ const DEFAULT_EQUIPMENT = [
   { id: 2, name: "8R370 Tractor" },
 ];
 
-const DEFAULT_LICENSED = [];   // { id, name, license }
-const DEFAULT_NONLICENSED = []; // { id, name }
+const DEFAULT_LICENSED = [{ id:1, name:"Glenn Wilde", license:"" }];   // { id, name, license }
+const DEFAULT_NONLICENSED = [{ id:1, name:"Bryce" }]; // { id, name }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const OZ_PER_GAL = 128;
@@ -841,9 +841,9 @@ export default function App() {
     flushCleanout: false,
     equipmentType: "4440 Sprayer",
     equipmentTypeCustom: "",
-    licensedApplicant: "",
+    licensedApplicant: "Glenn Wilde",
     licensedApplicantLicense: "",
-    nonLicensedApplicant: "",
+    nonLicensedApplicant: "Bryce",
     notes: "",
     chemRows: [{ id: Date.now(), chemId: "", ratePerAcre: "", inputMode: "rate", galPerTank: "" }],
   });
