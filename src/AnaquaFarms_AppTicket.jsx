@@ -56,7 +56,7 @@ const DEFAULT_EQUIPMENT = [
   { id: 2, name: "8R370 Tractor" },
 ];
 
-const DEFAULT_LICENSED = [{ id:1, name:"Glenn Wilde", license:"" }];   // { id, name, license }
+const DEFAULT_LICENSED = [{ id:1, name:"Glenn Wilde 0186663", license:"" }];   // { id, name, license }
 const DEFAULT_NONLICENSED = [{ id:1, name:"Bryce" }]; // { id, name }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -502,7 +502,7 @@ function downloadCSV(tickets) {
     "Date","Time Start","Time End","Location/Field","Acres","Crop/Site","Target Pest",
     "Wind Speed (mph)","Wind Direction","Air Temp (F)",
     "Tank Size (gal)","Pressure (PSI)","Gal/Acre","Acre Loads","Full Loads","Partial Load (ac)",
-    "Equipment","Licensed Applicator","Applicator License #","Non-Licensed Applicator",
+    "Equipment","Licensed Applicator","Non-Licensed Applicator",
     "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Full Tank Amount","Partial Tank Amount","Notes"
   ].join(",");
 
@@ -516,7 +516,7 @@ function downloadCSV(tickets) {
         t.crop, `"${t.targetPest||""}"`,
         t.windSpeed, t.windDir, t.airTemp||"",
         t.tankSize, t.pressure, t.galPerAcre, t.acreLoads, t.fullLoads, t.partialAcres||"0",
-        `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, t.licensedApplicantLicense||"", `"${t.nonLicensedApplicant||""}"`,
+        `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, `"${t.nonLicensedApplicant||""}"`,
         `"${c.name||""}"`, c.epa||"", c.rei||"",
         c.ratePerAcre||"", c.unit||"",
         `"${c.totalPerTankFmt || c.totalPerTank || ""}"`,
@@ -890,7 +890,7 @@ export default function App() {
     flushCleanout: false,
     equipmentType: "4440 Sprayer",
     equipmentTypeCustom: "",
-    licensedApplicant: "Glenn Wilde",
+    licensedApplicant: "Glenn Wilde 0186663",
     licensedApplicantLicense: "",
     nonLicensedApplicant: "Bryce",
     notes: "",
@@ -1300,22 +1300,10 @@ export default function App() {
                   <select value={form.licensedApplicant} onChange={e => {
                     const op = licensed.find(o=>o.name===e.target.value);
                     set("licensedApplicant", e.target.value);
-                    set("licensedApplicantLicense", op ? op.license : "");
                   }} style={sel}>
                     <option value="">— select —</option>
                     {licensed.map(op => <option key={op.id} value={op.name}>{op.name}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Applicator License #</label>
-                  <div style={{
-                    border:"1.5px solid #a8d870", borderRadius:5, padding:"6px 10px",
-                    background:"#e6f5d0", minHeight:46, display:"flex", alignItems:"center"
-                  }}>
-                    <span style={{ fontSize:13, fontWeight:700, color:"#2a5c0f" }}>
-                      {form.licensedApplicantLicense || "—"}
-                    </span>
-                  </div>
                 </div>
                 <div>
                   <label style={labelStyle}>Non-Licensed Applicator</label>
@@ -2015,7 +2003,7 @@ export default function App() {
                         <span>⛽ {t.tankSize} gal</span>
                         <span>📦 {t.fullLoads} full{t.partialAcres?` + 1 partial (${t.partialAcres} ac)`:""}</span>
                         {t.equipmentType && <span>🚜 {t.equipmentType}</span>}
-                        {t.licensedApplicant && <span>👤 {t.licensedApplicant} {t.licensedApplicantLicense ? `(${t.licensedApplicantLicense})` : ""}</span>}
+                        {t.licensedApplicant && <span>👤 {t.licensedApplicant}</span>}
                       </div>
 
                       {/* Field schedule */}
@@ -2215,25 +2203,20 @@ export default function App() {
             {/* Licensed Applicators */}
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Licensed Applicators</div>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
                   <label style={labelStyle}>Name</label>
                   <input id="newLicName" style={inp} placeholder="Full name"/>
                 </div>
                 <div>
-                  <label style={labelStyle}>TDA License #</label>
-                  <input id="newLicNum" style={inp} placeholder="License number"/>
-                </div>
                 <button onClick={() => {
                   const name = document.getElementById("newLicName").value.trim();
-                  const lic  = document.getElementById("newLicNum").value.trim();
                   if (!name) return alert("Name is required.");
                   const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
-                  const newLicRec = { id: nextId, name, license: lic };
+                  const newLicRec = { id: nextId, name, license: "" };
                   setLicensed(ops => [...ops, newLicRec]);
                   supabase.from("licensed_applicators").upsert(newLicRec).then(({ error }) => { if (error) console.error("Add lic error:", error); });
                   document.getElementById("newLicName").value = "";
-                  document.getElementById("newLicNum").value  = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
@@ -2242,14 +2225,12 @@ export default function App() {
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
-                  <th style={th}>TDA License #</th>
                   <th style={th}></th>
                 </tr></thead>
                 <tbody>
                   {licensed.map(op => (
                     <tr key={op.id}>
                       <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
-                      <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{op.license || "—"}</td>
                       <td style={td}>
                         <button onClick={() => { setLicensed(ops=>ops.filter(x=>x.id!==op.id)); supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => { if (error) console.error("Delete lic error:", error); }); }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
