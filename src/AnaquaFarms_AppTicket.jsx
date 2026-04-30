@@ -116,27 +116,21 @@ function fmtTankAmount(rawValue, unit) {
   return `${Math.round(v * 10)/10} ${unit}`;
 }
 
-// Round to nearest ¼ gal, display as decimal gallons e.g. "8.25 gal"
-function fmtTankAmountQtrGal(rawValue, unit) {
-  const v = parseFloat(rawValue) || 0;
-  if (!v) return "—";
-  const u = (unit||"oz").toLowerCase();
-  let totalOz = v;
-  if      (u === "gal") totalOz = v * OZ_PER_GAL;
-  else if (u === "pt")  totalOz = v * 16;
-  else if (u === "qt")  totalOz = v * 32;
-  else if (u !== "oz") {
-    const r = Math.round(v * 4) / 4;
-    return `${r % 1 === 0 ? r : r.toFixed(2)} ${unit}`;
-  }
-  const qtr = Math.round((totalOz / OZ_PER_GAL) * 4) / 4;
-  return `${qtr % 1 === 0 ? qtr : qtr.toFixed(2)} gal`;
-}
-
 // Back-calc rate/acre from gallons per tank
 function rateFromGalPerTank(galPerTank, acreLoads) {
   if (!galPerTank || !acreLoads || acreLoads <= 0) return "";
   return ((parseFloat(galPerTank) * OZ_PER_GAL) / acreLoads).toFixed(2);
+}
+
+// Round an oz value to the nearest ¼ gallon (32 oz), return rounded oz
+function roundOzToQtrGal(totalOz) {
+  return Math.round((totalOz / OZ_PER_GAL) * 4) / 4 * OZ_PER_GAL;
+}
+
+// Format a rounded oz value as decimal gallons e.g. "8.25 gal"
+function fmtQtrGal(totalOz) {
+  const gal = Math.round((totalOz / OZ_PER_GAL) * 4) / 4;
+  return `${gal % 1 === 0 ? gal : gal.toFixed(2)} gal`;
 }
 
 
@@ -186,10 +180,20 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     if (r.inputMode === "galtank" && r.galPerTank) {
       effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
     }
+    // If ¼-gal rounding is on, snap the total to the nearest ¼ gal and back-calc rate
+    const roundQtr = !!r.roundQtrGal;
+    if (roundQtr && (chem.unit||"oz").toLowerCase() === "oz" && acreLoadsRaw > 0 && parseFloat(effRate) > 0) {
+      const rawTankOz = parseFloat(effRate) * acreLoadsRaw;
+      const roundedOz = roundOzToQtrGal(rawTankOz);
+      effRate         = (roundedOz / acreLoadsRaw).toFixed(4);
+    }
     const calc    = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
-    const fullFmt = fmtTankAmount(calc.totalPerTankRaw, chem.unit);
-    const partFmt = fmtTankAmount(calc.partialPerTankRaw, chem.unit);
-    return { chem, effRate, fullFmt, partFmt, calc };
+    const fmtFn   = (raw) => roundQtr && (chem.unit||"oz").toLowerCase() === "oz"
+      ? fmtQtrGal(roundOzToQtrGal(raw))
+      : fmtTankAmount(raw, chem.unit);
+    const fullFmt = fmtFn(calc.totalPerTankRaw);
+    const partFmt = fmtFn(calc.partialPerTankRaw);
+    return { chem, effRate, fullFmt, partFmt, calc, roundQtr };
   }).filter(Boolean);
 
   // Field list rows — no times
@@ -250,8 +254,10 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
   const partialChemCompact = hasPartial
-    ? resolvedChems.map(({ chem, effRate, calc }) => {
-        const amt = fmtTankAmount(calc.partialPerTankRaw, chem.unit);
+    ? resolvedChems.map(({ chem, effRate, calc, roundQtr }) => {
+        const amt = roundQtr && (chem.unit||"oz").toLowerCase() === "oz"
+          ? fmtQtrGal(roundOzToQtrGal(calc.partialPerTankRaw))
+          : fmtTankAmount(calc.partialPerTankRaw, chem.unit);
         return `<tr>
           <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;border-bottom:1px solid #ddd">${chem.name}</td>
           <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">${amt}</td>
@@ -330,7 +336,12 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     .filter(s => usedTypes.includes(s.key))
     .map((s, i) => {
       const chems = resolvedChems.filter(r => r.chem.formType === s.key);
-      const names = chems.map(r => `${r.chem.name} — ${fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit)}`).join("<br/>");
+      const names = chems.map(r => {
+        const amt = r.roundQtr && (r.chem.unit||"oz").toLowerCase() === "oz"
+          ? fmtQtrGal(roundOzToQtrGal(r.calc.totalPerTankRaw))
+          : fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit);
+        return `${r.chem.name} — ${amt}`;
+      }).join("<br/>");
       return `<tr>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #dde;vertical-align:middle;"><div style="background:${s.color};color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
         <td style="padding:7px 8px;border-bottom:1px solid #dde;font-size:12px;font-weight:700;" colspan="2">${names}</td>
@@ -799,30 +810,49 @@ function ChemTag({ chem, onRemove }) {
 
 function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChange, onRemove }) {
   const selected    = chemicals.find(c => c.id === chem.chemId);
-  const baseUnit    = selected?.unit || "oz";          // library unit
-  const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
-  const roundQtr    = !!chem.roundQtrGal;              // ¼-gal rounding toggle
+  const baseUnit    = selected?.unit || "oz";
+  const inputMode   = chem.inputMode || "rate";
+  const roundQtr    = !!chem.roundQtrGal;
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
-  // Effective rate/acre — either entered directly or back-calculated from gal/tank
-  let effectiveRate = chem.ratePerAcre;
+  // ── Step 1: get the raw (un-rounded) effective rate/acre
+  let rawRate = chem.ratePerAcre;
   if (inputMode === "galtank" && chem.galPerTank) {
-    effectiveRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw);
+    rawRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw);
   }
 
-  const calc        = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: effectiveRate });
-  const tankRaw     = calc.totalPerTankRaw;     // raw number in product's own unit
-  const partialRaw  = calc.partialPerTankRaw;
-  const partialAc   = calc.partialAcres;
+  // ── Step 2: if ¼-gal rounding is on AND unit is oz, derive a rate that produces
+  //    a ¼-gal-rounded total-per-tank, then back-calculate the matching rate/acre.
+  //    This keeps everything consistent: display, saved ticket, and print file.
+  let effectiveRate = rawRate;
+  let roundedTankOz = null;   // rounded full-tank oz (used for display)
+  let roundedPartOz = null;   // rounded partial-tank oz
+  if (roundQtr && baseUnit.toLowerCase() === "oz" && acreLoadsRaw > 0 && parseFloat(rawRate) > 0) {
+    const rawTankOz  = parseFloat(rawRate) * acreLoadsRaw;
+    roundedTankOz    = roundOzToQtrGal(rawTankOz);
+    effectiveRate    = (roundedTankOz / acreLoadsRaw).toFixed(4); // back-calc from rounded total
+    const calc0      = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: effectiveRate });
+    if (calc0.partialAcres > 0.01) {
+      roundedPartOz  = roundOzToQtrGal(calc0.partialPerTankRaw);
+    }
+  }
 
-  // Pick formatter based on rounding mode
-  const fmt = (raw, unit) => roundQtr ? fmtTankAmountQtrGal(raw, unit) : fmtTankAmount(raw, unit);
+  const calc       = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: effectiveRate });
+  const tankRaw    = calc.totalPerTankRaw;
+  const partialRaw = calc.partialPerTankRaw;
+  const partialAc  = calc.partialAcres;
 
-  // Display: full tank and partial tank
-  const tankDisplay    = fmt(tankRaw,    baseUnit);
-  const partialDisplay = partialAc > 0.01 ? fmt(partialRaw, baseUnit) : null;
-  // oz subline only shown when NOT rounding (rounded view is already decimal gal)
-  const ozSubline      = !roundQtr && baseUnit.toLowerCase() === "oz" && tankRaw > 0
+  // ── Displays
+  const tankDisplay    = roundQtr && roundedTankOz !== null
+    ? fmtQtrGal(roundedTankOz)
+    : fmtTankAmount(tankRaw, baseUnit);
+  const partialDisplay = partialAc > 0.01
+    ? (roundQtr && roundedPartOz !== null
+        ? fmtQtrGal(roundedPartOz)
+        : fmtTankAmount(partialRaw, baseUnit))
+    : null;
+  // oz subline: show exact oz only when NOT rounding
+  const ozSubline = !roundQtr && baseUnit.toLowerCase() === "oz" && tankRaw > 0
     ? `${Math.round(tankRaw)} oz` : null;
 
   return (
@@ -835,7 +865,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
         </select>
       </td>
 
-      {/* Input mode toggle */}
+      {/* Input mode toggle + rate input */}
       <td style={td} colSpan={2}>
         <div style={{ display:"flex", gap:3, marginBottom:4 }}>
           <button onClick={() => onChange("inputMode","rate")}
@@ -866,9 +896,12 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
             <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>gal/tank</span>
           </div>
         )}
-        {inputMode === "galtank" && effectiveRate && (
-          <div style={{ fontSize:10, color:"#6aaa30", marginTop:2 }}>
-            = {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac
+        {/* Show effective rate/acre — rounded if ¼-gal is active, otherwise raw back-calc */}
+        {(inputMode === "galtank" || roundQtr) && effectiveRate && parseFloat(effectiveRate) > 0 && (
+          <div style={{ fontSize:10, marginTop:2,
+            color: roundQtr ? "#1a6a8a" : "#6aaa30",
+            fontWeight: roundQtr ? 700 : 400 }}>
+            {roundQtr ? "⅟₄ " : "= "}{parseFloat(effectiveRate).toFixed(4)} {baseUnit}/ac
           </div>
         )}
       </td>
@@ -878,13 +911,14 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
         const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
         return (
           <td style={{ ...td, minWidth:150 }} colSpan={2}>
-            {/* ¼-gal rounding toggle */}
+
+            {/* ¼-gal toggle button */}
             <button
               onClick={() => onChange("roundQtrGal", !roundQtr)}
-              title="Round to nearest ¼ gallon"
+              title="Round total to nearest ¼ gallon — adjusts rate/acre accordingly"
               style={{
                 display:"inline-flex", alignItems:"center", gap:3,
-                padding:"1px 6px", border:"1.5px solid",
+                padding:"1px 7px", border:"1.5px solid",
                 borderColor: roundQtr ? "#1a6a8a" : "#c8dbb0",
                 borderRadius:4, cursor:"pointer", fontSize:9, fontWeight:700,
                 background:  roundQtr ? "#e0f0ff" : "#f9fdf5",
@@ -894,8 +928,8 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
             >
               {roundQtr ? "✓" : "○"} ¼ gal
             </button>
+
             {lessThanOneTank ? (
-              // Total acres < one full tank — show only the partial (actual) amount
               <div>
                 <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>This Load ({parseFloat(totalAcres).toFixed(1)} ac)</div>
                 <div style={{ fontWeight:700, color:"#e07020", fontSize:14, lineHeight:1.2 }}>{partialDisplay || tankDisplay}</div>
@@ -1089,22 +1123,31 @@ export default function App() {
       .filter(r => r.chemId && (r.ratePerAcre || (r.inputMode === 'galtank' && r.galPerTank)))
       .map(r => {
         const c = chemicals.find(x => x.id === r.chemId);
-        const { totalPerTank } = calcTotals({ ...form, totalAcres, ratePerAcre: r.ratePerAcre });
         const inputMode = r.inputMode || "rate";
         let effectiveRate = r.ratePerAcre;
         if (inputMode === "galtank" && r.galPerTank) {
           effectiveRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
         }
-        const totalOz = parseFloat(calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate }).totalPerTank) || 0;
-        const calc2       = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
-        const tankFmt     = fmtTankAmount(calc2.totalPerTankRaw, c.unit);
-        const partialFmt  = calc2.partialAcres > 0.01 ? fmtTankAmount(calc2.partialPerTankRaw, c.unit) : null;
+        // If ¼-gal rounding is on, back-calc rate from the rounded total
+        const roundQtr = !!r.roundQtrGal;
+        if (roundQtr && (c.unit||"oz").toLowerCase() === "oz" && acreLoadsRaw > 0 && parseFloat(effectiveRate) > 0) {
+          const rawTankOz   = parseFloat(effectiveRate) * acreLoadsRaw;
+          const roundedOz   = roundOzToQtrGal(rawTankOz);
+          effectiveRate     = (roundedOz / acreLoadsRaw).toFixed(4);
+        }
+        const calc2      = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
+        const fmtFn      = (raw) => roundQtr && (c.unit||"oz").toLowerCase() === "oz"
+          ? fmtQtrGal(roundOzToQtrGal(raw))
+          : fmtTankAmount(raw, c.unit);
+        const tankFmt    = fmtFn(calc2.totalPerTankRaw);
+        const partialFmt = calc2.partialAcres > 0.01 ? fmtFn(calc2.partialPerTankRaw) : null;
         return { name:c.name, epa:c.epa, rei:c.rei, unit:c.unit,
-          ratePerAcre: parseFloat(effectiveRate||0).toFixed(2),
+          ratePerAcre: parseFloat(effectiveRate||0).toFixed(4),
           totalPerTank: calc2.totalPerTank,
           totalPerTankFmt: tankFmt,
           partialPerTankFmt: partialFmt,
-          partialAcres: calc2.partialAcres > 0.01 ? calc2.partialAcres.toFixed(1) : null };
+          partialAcres: calc2.partialAcres > 0.01 ? calc2.partialAcres.toFixed(1) : null,
+          roundQtrGal: roundQtr };
       });
     const fieldSchedule = buildFieldSchedule(form.selectedFields, form.timeStart);
     const computedEnd   = fieldSchedule.length ? fieldSchedule[fieldSchedule.length - 1].timeEnd : form.timeEnd;
