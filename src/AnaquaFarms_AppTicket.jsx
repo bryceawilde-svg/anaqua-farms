@@ -96,9 +96,11 @@ function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
 // Format oz total as "X gal Y oz" breakdown
 function fmtOzAsTankMeasure(totalOz) {
   if (!totalOz || isNaN(totalOz) || totalOz <= 0) return null;
-  // Convert oz to decimal gallons (1 gal = 128 oz), rounded to 2 decimal places
-  const gals = Math.round((totalOz / OZ_PER_GAL) * 100) / 100;
-  return `${gals} gal`;
+  const gals = Math.floor(totalOz / OZ_PER_GAL);
+  const oz   = Math.round(totalOz % OZ_PER_GAL);
+  if (gals === 0) return `${oz} oz`;
+  if (oz === 0)   return `${gals} gal`;
+  return `${gals} gal ${oz} oz`;
 }
 
 // Unified formatter: handles oz (→ gal+oz) and other units
@@ -473,6 +475,31 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   ${tankSetupHtml}
   <div style="font-size:10px;color:#555;margin-bottom:4px;margin-top:4px">Pressure: <strong>${form.pressure||"—"} PSI</strong></div>
 
+  ${(() => {
+    if (!resolvedChems.length) return "";
+    const rows = resolvedChems.map(r => {
+      const totalOz = r.calc.totalPerTankRaw * (lessThanOneTank ? 1 : (parseInt(fullLoads)||1));
+      // Use partialPerTankRaw too if partial exists
+      const allLoadsOz = r.calc.totalPerTankRaw * (parseInt(fullLoads)||0) + (hasPartial ? r.calc.partialPerTankRaw : 0);
+      const fmt = fmtTankAmount(allLoadsOz, r.chem.unit);
+      return `<tr>
+        <td style="padding:4px 8px;font-weight:700;font-size:11px;">${r.chem.name}</td>
+        <td style="padding:4px 8px;text-align:right;font-size:9px;color:#888;">${parseFloat(r.effRate||0).toFixed(2)} ${r.chem.unit}/ac</td>
+        <td style="padding:4px 8px;text-align:right;font-size:13px;font-weight:900;color:#2a5c0f;">${fmt}</td>
+      </tr>`;
+    }).join("");
+    return `<div style="margin-bottom:8px;">
+      <div style="font-size:8px;font-weight:900;color:#fff;background:#1a3a6a;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Total Chemical Needed — ${typeof totalAcres==="number"?totalAcres.toFixed(2):totalAcres} Acres</div>
+      <table style="width:100%;border-collapse:collapse;border:1.5px solid #b0c8e8;border-top:none;">
+        <thead><tr>
+          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:left;">Product</th>
+          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;">Rate/Acre</th>
+          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;">Total Needed</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  })()}
   ${chemSectionHtml}
 
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
