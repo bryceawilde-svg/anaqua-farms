@@ -122,17 +122,6 @@ function rateFromGalPerTank(galPerTank, acreLoads) {
   return ((parseFloat(galPerTank) * OZ_PER_GAL) / acreLoads).toFixed(2);
 }
 
-// Round an oz value to the nearest ¼ gallon (32 oz), return rounded oz
-function roundOzToQtrGal(totalOz) {
-  return Math.round((totalOz / OZ_PER_GAL) * 4) / 4 * OZ_PER_GAL;
-}
-
-// Format a rounded oz value as decimal gallons e.g. "8.25 gal"
-function fmtQtrGal(totalOz) {
-  const gal = Math.round((totalOz / OZ_PER_GAL) * 4) / 4;
-  return `${gal % 1 === 0 ? gal : gal.toFixed(2)} gal`;
-}
-
 
 const ACRES_PER_HOUR = 75;
 
@@ -180,20 +169,10 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     if (r.inputMode === "galtank" && r.galPerTank) {
       effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
     }
-    // If ¼-gal rounding is on, snap the total to the nearest ¼ gal and back-calc rate
-    const roundQtr = !!r.roundQtrGal;
-    if (roundQtr && (chem.unit||"oz").toLowerCase() === "oz" && acreLoadsRaw > 0 && parseFloat(effRate) > 0) {
-      const rawTankOz = parseFloat(effRate) * acreLoadsRaw;
-      const roundedOz = roundOzToQtrGal(rawTankOz);
-      effRate         = (roundedOz / acreLoadsRaw).toFixed(4);
-    }
     const calc    = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
-    const fmtFn   = (raw) => roundQtr && (chem.unit||"oz").toLowerCase() === "oz"
-      ? fmtQtrGal(roundOzToQtrGal(raw))
-      : fmtTankAmount(raw, chem.unit);
-    const fullFmt = fmtFn(calc.totalPerTankRaw);
-    const partFmt = fmtFn(calc.partialPerTankRaw);
-    return { chem, effRate, fullFmt, partFmt, calc, roundQtr };
+    const fullFmt = fmtTankAmount(calc.totalPerTankRaw, chem.unit);
+    const partFmt = fmtTankAmount(calc.partialPerTankRaw, chem.unit);
+    return { chem, effRate, fullFmt, partFmt, calc };
   }).filter(Boolean);
 
   // Field list rows — no times
@@ -254,10 +233,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
   const partialChemCompact = hasPartial
-    ? resolvedChems.map(({ chem, effRate, calc, roundQtr }) => {
-        const amt = roundQtr && (chem.unit||"oz").toLowerCase() === "oz"
-          ? fmtQtrGal(roundOzToQtrGal(calc.partialPerTankRaw))
-          : fmtTankAmount(calc.partialPerTankRaw, chem.unit);
+    ? resolvedChems.map(({ chem, effRate, calc }) => {
+        const amt = fmtTankAmount(calc.partialPerTankRaw, chem.unit);
         return `<tr>
           <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;border-bottom:1px solid #ddd">${chem.name}</td>
           <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">${amt}</td>
@@ -336,12 +313,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     .filter(s => usedTypes.includes(s.key))
     .map((s, i) => {
       const chems = resolvedChems.filter(r => r.chem.formType === s.key);
-      const names = chems.map(r => {
-        const amt = r.roundQtr && (r.chem.unit||"oz").toLowerCase() === "oz"
-          ? fmtQtrGal(roundOzToQtrGal(r.calc.totalPerTankRaw))
-          : fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit);
-        return `${r.chem.name} — ${amt}`;
-      }).join("<br/>");
+      const names = chems.map(r => `${r.chem.name} — ${fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit)}`).join("<br/>");
       return `<tr>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #dde;vertical-align:middle;"><div style="background:${s.color};color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
         <td style="padding:7px 8px;border-bottom:1px solid #dde;font-size:12px;font-weight:700;" colspan="2">${names}</td>
@@ -810,49 +782,25 @@ function ChemTag({ chem, onRemove }) {
 
 function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChange, onRemove }) {
   const selected    = chemicals.find(c => c.id === chem.chemId);
-  const baseUnit    = selected?.unit || "oz";
-  const inputMode   = chem.inputMode || "rate";
-  const roundQtr    = !!chem.roundQtrGal;
+  const baseUnit    = selected?.unit || "oz";          // library unit
+  const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
-  // ── Step 1: get the raw (un-rounded) effective rate/acre
-  let rawRate = chem.ratePerAcre;
+  // Effective rate/acre — either entered directly or back-calculated from gal/tank
+  let effectiveRate = chem.ratePerAcre;
   if (inputMode === "galtank" && chem.galPerTank) {
-    rawRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw);
+    effectiveRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw);
   }
 
-  // ── Step 2: if ¼-gal rounding is on AND unit is oz, derive a rate that produces
-  //    a ¼-gal-rounded total-per-tank, then back-calculate the matching rate/acre.
-  //    This keeps everything consistent: display, saved ticket, and print file.
-  let effectiveRate = rawRate;
-  let roundedTankOz = null;   // rounded full-tank oz (used for display)
-  let roundedPartOz = null;   // rounded partial-tank oz
-  if (roundQtr && baseUnit.toLowerCase() === "oz" && acreLoadsRaw > 0 && parseFloat(rawRate) > 0) {
-    const rawTankOz  = parseFloat(rawRate) * acreLoadsRaw;
-    roundedTankOz    = roundOzToQtrGal(rawTankOz);
-    effectiveRate    = (roundedTankOz / acreLoadsRaw).toFixed(4); // back-calc from rounded total
-    const calc0      = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: effectiveRate });
-    if (calc0.partialAcres > 0.01) {
-      roundedPartOz  = roundOzToQtrGal(calc0.partialPerTankRaw);
-    }
-  }
+  const calc        = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: effectiveRate });
+  const tankRaw     = calc.totalPerTankRaw;     // raw number in product's own unit
+  const partialRaw  = calc.partialPerTankRaw;
+  const partialAc   = calc.partialAcres;
 
-  const calc       = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: effectiveRate });
-  const tankRaw    = calc.totalPerTankRaw;
-  const partialRaw = calc.partialPerTankRaw;
-  const partialAc  = calc.partialAcres;
-
-  // ── Displays
-  const tankDisplay    = roundQtr && roundedTankOz !== null
-    ? fmtQtrGal(roundedTankOz)
-    : fmtTankAmount(tankRaw, baseUnit);
-  const partialDisplay = partialAc > 0.01
-    ? (roundQtr && roundedPartOz !== null
-        ? fmtQtrGal(roundedPartOz)
-        : fmtTankAmount(partialRaw, baseUnit))
-    : null;
-  // oz subline: show exact oz only when NOT rounding
-  const ozSubline = !roundQtr && baseUnit.toLowerCase() === "oz" && tankRaw > 0
+  // Display: full tank and partial tank
+  const tankDisplay    = fmtTankAmount(tankRaw,    baseUnit);
+  const partialDisplay = partialAc > 0.01 ? fmtTankAmount(partialRaw, baseUnit) : null;
+  const ozSubline      = baseUnit.toLowerCase() === "oz" && tankRaw > 0
     ? `${Math.round(tankRaw)} oz` : null;
 
   return (
@@ -865,7 +813,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
         </select>
       </td>
 
-      {/* Input mode toggle + rate input */}
+      {/* Input mode toggle */}
       <td style={td} colSpan={2}>
         <div style={{ display:"flex", gap:3, marginBottom:4 }}>
           <button onClick={() => onChange("inputMode","rate")}
@@ -896,12 +844,9 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
             <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>gal/tank</span>
           </div>
         )}
-        {/* Show effective rate/acre — rounded if ¼-gal is active, otherwise raw back-calc */}
-        {(inputMode === "galtank" || roundQtr) && effectiveRate && parseFloat(effectiveRate) > 0 && (
-          <div style={{ fontSize:10, marginTop:2,
-            color: roundQtr ? "#1a6a8a" : "#6aaa30",
-            fontWeight: roundQtr ? 700 : 400 }}>
-            {roundQtr ? "⅟₄ " : "= "}{parseFloat(effectiveRate).toFixed(4)} {baseUnit}/ac
+        {inputMode === "galtank" && effectiveRate && (
+          <div style={{ fontSize:10, color:"#6aaa30", marginTop:2 }}>
+            = {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac
           </div>
         )}
       </td>
@@ -910,26 +855,9 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
       {(() => {
         const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
         return (
-          <td style={{ ...td, minWidth:150 }} colSpan={2}>
-
-            {/* ¼-gal toggle button */}
-            <button
-              onClick={() => onChange("roundQtrGal", !roundQtr)}
-              title="Round total to nearest ¼ gallon — adjusts rate/acre accordingly"
-              style={{
-                display:"inline-flex", alignItems:"center", gap:3,
-                padding:"1px 7px", border:"1.5px solid",
-                borderColor: roundQtr ? "#1a6a8a" : "#c8dbb0",
-                borderRadius:4, cursor:"pointer", fontSize:9, fontWeight:700,
-                background:  roundQtr ? "#e0f0ff" : "#f9fdf5",
-                color:       roundQtr ? "#1a4a6a" : "#aaa",
-                marginBottom:5,
-              }}
-            >
-              {roundQtr ? "✓" : "○"} ¼ gal
-            </button>
-
+          <td style={{ ...td, minWidth:130 }} colSpan={2}>
             {lessThanOneTank ? (
+              // Total acres < one full tank — show only the partial (actual) amount
               <div>
                 <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>This Load ({parseFloat(totalAcres).toFixed(1)} ac)</div>
                 <div style={{ fontWeight:700, color:"#e07020", fontSize:14, lineHeight:1.2 }}>{partialDisplay || tankDisplay}</div>
@@ -975,6 +903,8 @@ export default function App() {
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
   const [tdaFrom,       setTdaFrom]       = useState("");
   const [tdaTo,         setTdaTo]         = useState("");
+  const [logFieldSearch, setLogFieldSearch] = useState("");
+  const [logChemSearch,  setLogChemSearch]  = useState("");
   const [dbLoading,     setDbLoading]     = useState(true);
 
   // ── Form state
@@ -1123,31 +1053,22 @@ export default function App() {
       .filter(r => r.chemId && (r.ratePerAcre || (r.inputMode === 'galtank' && r.galPerTank)))
       .map(r => {
         const c = chemicals.find(x => x.id === r.chemId);
+        const { totalPerTank } = calcTotals({ ...form, totalAcres, ratePerAcre: r.ratePerAcre });
         const inputMode = r.inputMode || "rate";
         let effectiveRate = r.ratePerAcre;
         if (inputMode === "galtank" && r.galPerTank) {
           effectiveRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
         }
-        // If ¼-gal rounding is on, back-calc rate from the rounded total
-        const roundQtr = !!r.roundQtrGal;
-        if (roundQtr && (c.unit||"oz").toLowerCase() === "oz" && acreLoadsRaw > 0 && parseFloat(effectiveRate) > 0) {
-          const rawTankOz   = parseFloat(effectiveRate) * acreLoadsRaw;
-          const roundedOz   = roundOzToQtrGal(rawTankOz);
-          effectiveRate     = (roundedOz / acreLoadsRaw).toFixed(4);
-        }
-        const calc2      = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
-        const fmtFn      = (raw) => roundQtr && (c.unit||"oz").toLowerCase() === "oz"
-          ? fmtQtrGal(roundOzToQtrGal(raw))
-          : fmtTankAmount(raw, c.unit);
-        const tankFmt    = fmtFn(calc2.totalPerTankRaw);
-        const partialFmt = calc2.partialAcres > 0.01 ? fmtFn(calc2.partialPerTankRaw) : null;
+        const totalOz = parseFloat(calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate }).totalPerTank) || 0;
+        const calc2       = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
+        const tankFmt     = fmtTankAmount(calc2.totalPerTankRaw, c.unit);
+        const partialFmt  = calc2.partialAcres > 0.01 ? fmtTankAmount(calc2.partialPerTankRaw, c.unit) : null;
         return { name:c.name, epa:c.epa, rei:c.rei, unit:c.unit,
-          ratePerAcre: parseFloat(effectiveRate||0).toFixed(4),
+          ratePerAcre: parseFloat(effectiveRate||0).toFixed(2),
           totalPerTank: calc2.totalPerTank,
           totalPerTankFmt: tankFmt,
           partialPerTankFmt: partialFmt,
-          partialAcres: calc2.partialAcres > 0.01 ? calc2.partialAcres.toFixed(1) : null,
-          roundQtrGal: roundQtr };
+          partialAcres: calc2.partialAcres > 0.01 ? calc2.partialAcres.toFixed(1) : null };
       });
     const fieldSchedule = buildFieldSchedule(form.selectedFields, form.timeStart);
     const computedEnd   = fieldSchedule.length ? fieldSchedule[fieldSchedule.length - 1].timeEnd : form.timeEnd;
@@ -1993,10 +1914,23 @@ export default function App() {
               borderTop: isMobile ? "1.5px solid #c8dbb0" : "none",
             }}>
               {editingId && (
-                <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"6px 12px", fontSize:12, color:"#7a5800", marginBottom:8 }}>
-                  ✏ Editing saved ticket — Save will update the existing record.
-                  <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); }}
-                    style={{ marginLeft:12, background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:12 }}>Cancel Edit</button>
+                <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"6px 12px", fontSize:12, color:"#7a5800", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:6 }}>
+                  <span>✏ Editing saved ticket — Save will update the existing record.</span>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); }}
+                      style={{ background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:12 }}>Cancel Edit</button>
+                    <button onClick={() => {
+                      if (!window.confirm("Delete this ticket? This cannot be undone.")) return;
+                      setTickets(t => t.filter(x => x.id !== editingId));
+                      // Also remove from Supabase if connected
+                      try { supabase.from("tickets").delete().eq("id", editingId); } catch(e) {}
+                      setForm(blank()); setEditingId(null); setManualTank(false);
+                      setView("log");
+                    }} style={{
+                      background:"#c0392b", color:"#fff", border:"none", borderRadius:5,
+                      padding:"4px 12px", cursor:"pointer", fontWeight:700, fontSize:12
+                    }}>🗑 Delete Ticket</button>
+                  </div>
                 </div>
               )}
 
@@ -2032,7 +1966,7 @@ export default function App() {
             {/* Header row */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:8 }}>
               <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:16 }}>
-                {tickets.length} Ticket{tickets.length!==1?"s":""}
+                {tickets.length} Ticket{tickets.length!==1?"s":""} saved
               </div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                 <button onClick={() => downloadCSV(tickets)} disabled={!tickets.length} style={{
@@ -2070,7 +2004,52 @@ export default function App() {
               <div style={{ textAlign:"center", padding:60, color:"#999", fontSize:14 }}>
                 No tickets yet. Create one using the New Ticket tab.
               </div>
-            ) : tickets.map(t => {
+            ) : (() => {
+              // Filter tickets by field name and/or chemical name
+              const fq = logFieldSearch.trim().toLowerCase();
+              const cq = logChemSearch.trim().toLowerCase();
+              const filtered = tickets.filter(t => {
+                const fieldMatch = !fq || (t.selectedFields||[]).some(f => f.name.toLowerCase().includes(fq));
+                const chemMatch  = !cq || (t.chemicals||[]).some(c => c.name.toLowerCase().includes(cq));
+                return fieldMatch && chemMatch;
+              });
+              return (
+                <>
+                  {/* Search bar */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                    <div style={{ position:"relative" }}>
+                      <span style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#aaa", pointerEvents:"none" }}>🌾</span>
+                      <input
+                        value={logFieldSearch}
+                        onChange={e => setLogFieldSearch(e.target.value)}
+                        placeholder="Search by field…"
+                        style={{ ...inp, paddingLeft:28, fontSize:13 }}
+                      />
+                    </div>
+                    <div style={{ position:"relative" }}>
+                      <span style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#aaa", pointerEvents:"none" }}>🧪</span>
+                      <input
+                        value={logChemSearch}
+                        onChange={e => setLogChemSearch(e.target.value)}
+                        placeholder="Search by chemical…"
+                        style={{ ...inp, paddingLeft:28, fontSize:13 }}
+                      />
+                    </div>
+                  </div>
+                  {(fq || cq) && (
+                    <div style={{ fontSize:12, color:"#888", marginBottom:8, display:"flex", alignItems:"center", gap:8 }}>
+                      {filtered.length} of {tickets.length} ticket{tickets.length!==1?"s":""} match
+                      <button onClick={() => { setLogFieldSearch(""); setLogChemSearch(""); }}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:11 }}>
+                        ✕ clear
+                      </button>
+                    </div>
+                  )}
+                  {filtered.length === 0 ? (
+                    <div style={{ textAlign:"center", padding:40, color:"#999", fontSize:13 }}>
+                      No tickets match your search.
+                    </div>
+                  ) : filtered.map(t => {
               const isOpen = expandedTicket === t.id;
               const ticketNum = String(t.ticketNumber || "?").padStart(3, "0");
               const pestStr   = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest||"");
@@ -2198,6 +2177,9 @@ export default function App() {
                 </div>
               );
             })}
+                </>
+              );
+            })()}
           </div>
         )}
 
