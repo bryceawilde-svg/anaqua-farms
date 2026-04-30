@@ -242,7 +242,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       }).join("")
     : "";
   const partialCard = hasPartial ? `
-  <div style="width:50%;border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;">
+  <div style="border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;width:100%">
     <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;">
       <span>⚠ PARTIAL LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac</span>
       <span>Fill to ${partialTankGal} gal</span>
@@ -345,11 +345,13 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   <h3>Chemical Mix &mdash; This Load (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
   <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>
   </div>` : `
-  <div style="width:75%;margin:0 auto;">
-  <h3>Chemical Mix &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
-  <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
-  </div>
-  ${partialCard}`;
+  <div style="display:flex;gap:10px;align-items:flex-start;">
+    <div style="flex:3;min-width:0;">
+      <h3>Chemical Mix &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
+      <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
+    </div>
+    ${hasPartial ? `<div style="flex:1;min-width:0;">${partialCard}</div>` : ""}
+  </div>`;
 
   const html = `<!DOCTYPE html>
 <html>
@@ -499,8 +501,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
           const allLoadsOz = r.calc.totalPerTankRaw * (parseInt(fullLoads)||0) + (hasPartial ? r.calc.partialPerTankRaw : 0);
           const fmt = fmtTankAmount(allLoadsOz, r.chem.unit);
           return `<tr>
-            <td style="padding:4px 8px;font-weight:700;font-size:11px;">${r.chem.name}</td>
-            <td style="padding:4px 8px;text-align:right;font-size:13px;font-weight:900;color:#2a5c0f;">${fmt}</td>
+            <td style="padding:4px 6px;font-weight:400;font-size:9.5px;color:#111;">${r.chem.name}</td>
+            <td style="padding:4px 6px;text-align:right;font-size:9.5px;font-weight:400;color:#111;">${fmt}</td>
           </tr>`;
         }).join("")}</tbody>
       </table>
