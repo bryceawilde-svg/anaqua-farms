@@ -341,10 +341,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   // Chem section heading and content depend on scenario
   const chemSectionHtml = lessThanOneTank ? `
+  <div style="width:75%;margin:0 auto;">
   <h3>Chemical Mix &mdash; This Load (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
-  <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>` : `
+  <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>
+  </div>` : `
+  <div style="width:75%;margin:0 auto;">
   <h3>Chemical Mix &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
   <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
+  </div>
   ${partialCard}`;
 
   const html = `<!DOCTYPE html>
@@ -358,13 +362,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   .page { padding:10px 14px; max-width:700px; margin:0 auto; }
 
   .header { display:flex; justify-content:space-between; align-items:center;
-    background:#2a5c0f; color:#fff; border-radius:7px; padding:6px 12px; margin-bottom:7px; }
-  .farm { font-size:15px; font-weight:900; color:#fff; letter-spacing:.02em; }
-  .farm-sub { font-size:8px; color:#a8d878; margin-top:1px; }
-  .ticket-title { font-size:11px; font-weight:700; text-align:right; color:#a8d878; }
-  .ticket-meta  { font-size:8px; color:#a8d878; text-align:right; margin-top:2px; }
-  .ticket-num   { font-size:22px; font-weight:900; color:#fff; font-family:monospace;
-    background:rgba(255,255,255,.15); border-radius:5px; padding:1px 10px; }
+    background:#fff; color:#111; border-radius:7px; padding:6px 12px; margin-bottom:7px;
+    border:1.5px solid #ddd; }
+  .farm { font-size:15px; font-weight:900; color:#111; letter-spacing:.02em; }
+  .farm-sub { font-size:8px; color:#555; margin-top:1px; }
+  .ticket-title { font-size:11px; font-weight:700; text-align:right; color:#111; }
+  .ticket-meta  { font-size:8px; color:#555; text-align:right; margin-top:2px; }
+  .ticket-num   { font-size:22px; font-weight:900; color:#111; font-family:monospace;
+    background:rgba(0,0,0,.06); border-radius:5px; padding:1px 10px; }
 
   .prime-box { background:#fff8e0; border:1.5px solid #e0a020; border-radius:6px;
     padding:6px 10px; margin-bottom:7px; display:flex; gap:8px; align-items:flex-start; }
