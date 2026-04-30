@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -661,18 +661,67 @@ const card = { border:"1.5px solid #c8dbb0", borderRadius:8, padding:"14px 16px"
 const sectionTitle = { fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10, borderBottom:"2px solid #c8dbb0", paddingBottom:4 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function FieldTag({ field, onRemove }) {
+function FieldTag({ field, onRemove, onAcresChange }) {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal]         = React.useState("");
+  const origAcres = field._origAcres ?? field.acres;
+  const modified  = parseFloat(field.acres) !== parseFloat(origAcres);
+
+  const startEdit = (e) => {
+    e.stopPropagation();
+    setVal(String(field.acres));
+    setEditing(true);
+  };
+  const commit = () => {
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed) && parsed > 0) onAcresChange(parsed);
+    setEditing(false);
+  };
+  const onKey = (e) => {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") setEditing(false);
+  };
+
   return (
     <span style={{
       display:"inline-flex", alignItems:"center", gap:4,
-      background:"#d4e8c2", color:"#2a5c0f", borderRadius:5,
-      padding:"3px 9px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
+      background: modified ? "#fff3cc" : "#d4e8c2",
+      color:"#2a5c0f", borderRadius:5,
+      border: modified ? "1.5px solid #c8a000" : "1.5px solid transparent",
+      padding:"3px 7px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
     }}>
       <span>{field.name}</span>
-      <span style={{ opacity:0.65, fontSize:11 }}>({field.acres} ac)</span>
+      {editing ? (
+        <input
+          autoFocus
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={onKey}
+          onClick={e => e.stopPropagation()}
+          type="number" min="0.1" step="0.1"
+          style={{
+            width:54, fontSize:12, fontWeight:700,
+            border:"1.5px solid #2a5c0f", borderRadius:3,
+            padding:"1px 4px", background:"#fff", color:"#2a5c0f",
+            outline:"none"
+          }}
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          title={modified ? `Original: ${origAcres} ac — tap to edit` : "Tap to edit acres"}
+          style={{
+            opacity: modified ? 1 : 0.72, fontSize:11,
+            cursor:"pointer", borderBottom:"1px dashed #2a5c0f",
+            color: modified ? "#8a6000" : "#2a5c0f",
+            fontWeight: modified ? 700 : 600
+          }}
+        >({field.acres} ac{modified ? " ✎" : ""})</span>
+      )}
       <button onClick={onRemove} style={{
         background:"none", border:"none", cursor:"pointer",
-        color:"#2a5c0f", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:2
+        color:"#2a5c0f", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:1
       }}>×</button>
     </span>
   );
@@ -1320,7 +1369,18 @@ export default function App() {
                     cursor:"text"
                   }} onClick={() => setShowDrop(true)}>
                     {form.selectedFields.map(f => (
-                      <FieldTag key={f.id} field={f} onRemove={() => removeField(f.id)}/>
+                      <FieldTag
+                        key={f.id}
+                        field={f}
+                        onRemove={() => removeField(f.id)}
+                        onAcresChange={(newAcres) => {
+                          set("selectedFields", form.selectedFields.map(sf =>
+                            sf.id === f.id
+                              ? { ...sf, acres: newAcres, _origAcres: sf._origAcres ?? sf.acres }
+                              : sf
+                          ));
+                        }}
+                      />
                     ))}
                     <input
                       value={fieldSearch}
