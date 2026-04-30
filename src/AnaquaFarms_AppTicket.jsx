@@ -1,5 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
-import { supabase } from "./supabaseClient";
+import { useState, useRef, useEffect } from "react";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CROPS_LIST = ["Cotton", "Corn", "Sorghum"];
@@ -56,8 +55,8 @@ const DEFAULT_EQUIPMENT = [
   { id: 2, name: "8R370 Tractor" },
 ];
 
-const DEFAULT_LICENSED = [{ id:1, name:"Glenn Wilde 0186663", license:"" }];   // { id, name, license }
-const DEFAULT_NONLICENSED = [{ id:1, name:"Bryce" }]; // { id, name }
+const DEFAULT_LICENSED = [];   // { id, name, license }
+const DEFAULT_NONLICENSED = []; // { id, name }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const OZ_PER_GAL = 128;
@@ -96,11 +95,9 @@ function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
 // Format oz total as "X gal Y oz" breakdown
 function fmtOzAsTankMeasure(totalOz) {
   if (!totalOz || isNaN(totalOz) || totalOz <= 0) return null;
-  const gals = Math.floor(totalOz / OZ_PER_GAL);
-  const oz   = Math.round(totalOz % OZ_PER_GAL);
-  if (gals === 0) return `${oz} oz`;
-  if (oz === 0)   return `${gals} gal`;
-  return `${gals} gal ${oz} oz`;
+  // Convert oz to decimal gallons (1 gal = 128 oz), rounded to 2 decimal places
+  const gals = Math.round((totalOz / OZ_PER_GAL) * 100) / 100;
+  return `${gals} gal`;
 }
 
 // Unified formatter: handles oz (→ gal+oz) and other units
@@ -114,6 +111,26 @@ function fmtTankAmount(rawValue, unit) {
   if (u === "pt")  return `${Math.round(v * 10)/10} pt`;
   if (u === "qt")  return `${Math.round(v * 10)/10} qt`;
   return `${Math.round(v * 10)/10} ${unit}`;
+}
+
+// Round oz value to nearest ¼ gallon, return decimal gal string (e.g. "8.25 gal")
+function fmtTankAmountQtrGal(rawValue, unit) {
+  const v = parseFloat(rawValue) || 0;
+  if (!v) return "—";
+  const u = (unit||"oz").toLowerCase();
+  // Convert to oz first if needed
+  let totalOz = v;
+  if (u === "gal") totalOz = v * OZ_PER_GAL;
+  else if (u === "pt") totalOz = v * 16;
+  else if (u === "qt") totalOz = v * 32;
+  else if (u !== "oz") {
+    // Non-volume unit (lb, etc.) — just round to nearest 0.25
+    const rounded = Math.round(v * 4) / 4;
+    return `${rounded % 1 === 0 ? rounded : rounded.toFixed(2)} ${unit}`;
+  }
+  // Round to nearest ¼ gal (= 32 oz)
+  const qtrGals = Math.round((totalOz / OZ_PER_GAL) * 4) / 4;
+  return `${qtrGals % 1 === 0 ? qtrGals : qtrGals.toFixed(2)} gal`;
 }
 
 // Back-calc rate/acre from gallons per tank
@@ -196,30 +213,34 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     return (ai===-1?99:ai) - (bi===-1?99:bi);
   });
   const colHdr = (isPartial) => `<tr>
-    <th style="width:36px;text-align:center;padding:5px 4px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Step</th>
-    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Product</th>
-    <th style="padding:5px 8px;font-size:9px;color:${isPartial?"#c05000":"#1a7a20"};background:#e6f5d0;text-align:right;text-transform:uppercase;">Add to Tank</th>
+    <th style="width:36px;text-align:center;padding:5px 4px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Paso</th>
+    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Producto / Product</th>
+    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-align:right;text-transform:uppercase;">Dosis / Rate</th>
+    <th style="padding:5px 8px;font-size:9px;color:${isPartial?"#c05000":"#1a7a20"};background:#e6f5d0;text-align:right;text-transform:uppercase;">Agregar / Add to Tank</th>
     <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">REI</th>
   </tr>`;
   const fillRow2 = (target) => `<tr style="background:#e6f5d0">
     <td style="text-align:center;padding:7px 4px"><div style="background:#2a5c0f;color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">✓</div></td>
-    <td colspan="3" style="padding:7px 10px;font-size:13px;font-weight:900;color:#2a5c0f">
+    <td colspan="4" style="padding:7px 10px;font-size:13px;font-weight:900;color:#2a5c0f">
       Fill to ${target} gal
+      <div style="font-size:10px;color:#4a8a5a;font-weight:400;margin-top:1px">Llenar a ${target} galones</div>
     </td>
   </tr>`;
   const buildRows = (chems, amtFn) => {
     const sorted = sortByWales2(chems);
     const water = `<tr style="background:#eef6ff">
       <td style="text-align:center;padding:7px 4px"><div style="background:#1a3a6a;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">1</div></td>
-      <td colspan="3" style="padding:7px 10px;font-weight:700;font-size:12px;color:#1a3a6a">
+      <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:12px;color:#1a3a6a">
         Fill tank ½ full — begin agitation
+        <div style="font-size:10px;color:#6a9aaa;font-weight:400;margin-top:1px">Llenar tanque a la mitad — iniciar agitación</div>
       </td>
     </tr>`;
     return water + sorted.map(({ chem, effRate, ...rest }, i) => {
       const cc = circleColors2[chem.formType] || "#555";
       return `<tr>
         <td style="text-align:center;padding:7px 4px"><div style="background:${cc};color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
-        <td style="padding:7px 8px;font-weight:700;font-size:12px">${chem.name}<div style="font-size:9px;font-weight:400;color:#aaa;margin-top:1px">${parseFloat(effRate||0).toFixed(2)} ${chem.unit}/ac</div></td>
+        <td style="padding:7px 8px;font-weight:700;font-size:12px">${chem.name}</td>
+        <td style="padding:7px 8px;text-align:right;font-size:10px;color:#888">${parseFloat(effRate||0).toFixed(2)} ${chem.unit}/ac</td>
         <td style="padding:7px 8px;text-align:right;font-size:18px;font-weight:900">${amtFn({ chem, effRate, ...rest })}</td>
         <td style="padding:7px 8px;font-size:10px;color:#c05000;font-weight:700">${chem.rei}</td>
       </tr>`;
@@ -232,28 +253,15 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     + fillRow2(form.tankSize||"—");
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
-  const partialChemCompact = hasPartial
-    ? resolvedChems.map(({ chem, effRate, calc }) => {
-        const amt = fmtTankAmount(calc.partialPerTankRaw, chem.unit);
-        return `<tr>
-          <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;border-bottom:1px solid #ddd">${chem.name}</td>
-          <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">${amt}</td>
-        </tr>`;
-      }).join("")
+  const partialChemBody = hasPartial
+    ? buildRows(resolvedChems, ({partFmt}) => `<span style="color:#c05000">${partFmt||"—"}</span>`) + fillRow2(partialTankGal)
     : "";
   const partialCard = hasPartial ? `
-  <div style="border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;width:100%">
-    <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;">
-      <span>⚠ PARTIAL LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac</span>
-      <span>Fill to ${partialTankGal} gal</span>
+  <div class="partial-card">
+    <div class="partial-card-hdr">
+      ⚠ PARTIAL LOAD / CARGA PARCIAL &mdash; ${parseFloat(partialAcres).toFixed(1)} acres &mdash; Fill to ${partialTankGal} gal / Llenar a ${partialTankGal} galones
     </div>
-    <table style="width:100%;border-collapse:collapse;">
-      <thead><tr>
-        <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:left;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Product</th>
-        <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:right;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Amount</th>
-      </tr></thead>
-      <tbody>${partialChemCompact}</tbody>
-    </table>
+    <table><thead>${colHdr(true)}</thead><tbody>${partialChemBody}</tbody></table>
   </div>` : "";
 
   // Tank Setup section: when < 1 full tank, show actual fill amount instead of # of loads
@@ -341,17 +349,11 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   // Chem section heading and content depend on scenario
   const chemSectionHtml = lessThanOneTank ? `
-  <div style="width:75%;margin:0 auto;">
-  <h3>Chemical Mix &mdash; This Load (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
-  <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>
-  </div>` : `
-  <div style="display:flex;gap:10px;align-items:flex-start;">
-    <div style="flex:3;min-width:0;">
-      <h3>Chemical Mix &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
-      <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
-    </div>
-    ${hasPartial ? `<div style="flex:1;min-width:0;">${partialCard}</div>` : ""}
-  </div>`;
+  <h3>Chemical Mix &mdash; This Load / Esta Carga (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
+  <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>` : `
+  <h3>Chemical Mix / Orden de Mezcla &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
+  <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
+  ${partialCard}`;
 
   const html = `<!DOCTYPE html>
 <html>
@@ -364,14 +366,13 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   .page { padding:10px 14px; max-width:700px; margin:0 auto; }
 
   .header { display:flex; justify-content:space-between; align-items:center;
-    background:#fff; color:#111; border-radius:7px; padding:6px 12px; margin-bottom:7px;
-    border:1.5px solid #ddd; }
-  .farm { font-size:15px; font-weight:900; color:#111; letter-spacing:.02em; }
-  .farm-sub { font-size:8px; color:#555; margin-top:1px; }
-  .ticket-title { font-size:11px; font-weight:700; text-align:right; color:#111; }
-  .ticket-meta  { font-size:8px; color:#555; text-align:right; margin-top:2px; }
-  .ticket-num   { font-size:22px; font-weight:900; color:#111; font-family:monospace;
-    background:rgba(0,0,0,.06); border-radius:5px; padding:1px 10px; }
+    background:#2a5c0f; color:#fff; border-radius:7px; padding:6px 12px; margin-bottom:7px; }
+  .farm { font-size:15px; font-weight:900; color:#fff; letter-spacing:.02em; }
+  .farm-sub { font-size:8px; color:#a8d878; margin-top:1px; }
+  .ticket-title { font-size:11px; font-weight:700; text-align:right; color:#a8d878; }
+  .ticket-meta  { font-size:8px; color:#a8d878; text-align:right; margin-top:2px; }
+  .ticket-num   { font-size:22px; font-weight:900; color:#fff; font-family:monospace;
+    background:rgba(255,255,255,.15); border-radius:5px; padding:1px 10px; }
 
   .prime-box { background:#fff8e0; border:1.5px solid #e0a020; border-radius:6px;
     padding:6px 10px; margin-bottom:7px; display:flex; gap:8px; align-items:flex-start; }
@@ -477,37 +478,15 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     </div>
   </div>
 
-  ${(form.primeBoom || form.flushCleanout) ? `<div style="display:flex;gap:8px;margin-bottom:8px;">
-    ${form.primeBoom ? `<div style="background:#fff8e0;border:1.5px solid #e0a020;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:900;color:#7a5000;">⚠ PRIME BOOM</div>` : ""}
-    ${form.flushCleanout ? `<div style="background:#e8f4ff;border:1.5px solid #1a6a8a;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:900;color:#0e3a5c;">🚿 FLUSH REQUIRED</div>` : ""}
+  ${form.primeBoom ? `<div style="background:#fff8e0;border:1.5px solid #e0a020;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:10px;">
+    <strong style="color:#7a5000">⚠ PRIME BOOM — Cebar antes de empezar:</strong> Fill boom with 20 gal of spray mix before entering the field. First tank will cover approximately ${form.galPerAcre ? Math.max(0,((parseFloat(form.tankSize)||0)-20)/(parseFloat(form.galPerAcre)||1)).toFixed(1) : "—"} acres.
   </div>` : ""}
 
-  <div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;">
-    <div style="flex:1;min-width:0;">
-      <div style="font-size:8px;font-weight:900;color:#fff;background:#2a5c0f;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Field List &mdash; ${totalAcres.toFixed(2)} ac</div>
-      <table style="border:1px solid #c8dbb0;border-top:none;">
-        <thead><tr><th>Field</th><th style="text-align:right">Acres</th></tr></thead>
-        <tbody>${fieldRows}</tbody>
-      </table>
-    </div>
-    ${resolvedChems.length ? `<div style="flex:1;min-width:0;">
-      <div style="font-size:8px;font-weight:900;color:#fff;background:#1a3a6a;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Total Chemical Needed</div>
-      <table style="border-collapse:collapse;width:100%;border:1.5px solid #b0c8e8;border-top:none;">
-        <thead><tr>
-          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:left;">Product</th>
-          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;">Total</th>
-        </tr></thead>
-        <tbody>${resolvedChems.map(r => {
-          const allLoadsOz = r.calc.totalPerTankRaw * (parseInt(fullLoads)||0) + (hasPartial ? r.calc.partialPerTankRaw : 0);
-          const fmt = fmtTankAmount(allLoadsOz, r.chem.unit);
-          return `<tr>
-            <td style="padding:4px 6px;font-weight:400;font-size:9.5px;color:#111;">${r.chem.name}</td>
-            <td style="padding:4px 6px;text-align:right;font-size:9.5px;font-weight:400;color:#111;">${fmt}</td>
-          </tr>`;
-        }).join("")}</tbody>
-      </table>
-    </div>` : ""}
-  </div>
+  <h3>Field List &mdash; ${totalAcres.toFixed(2)} Total Acres</h3>
+  <table>
+    <thead><tr><th>Field</th><th style="text-align:right">Acres</th></tr></thead>
+    <tbody>${fieldRows}</tbody>
+  </table>
 
   <h3>Tank Setup</h3>
   ${tankSetupHtml}
@@ -516,6 +495,10 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   ${chemSectionHtml}
 
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
+
+  ${form.flushCleanout ? `<div style="background:#e8f4ff;border:2px solid #1a6a8a;border-radius:6px;padding:8px 12px;margin-top:10px;font-size:10px;">
+    <strong style="color:#0e3a5c">🚿 FLUSH — Enjuague requerido:</strong> When application is complete, flush the system with onboard rinse water before leaving the field.
+  </div>` : ""}
 
   <div class="footer">
     <span>Anaqua Farms &mdash; Application Ticket</span>
@@ -538,7 +521,7 @@ function downloadCSV(tickets) {
     "Date","Time Start","Time End","Location/Field","Acres","Crop/Site","Target Pest",
     "Wind Speed (mph)","Wind Direction","Air Temp (F)",
     "Tank Size (gal)","Pressure (PSI)","Gal/Acre","Acre Loads","Full Loads","Partial Load (ac)",
-    "Equipment","Licensed Applicator","Non-Licensed Applicator",
+    "Equipment","Licensed Applicator","Applicator License #","Non-Licensed Applicator",
     "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Full Tank Amount","Partial Tank Amount","Notes"
   ].join(",");
 
@@ -552,7 +535,7 @@ function downloadCSV(tickets) {
         t.crop, `"${t.targetPest||""}"`,
         t.windSpeed, t.windDir, t.airTemp||"",
         t.tankSize, t.pressure, t.galPerAcre, t.acreLoads, t.fullLoads, t.partialAcres||"0",
-        `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, `"${t.nonLicensedApplicant||""}"`,
+        `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, t.licensedApplicantLicense||"", `"${t.nonLicensedApplicant||""}"`,
         `"${c.name||""}"`, c.epa||"", c.rei||"",
         c.ratePerAcre||"", c.unit||"",
         `"${c.totalPerTankFmt || c.totalPerTank || ""}"`,
@@ -697,67 +680,18 @@ const card = { border:"1.5px solid #c8dbb0", borderRadius:8, padding:"14px 16px"
 const sectionTitle = { fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10, borderBottom:"2px solid #c8dbb0", paddingBottom:4 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function FieldTag({ field, onRemove, onAcresChange }) {
-  const [editing, setEditing] = React.useState(false);
-  const [val, setVal]         = React.useState("");
-  const origAcres = field._origAcres ?? field.acres;
-  const modified  = parseFloat(field.acres) !== parseFloat(origAcres);
-
-  const startEdit = (e) => {
-    e.stopPropagation();
-    setVal(String(field.acres));
-    setEditing(true);
-  };
-  const commit = () => {
-    const parsed = parseFloat(val);
-    if (!isNaN(parsed) && parsed > 0) onAcresChange(parsed);
-    setEditing(false);
-  };
-  const onKey = (e) => {
-    if (e.key === "Enter") commit();
-    if (e.key === "Escape") setEditing(false);
-  };
-
+function FieldTag({ field, onRemove }) {
   return (
     <span style={{
       display:"inline-flex", alignItems:"center", gap:4,
-      background: modified ? "#fff3cc" : "#d4e8c2",
-      color:"#2a5c0f", borderRadius:5,
-      border: modified ? "1.5px solid #c8a000" : "1.5px solid transparent",
-      padding:"3px 7px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
+      background:"#d4e8c2", color:"#2a5c0f", borderRadius:5,
+      padding:"3px 9px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
     }}>
       <span>{field.name}</span>
-      {editing ? (
-        <input
-          autoFocus
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={onKey}
-          onClick={e => e.stopPropagation()}
-          type="number" min="0.1" step="0.1"
-          style={{
-            width:54, fontSize:12, fontWeight:700,
-            border:"1.5px solid #2a5c0f", borderRadius:3,
-            padding:"1px 4px", background:"#fff", color:"#2a5c0f",
-            outline:"none"
-          }}
-        />
-      ) : (
-        <span
-          onClick={startEdit}
-          title={modified ? `Original: ${origAcres} ac — tap to edit` : "Tap to edit acres"}
-          style={{
-            opacity: modified ? 1 : 0.72, fontSize:11,
-            cursor:"pointer", borderBottom:"1px dashed #2a5c0f",
-            color: modified ? "#8a6000" : "#2a5c0f",
-            fontWeight: modified ? 700 : 600
-          }}
-        >({field.acres} ac{modified ? " ✎" : ""})</span>
-      )}
+      <span style={{ opacity:0.65, fontSize:11 }}>({field.acres} ac)</span>
       <button onClick={onRemove} style={{
         background:"none", border:"none", cursor:"pointer",
-        color:"#2a5c0f", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:1
+        color:"#2a5c0f", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:2
       }}>×</button>
     </span>
   );
@@ -784,6 +718,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const selected    = chemicals.find(c => c.id === chem.chemId);
   const baseUnit    = selected?.unit || "oz";          // library unit
   const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
+  const roundQtr    = !!chem.roundQtrGal;              // ¼-gal rounding toggle
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
   // Effective rate/acre — either entered directly or back-calculated from gal/tank
@@ -797,10 +732,16 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const partialRaw  = calc.partialPerTankRaw;
   const partialAc   = calc.partialAcres;
 
+  // Choose formatter based on rounding mode
+  const fmt = (raw, unit) => roundQtr
+    ? fmtTankAmountQtrGal(raw, unit)
+    : fmtTankAmount(raw, unit);
+
   // Display: full tank and partial tank
-  const tankDisplay    = fmtTankAmount(tankRaw,    baseUnit);
-  const partialDisplay = partialAc > 0.01 ? fmtTankAmount(partialRaw, baseUnit) : null;
-  const ozSubline      = baseUnit.toLowerCase() === "oz" && tankRaw > 0
+  const tankDisplay    = fmt(tankRaw,    baseUnit);
+  const partialDisplay = partialAc > 0.01 ? fmt(partialRaw, baseUnit) : null;
+  // Exact oz subline shown only when NOT rounding (rounding shows decimal gal already)
+  const ozSubline      = !roundQtr && baseUnit.toLowerCase() === "oz" && tankRaw > 0
     ? `${Math.round(tankRaw)} oz` : null;
 
   return (
@@ -855,7 +796,24 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
       {(() => {
         const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
         return (
-          <td style={{ ...td, minWidth:130 }} colSpan={2}>
+          <td style={{ ...td, minWidth:150 }} colSpan={2}>
+            {/* ¼-gal rounding toggle */}
+            <button
+              onClick={() => onChange("roundQtrGal", !roundQtr)}
+              title="Round to nearest ¼ gallon"
+              style={{
+                display:"inline-flex", alignItems:"center", gap:3,
+                padding:"1px 6px", border:"1.5px solid",
+                borderColor: roundQtr ? "#1a6a8a" : "#c8dbb0",
+                borderRadius:4, cursor:"pointer", fontSize:9, fontWeight:700,
+                background:  roundQtr ? "#e8f4ff" : "#f9fdf5",
+                color:       roundQtr ? "#1a6a8a" : "#aaa",
+                marginBottom:5, letterSpacing:"0.02em"
+              }}
+            >
+              {roundQtr ? "✓" : "○"} ¼ gal
+            </button>
+
             {lessThanOneTank ? (
               // Total acres < one full tank — show only the partial (actual) amount
               <div>
@@ -893,17 +851,16 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
 // ── Main App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const isMobile        = useIsMobile();
-  const [fieldLibrary,  setFieldLibrary]  = useState([]);
-  const [chemicals,     setChemicals]     = useState([]);
-  const [equipment,     setEquipment]     = useState([]);
-  const [licensed,      setLicensed]      = useState([]);
-  const [nonLicensed,   setNonLicensed]   = useState([]);
+  const [fieldLibrary,  setFieldLibrary]  = useState(DEFAULT_FIELDS);
+  const [chemicals,     setChemicals]     = useState(DEFAULT_CHEMICALS);
+  const [equipment,     setEquipment]     = useState(DEFAULT_EQUIPMENT);
+  const [licensed,      setLicensed]      = useState(DEFAULT_LICENSED);
+  const [nonLicensed,   setNonLicensed]   = useState(DEFAULT_NONLICENSED);
   const [tickets,       setTickets]       = useState([]);
   const [view,          setView]          = useState("form");
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
   const [tdaFrom,       setTdaFrom]       = useState("");
   const [tdaTo,         setTdaTo]         = useState("");
-  const [dbLoading,     setDbLoading]     = useState(true);
 
   // ── Form state
   const blank = () => ({
@@ -926,9 +883,9 @@ export default function App() {
     flushCleanout: false,
     equipmentType: "4440 Sprayer",
     equipmentTypeCustom: "",
-    licensedApplicant: "Glenn Wilde 0186663",
+    licensedApplicant: "",
     licensedApplicantLicense: "",
-    nonLicensedApplicant: "Bryce",
+    nonLicensedApplicant: "",
     notes: "",
     chemRows: [{ id: Date.now(), chemId: "", ratePerAcre: "", inputMode: "rate", galPerTank: "" }],
   });
@@ -944,54 +901,6 @@ export default function App() {
   const [wxLoading,   setWxLoading]   = useState(false);
   const [wxError,     setWxError]     = useState("");
   const [editingId,   setEditingId]   = useState(null);
-
-  // ── Load all data from Supabase on mount
-  useEffect(() => {
-    async function loadAll() {
-      setDbLoading(true);
-      const [f, c, e, la, nla, t] = await Promise.all([
-        supabase.from("fields").select("*").order("name"),
-        supabase.from("chemicals").select("*").order("name"),
-        supabase.from("equipment").select("*").order("name"),
-        supabase.from("licensed_applicators").select("*").order("name"),
-        supabase.from("non_licensed_applicators").select("*").order("name"),
-        supabase.from("tickets").select("*").order("created_at", { ascending: false }),
-      ]);
-      setFieldLibrary(f.data?.length ? f.data : DEFAULT_FIELDS);
-      setChemicals(c.data?.length ? c.data : DEFAULT_CHEMICALS);
-      setEquipment(e.data?.length ? e.data : DEFAULT_EQUIPMENT);
-      setLicensed(la.data || []);
-      setNonLicensed(nla.data || []);
-      setTickets((t.data || []).map(tk => ({
-        ...tk,
-        id:                       tk.id,
-        ticketNumber:             tk.ticket_number   || tk.ticketNumber,
-        selectedFields:           tk.selected_fields || tk.selectedFields || [],
-        chemRows:                 tk.chem_rows       || tk.chemRows       || [],
-        fieldSchedule:            tk.field_schedule  || tk.fieldSchedule  || [],
-        chemicals:                tk.chemicals       || [],
-        timeStart:                tk.time_start      || tk.timeStart      || "",
-        timeEnd:                  tk.time_end        || tk.timeEnd        || "",
-        galPerAcre:               tk.gal_per_acre    || tk.galPerAcre     || "",
-        tankSize:                 tk.tank_size       || tk.tankSize       || "",
-        windSpeed:                tk.wind_speed      || tk.windSpeed      || "",
-        windDir:                  tk.wind_dir        || tk.windDir        || "",
-        airTemp:                  tk.air_temp        || tk.airTemp        || "",
-        primeBoom:                tk.prime_boom      ?? tk.primeBoom      ?? false,
-        flushCleanout:            tk.flush_cleanout  ?? tk.flushCleanout  ?? false,
-        equipmentType:            tk.equipment_type  || tk.equipmentType  || "",
-        licensedApplicant:        tk.licensed_applicant         || tk.licensedApplicant        || "",
-        licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense || "",
-        nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant     || "",
-        totalAcres:               tk.total_acres     || tk.totalAcres     || "0",
-        fullLoads:                tk.full_loads      || tk.fullLoads      || "—",
-        partialAcres:             tk.partial_acres   || tk.partialAcres   || null,
-        acreLoads:                tk.acre_loads      || tk.acreLoads      || "—",
-      })));
-      setDbLoading(false);
-    }
-    loadAll();
-  }, []);
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
@@ -1090,38 +999,6 @@ export default function App() {
       ? t.map(x => x.id === editingId ? finalTicket : x)
       : [finalTicket, ...t]
     );
-    // Persist to Supabase
-    supabase.from("tickets").upsert({
-      id:                         finalTicket.id,
-      ticket_number:              finalTicket.ticketNumber,
-      date:                       finalTicket.date,
-      time_start:                 finalTicket.timeStart,
-      time_end:                   finalTicket.timeEnd,
-      crop:                       finalTicket.crop,
-      target_pest:                finalTicket.targetPest,
-      wind_speed:                 finalTicket.windSpeed,
-      wind_dir:                   finalTicket.windDir,
-      air_temp:                   finalTicket.airTemp,
-      tank_size:                  finalTicket.tankSize,
-      pressure:                   finalTicket.pressure,
-      gal_per_acre:               finalTicket.galPerAcre,
-      prime_boom:                 finalTicket.primeBoom,
-      flush_cleanout:             finalTicket.flushCleanout,
-      equipment_type:             finalTicket.equipmentType,
-      licensed_applicant:         finalTicket.licensedApplicant,
-      licensed_applicant_license: finalTicket.licensedApplicantLicense,
-      non_licensed_applicant:     finalTicket.nonLicensedApplicant,
-      notes:                      finalTicket.notes,
-      total_acres:                String(finalTicket.totalAcres),
-      full_loads:                 String(finalTicket.fullLoads),
-      partial_loads:              finalTicket.partialLoads,
-      partial_acres:              finalTicket.partialAcres ? String(finalTicket.partialAcres) : null,
-      acre_loads:                 String(finalTicket.acreLoads),
-      selected_fields:            finalTicket.selectedFields,
-      chemicals:                  finalTicket.chemicals,
-      chem_rows:                  finalTicket.chemRows,
-      field_schedule:             finalTicket.fieldSchedule,
-    }).then(({ error }) => { if (error) console.error("Ticket save error:", error); });
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -1151,7 +1028,6 @@ export default function App() {
         imported++;
       });
       setFieldLibrary(fl => [...fl, ...added]);
-      supabase.from("fields").upsert(added).then(({ error }) => { if (error) console.error("Field import error:", error); });
       setFieldUpMsg(`✓ Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setFieldUpMsg(""), 4000);
     };
@@ -1162,12 +1038,10 @@ export default function App() {
   const addManualField = () => {
     if (!newField.name || !newField.acres) return alert("Field name and acres are required.");
     const nextId = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) + 1 : 1;
-    const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" };
-    setFieldLibrary(fl => [...fl, newFieldRec]);
-    supabase.from("fields").upsert(newFieldRec).then(({ error }) => { if (error) console.error("Add field error:", error); });
+    setFieldLibrary(fl => [...fl, { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" }]);
     setNewField({ name:"", acres:"", crop:"" });
   };
-  const deleteField = (id) => { setFieldLibrary(fl => fl.filter(f => f.id !== id)); supabase.from("fields").delete().eq("id", id).then(({ error }) => { if (error) console.error("Delete field error:", error); }); };
+  const deleteField = (id) => setFieldLibrary(fl => fl.filter(f => f.id !== id));
 
   // ── Chemical Manager
   const chemFileRef  = useRef();
@@ -1188,7 +1062,6 @@ export default function App() {
         imported++;
       });
       setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, rate_min: a.rateMin, rate_max: a.rateMax }))).then(({ error }) => { if (error) console.error("Chem import error:", error); });
       setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
@@ -1198,12 +1071,10 @@ export default function App() {
 
   const addManualChem = () => {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
-    const newChemRec = { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 };
-    setChemicals(c => [...c, newChemRec]);
-    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType, rate_min: newChemRec.rateMin, rate_max: newChemRec.rateMax }).then(({ error }) => { if (error) console.error("Add chem error:", error); });
+    setChemicals(c => [...c, { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 }]);
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", rateMin:"", rateMax:"" });
   };
-  const deleteChem = (id) => { setChemicals(c => c.filter(x => x.id !== id)); supabase.from("chemicals").delete().eq("id", id).then(({ error }) => { if (error) console.error("Delete chem error:", error); }); };
+  const deleteChem = (id) => setChemicals(c => c.filter(x => x.id !== id));
 
   const filteredFields = fieldLibrary.filter(f =>
     f.name.toLowerCase().includes(fieldSearch.toLowerCase()) &&
@@ -1212,13 +1083,6 @@ export default function App() {
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────────
-  if (dbLoading) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
-      <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
-      <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>Anaqua Farms</div>
-      <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading data…</div>
-    </div>
-  );
   return (
     <div style={{ minHeight:"100vh", background:"#f0f7e8", fontFamily:"'Georgia','Times New Roman',serif" }}>
 
@@ -1336,10 +1200,22 @@ export default function App() {
                   <select value={form.licensedApplicant} onChange={e => {
                     const op = licensed.find(o=>o.name===e.target.value);
                     set("licensedApplicant", e.target.value);
+                    set("licensedApplicantLicense", op ? op.license : "");
                   }} style={sel}>
                     <option value="">— select —</option>
                     {licensed.map(op => <option key={op.id} value={op.name}>{op.name}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Applicator License #</label>
+                  <div style={{
+                    border:"1.5px solid #a8d870", borderRadius:5, padding:"6px 10px",
+                    background:"#e6f5d0", minHeight:46, display:"flex", alignItems:"center"
+                  }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:"#2a5c0f" }}>
+                      {form.licensedApplicantLicense || "—"}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label style={labelStyle}>Non-Licensed Applicator</label>
@@ -1393,18 +1269,7 @@ export default function App() {
                     cursor:"text"
                   }} onClick={() => setShowDrop(true)}>
                     {form.selectedFields.map(f => (
-                      <FieldTag
-                        key={f.id}
-                        field={f}
-                        onRemove={() => removeField(f.id)}
-                        onAcresChange={(newAcres) => {
-                          set("selectedFields", form.selectedFields.map(sf =>
-                            sf.id === f.id
-                              ? { ...sf, acres: newAcres, _origAcres: sf._origAcres ?? sf.acres }
-                              : sf
-                          ));
-                        }}
-                      />
+                      <FieldTag key={f.id} field={f} onRemove={() => removeField(f.id)}/>
                     ))}
                     <input
                       value={fieldSearch}
@@ -2039,7 +1904,7 @@ export default function App() {
                         <span>⛽ {t.tankSize} gal</span>
                         <span>📦 {t.fullLoads} full{t.partialAcres?` + 1 partial (${t.partialAcres} ac)`:""}</span>
                         {t.equipmentType && <span>🚜 {t.equipmentType}</span>}
-                        {t.licensedApplicant && <span>👤 {t.licensedApplicant}</span>}
+                        {t.licensedApplicant && <span>👤 {t.licensedApplicant} {t.licensedApplicantLicense ? `(${t.licensedApplicantLicense})` : ""}</span>}
                       </div>
 
                       {/* Field schedule */}
@@ -2204,9 +2069,7 @@ export default function App() {
                   const name = el.value.trim();
                   if (!name) return alert("Enter an equipment name.");
                   const nextId = equipment.length ? Math.max(...equipment.map(e=>e.id))+1 : 1;
-                  const newEquipRec = { id: nextId, name };
-                  setEquipment(eq => [...eq, newEquipRec]);
-                  supabase.from("equipment").upsert(newEquipRec).then(({ error }) => { if (error) console.error("Add equip error:", error); });
+                  setEquipment(eq => [...eq, { id: nextId, name }]);
                   el.value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2223,7 +2086,7 @@ export default function App() {
                     <tr key={eq.id}>
                       <td style={{ ...td, fontWeight:600 }}>{eq.name}</td>
                       <td style={td}>
-                        <button onClick={() => { setEquipment(e=>e.filter(x=>x.id!==eq.id)); supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => { if (error) console.error("Delete equip error:", error); }); }} style={{
+                        <button onClick={() => setEquipment(e=>e.filter(x=>x.id!==eq.id))} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}>×</button>
                       </td>
@@ -2239,19 +2102,23 @@ export default function App() {
             {/* Licensed Applicators */}
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Licensed Applicators</div>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
                   <label style={labelStyle}>Name</label>
                   <input id="newLicName" style={inp} placeholder="Full name"/>
                 </div>
+                <div>
+                  <label style={labelStyle}>TDA License #</label>
+                  <input id="newLicNum" style={inp} placeholder="License number"/>
+                </div>
                 <button onClick={() => {
                   const name = document.getElementById("newLicName").value.trim();
+                  const lic  = document.getElementById("newLicNum").value.trim();
                   if (!name) return alert("Name is required.");
                   const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
-                  const newLicRec = { id: nextId, name, license: "" };
-                  setLicensed(ops => [...ops, newLicRec]);
-                  supabase.from("licensed_applicators").upsert(newLicRec).then(({ error }) => { if (error) console.error("Add lic error:", error); });
+                  setLicensed(ops => [...ops, { id: nextId, name, license: lic }]);
                   document.getElementById("newLicName").value = "";
+                  document.getElementById("newLicNum").value  = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
@@ -2260,21 +2127,23 @@ export default function App() {
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
+                  <th style={th}>TDA License #</th>
                   <th style={th}></th>
                 </tr></thead>
                 <tbody>
                   {licensed.map(op => (
                     <tr key={op.id}>
                       <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
+                      <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{op.license || "—"}</td>
                       <td style={td}>
-                        <button onClick={() => { setLicensed(ops=>ops.filter(x=>x.id!==op.id)); supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => { if (error) console.error("Delete lic error:", error); }); }} style={{
+                        <button onClick={() => setLicensed(ops=>ops.filter(x=>x.id!==op.id))} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}>×</button>
                       </td>
                     </tr>
                   ))}
                   {licensed.length === 0 && (
-                    <tr><td colSpan={2} style={{ ...td, color:"#aaa", fontStyle:"italic" }}>No licensed applicators added yet.</td></tr>
+                    <tr><td colSpan={3} style={{ ...td, color:"#aaa", fontStyle:"italic" }}>No licensed applicators added yet.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -2292,9 +2161,7 @@ export default function App() {
                   const name = document.getElementById("newNonLicName").value.trim();
                   if (!name) return alert("Name is required.");
                   const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
-                  const newNonLicRec = { id: nextId, name };
-                  setNonLicensed(ops => [...ops, newNonLicRec]);
-                  supabase.from("non_licensed_applicators").upsert(newNonLicRec).then(({ error }) => { if (error) console.error("Add nonlic error:", error); });
+                  setNonLicensed(ops => [...ops, { id: nextId, name }]);
                   document.getElementById("newNonLicName").value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2311,7 +2178,7 @@ export default function App() {
                     <tr key={p.id}>
                       <td style={{ ...td, fontWeight:600 }}>{p.name}</td>
                       <td style={td}>
-                        <button onClick={() => { setNonLicensed(ops=>ops.filter(x=>x.id!==p.id)); supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => { if (error) console.error("Delete nonlic error:", error); }); }} style={{
+                        <button onClick={() => setNonLicensed(ops=>ops.filter(x=>x.id!==p.id))} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}>×</button>
                       </td>
@@ -2326,7 +2193,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ CHEMICAL MANAGER ═══════════════════════════════════════════════════ */}
+                {/* ══ CHEMICAL MANAGER ═══════════════════════════════════════════════════ */}
         {view === "chemMgr" && (
           <div>
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
