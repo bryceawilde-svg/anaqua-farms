@@ -116,6 +116,23 @@ function fmtTankAmount(rawValue, unit) {
   return `${Math.round(v * 10)/10} ${unit}`;
 }
 
+// Round to nearest ¼ gal, display as decimal gallons e.g. "8.25 gal"
+function fmtTankAmountQtrGal(rawValue, unit) {
+  const v = parseFloat(rawValue) || 0;
+  if (!v) return "—";
+  const u = (unit||"oz").toLowerCase();
+  let totalOz = v;
+  if      (u === "gal") totalOz = v * OZ_PER_GAL;
+  else if (u === "pt")  totalOz = v * 16;
+  else if (u === "qt")  totalOz = v * 32;
+  else if (u !== "oz") {
+    const r = Math.round(v * 4) / 4;
+    return `${r % 1 === 0 ? r : r.toFixed(2)} ${unit}`;
+  }
+  const qtr = Math.round((totalOz / OZ_PER_GAL) * 4) / 4;
+  return `${qtr % 1 === 0 ? qtr : qtr.toFixed(2)} gal`;
+}
+
 // Back-calc rate/acre from gallons per tank
 function rateFromGalPerTank(galPerTank, acreLoads) {
   if (!galPerTank || !acreLoads || acreLoads <= 0) return "";
@@ -784,6 +801,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const selected    = chemicals.find(c => c.id === chem.chemId);
   const baseUnit    = selected?.unit || "oz";          // library unit
   const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
+  const roundQtr    = !!chem.roundQtrGal;              // ¼-gal rounding toggle
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
   // Effective rate/acre — either entered directly or back-calculated from gal/tank
@@ -797,10 +815,14 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const partialRaw  = calc.partialPerTankRaw;
   const partialAc   = calc.partialAcres;
 
+  // Pick formatter based on rounding mode
+  const fmt = (raw, unit) => roundQtr ? fmtTankAmountQtrGal(raw, unit) : fmtTankAmount(raw, unit);
+
   // Display: full tank and partial tank
-  const tankDisplay    = fmtTankAmount(tankRaw,    baseUnit);
-  const partialDisplay = partialAc > 0.01 ? fmtTankAmount(partialRaw, baseUnit) : null;
-  const ozSubline      = baseUnit.toLowerCase() === "oz" && tankRaw > 0
+  const tankDisplay    = fmt(tankRaw,    baseUnit);
+  const partialDisplay = partialAc > 0.01 ? fmt(partialRaw, baseUnit) : null;
+  // oz subline only shown when NOT rounding (rounded view is already decimal gal)
+  const ozSubline      = !roundQtr && baseUnit.toLowerCase() === "oz" && tankRaw > 0
     ? `${Math.round(tankRaw)} oz` : null;
 
   return (
@@ -855,7 +877,23 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
       {(() => {
         const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
         return (
-          <td style={{ ...td, minWidth:130 }} colSpan={2}>
+          <td style={{ ...td, minWidth:150 }} colSpan={2}>
+            {/* ¼-gal rounding toggle */}
+            <button
+              onClick={() => onChange("roundQtrGal", !roundQtr)}
+              title="Round to nearest ¼ gallon"
+              style={{
+                display:"inline-flex", alignItems:"center", gap:3,
+                padding:"1px 6px", border:"1.5px solid",
+                borderColor: roundQtr ? "#1a6a8a" : "#c8dbb0",
+                borderRadius:4, cursor:"pointer", fontSize:9, fontWeight:700,
+                background:  roundQtr ? "#e0f0ff" : "#f9fdf5",
+                color:       roundQtr ? "#1a4a6a" : "#aaa",
+                marginBottom:5,
+              }}
+            >
+              {roundQtr ? "✓" : "○"} ¼ gal
+            </button>
             {lessThanOneTank ? (
               // Total acres < one full tank — show only the partial (actual) amount
               <div>
