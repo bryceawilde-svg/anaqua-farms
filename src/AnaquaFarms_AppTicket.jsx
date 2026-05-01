@@ -333,11 +333,10 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   // Tank Setup section: when < 1 full tank, show actual fill amount instead of # of loads
   const tankSetupHtml = lessThanOneTank ? `
-  <div class="tank-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="tank-grid" style="grid-template-columns:repeat(4,1fr)">
     <div class="tank-item">
       <label>Gal / Acre</label>
       <div class="bigval">${form.galPerAcre||"—"}</div>
-      <div class="sub">gal per acre</div>
     </div>
     <div class="tank-item">
       <label>Total Acres</label>
@@ -349,8 +348,12 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       <div class="bigval" style="color:#c05000">${thisLoadTankGal}<span style="font-size:12px;font-weight:400"> gal</span></div>
       <div class="sub" style="color:#c05000">do not fill completely</div>
     </div>
+    <div class="tank-item">
+      <label>Pressure</label>
+      <div class="bigval">${form.pressure||"—"}<span style="font-size:12px;font-weight:400"> PSI</span></div>
+    </div>
   </div>` : `
-  <div class="tank-grid">
+  <div class="tank-grid" style="grid-template-columns:repeat(5,1fr)">
     <div class="tank-item">
       <label>Tank Size</label>
       <div class="bigval">${form.tankSize||"—"}<span style="font-size:12px;font-weight:400"> gal</span></div>
@@ -358,18 +361,20 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     <div class="tank-item">
       <label>Gal / Acre</label>
       <div class="bigval">${form.galPerAcre||"—"}</div>
-      <div class="sub">gal per acre</div>
     </div>
     <div class="tank-item">
       <label>Acres / Load</label>
       <div class="bigval">${acreLoads}</div>
-      <div class="sub">acres per full tank</div>
     </div>
     <div class="tank-item">
       <label># of Loads</label>
       <div class="bigval">${fullLoads}</div>
       <div class="sub">full load${fullLoads!=="1"?"s":""}</div>
       ${hasPartial ? `<div class="tank-partial-tag">+ 1 partial (${parseFloat(partialAcres).toFixed(1)} ac)</div>` : ""}
+    </div>
+    <div class="tank-item">
+      <label>Pressure</label>
+      <div class="bigval">${form.pressure||"—"}<span style="font-size:12px;font-weight:400"> PSI</span></div>
     </div>
   </div>`;
 
@@ -598,7 +603,6 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   <h3>Tank Setup</h3>
   ${tankSetupHtml}
-  <div style="font-size:10px;color:#555;margin-bottom:4px;margin-top:4px">Pressure: <strong>${form.pressure||"—"} PSI</strong></div>
 
   ${chemSectionHtml}
 
