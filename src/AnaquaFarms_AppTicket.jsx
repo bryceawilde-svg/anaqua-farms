@@ -1924,18 +1924,18 @@ export default function App() {
 
               {/* ── Recently used chemicals — quick-pick chips ── */}
               {(() => {
-                // Collect last 4 unique chemicals used across saved tickets (most recent first)
+                // Collect last 6 unique chemicals used across saved tickets (most recent first)
                 const seen = new Set();
                 const recent = [];
-                for (const t of tickets) {
+                outer: for (const t of tickets) {
                   for (const c of (t.chemicals || [])) {
+                    if (recent.length >= 6) break outer;
                     if (!seen.has(c.name)) {
                       seen.add(c.name);
                       const lib = chemicals.find(x => x.name === c.name);
                       if (lib) recent.push(lib);
                     }
                   }
-                  if (recent.length >= 6) break;
                 }
                 if (!recent.length) return null;
                 const selectedIds = form.chemRows.map(r=>r.chemId).filter(Boolean);
