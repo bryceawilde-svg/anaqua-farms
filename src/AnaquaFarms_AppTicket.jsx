@@ -313,16 +313,21 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     : "";
   const partialCard = hasPartial ? `
   <div style="border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;width:100%">
-    <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;">
-      <span>⚠ PARTIAL LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac</span>
-      <span>Fill to ${partialTankGal} gal</span>
+    <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;">
+      ⚠ PARTIAL LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac
     </div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr>
         <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:left;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Product</th>
         <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:right;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Amount</th>
       </tr></thead>
-      <tbody>${partialChemCompact}</tbody>
+      <tbody>
+        ${partialChemCompact}
+        <tr style="background:#eef6ff">
+          <td style="padding:4px 6px;font-size:11px;font-weight:700;color:#1a3a6a;border-top:1px solid #ccc;">Water</td>
+          <td style="padding:4px 6px;font-size:13px;font-weight:900;color:#1a3a6a;text-align:right;border-top:1px solid #ccc;">Fill to ${partialTankGal} gal</td>
+        </tr>
+      </tbody>
     </table>
   </div>` : "";
 
