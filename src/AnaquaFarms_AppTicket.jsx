@@ -2065,11 +2065,15 @@ export default function App() {
                   <div style={{ display:"flex", gap:8 }}>
                     <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); }}
                       style={{ background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:12 }}>Cancel Edit</button>
-                    <button onClick={() => {
+                    <button onClick={async () => {
                       if (!window.confirm("Delete this ticket? This cannot be undone.")) return;
+                      const { error } = await supabase.from("tickets").delete().eq("id", editingId);
+                      if (error) {
+                        alert("Failed to delete from database: " + error.message);
+                        console.error("Delete ticket error:", error);
+                        return;
+                      }
                       setTickets(t => t.filter(x => x.id !== editingId));
-                      // Also remove from Supabase if connected
-                      try { supabase.from("tickets").delete().eq("id", editingId); } catch(e) {}
                       setForm(blank()); setEditingId(null); setManualTank(false);
                       setView("log");
                     }} style={{
