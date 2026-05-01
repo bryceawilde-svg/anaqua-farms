@@ -42,13 +42,13 @@ const FORM_LABELS  = {
 };
 
 const DEFAULT_CHEMICALS = [
-  { id: 1,  name: "Roundup PowerMAX 3", epa: "524-537",    rei: "4 hours",  unit: "oz", rateMin: 22, rateMax: 88 },
-  { id: 2,  name: "Atrazine 4L",        epa: "100-816",    rei: "12 hours", unit: "oz", rateMin: 16, rateMax: 64 },
-  { id: 3,  name: "2,4-D Amine 4",      epa: "62719-17",   rei: "48 hours", unit: "oz", rateMin: 16, rateMax: 64 },
-  { id: 4,  name: "Bicep II Magnum",    epa: "100-1077",   rei: "12 hours", unit: "oz", rateMin: 20, rateMax: 80 },
-  { id: 5,  name: "Headline SC",        epa: "7969-187",   rei: "12 hours", unit: "oz", rateMin: 6,  rateMax: 12 },
-  { id: 6,  name: "Lorsban 4E",         epa: "62719-220",  rei: "24 hours", unit: "oz", rateMin: 16, rateMax: 32 },
-  { id: 7,  name: "Treflan HFP",        epa: "62719-176",  rei: "24 hours", unit: "oz", rateMin: 12, rateMax: 24 },
+  { id: 1,  name: "Roundup PowerMAX 3", epa: "524-537",    rei: "4 hours",  unit: "oz", formType: "S" },
+  { id: 2,  name: "Atrazine 4L",        epa: "100-816",    rei: "12 hours", unit: "oz", formType: "L" },
+  { id: 3,  name: "2,4-D Amine 4",      epa: "62719-17",   rei: "48 hours", unit: "oz", formType: "L" },
+  { id: 4,  name: "Bicep II Magnum",    epa: "100-1077",   rei: "12 hours", unit: "oz", formType: "L" },
+  { id: 5,  name: "Headline SC",        epa: "7969-187",   rei: "12 hours", unit: "oz", formType: "L" },
+  { id: 6,  name: "Lorsban 4E",         epa: "62719-220",  rei: "24 hours", unit: "oz", formType: "E" },
+  { id: 7,  name: "Treflan HFP",        epa: "62719-176",  rei: "24 hours", unit: "oz", formType: "E" },
 ];
 
 const DEFAULT_EQUIPMENT = [
@@ -1320,7 +1320,7 @@ export default function App() {
   // ── Chemical Manager
   const chemFileRef  = useRef();
   const [chemUpMsg,  setChemUpMsg]  = useState("");
-  const [newChem,    setNewChem]    = useState({ name:"", epa:"", rei:"", unit:"oz", rateMin:"", rateMax:"" });
+  const [newChem,    setNewChem]    = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L" });
 
   const handleChemCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -1332,11 +1332,12 @@ export default function App() {
       lines.slice(1).forEach(line => {
         const p = line.split(",").map(s => s.trim().replace(/^"|"$/g,""));
         if (!p[0] || !p[1] || !p[2]) { skipped++; return; }
-        added.push({ id: Date.now() + Math.random(), name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", rateMin:parseFloat(p[4])||0, rateMax:parseFloat(p[5])||0, formType:p[6]||"L" });
+        // Columns: Name, EPA #, REI, Unit, Formulation Type
+        added.push({ id: Date.now() + Math.random(), name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", formType:p[4]||"L" });
         imported++;
       });
       setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, rate_min: a.rateMin, rate_max: a.rateMax }))).then(({ error }) => { if (error) console.error("Chem import error:", error); });
+      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType }))).then(({ error }) => { if (error) console.error("Chem import error:", error); });
       setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
@@ -1346,10 +1347,10 @@ export default function App() {
 
   const addManualChem = () => {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
-    const newChemRec = { ...newChem, id: Date.now(), rateMin: parseFloat(newChem.rateMin)||0, rateMax: parseFloat(newChem.rateMax)||0 };
+    const newChemRec = { ...newChem, id: Date.now() };
     setChemicals(c => [...c, newChemRec]);
-    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType, rate_min: newChemRec.rateMin, rate_max: newChemRec.rateMax }).then(({ error }) => { if (error) console.error("Add chem error:", error); });
-    setNewChem({ name:"", epa:"", rei:"", unit:"oz", rateMin:"", rateMax:"" });
+    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType }).then(({ error }) => { if (error) console.error("Add chem error:", error); });
+    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L" });
   };
   const deleteChem = (id) => { setChemicals(c => c.filter(x => x.id !== id)); supabase.from("chemicals").delete().eq("id", id).then(({ error }) => { if (error) console.error("Delete chem error:", error); }); };
 
@@ -2545,8 +2546,8 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Rate Min, Rate Max</code> — first row is header.<br/>
-                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong></span>
+                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Formulation Type</code> — first row is header.<br/>
+                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, E, S, WDG, WP, D, A</strong></span>
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <button onClick={() => chemFileRef.current.click()} style={{
@@ -2560,7 +2561,7 @@ export default function App() {
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Add Chemical Manually</div>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
                 {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelStyle}>{lbl}</label>
@@ -2575,24 +2576,18 @@ export default function App() {
                     <option value="lb">Lb</option>
                   </select>
                 </div>
-                {[["rateMin","Rate Min","number"],["rateMax","Rate Max","number"]].map(([k,lbl,type]) => (
-                  <div key={k}>
-                    <label style={labelStyle}>{lbl}</label>
-                    <input type={type} value={newChem[k]} onChange={e => setNewChem(c=>({...c,[k]:e.target.value}))} style={inp} placeholder={lbl}/>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop:10 }}>
-                <label style={labelStyle}>Formulation Type (WALES mixing order)</label>
-                <select value={newChem.formType||"L"} onChange={e => setNewChem(c=>({...c,formType:e.target.value}))} style={sel}>
-                  <option value="L">L — Liquid Flowable / SC / CS</option>
-                  <option value="E">E — Emulsifiable Concentrate (EC)</option>
-                  <option value="S">S — Soluble Liquid (SL) e.g. glyphosate</option>
-                  <option value="WDG">WDG — Water Dispersible Granule / DF</option>
-                  <option value="WP">WP — Wettable Powder</option>
-                  <option value="D">D — Dry Flowable</option>
-                  <option value="A">A — Adjuvant / Surfactant</option>
-                </select>
+                <div>
+                  <label style={labelStyle}>Formulation Type</label>
+                  <select value={newChem.formType||"L"} onChange={e => setNewChem(c=>({...c,formType:e.target.value}))} style={sel}>
+                    <option value="L">L — Liquid Flowable / SC</option>
+                    <option value="E">E — EC</option>
+                    <option value="S">S — Soluble Liquid</option>
+                    <option value="WDG">WDG — Dispersible Granule</option>
+                    <option value="WP">WP — Wettable Powder</option>
+                    <option value="D">D — Dry Flowable</option>
+                    <option value="A">A — Adjuvant</option>
+                  </select>
+                </div>
               </div>
               <button onClick={addManualChem} style={{
                 marginTop:12, background:"#2a5c0f", color:"#fff", border:"none",
@@ -2605,7 +2600,7 @@ export default function App() {
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
-                    <tr>{["Chemical Name","Form.","EPA #","REI","Unit","Rate Range",""].map(h=>(
+                    <tr>{["Chemical Name","Form.","EPA #","REI","Unit",""].map(h=>(
                       <th key={h} style={th}>{h}</th>
                     ))}</tr>
                   </thead>
@@ -2623,7 +2618,6 @@ export default function App() {
                           <td style={td}>{c.epa}</td>
                           <td style={td}>{c.rei}</td>
                           <td style={td}>{c.unit}{unitBadge}</td>
-                          <td style={td}>{c.rateMin}–{c.rateMax} {c.unit}/ac</td>
                           <td style={td}>
                             <button onClick={() => deleteChem(c.id)} style={{
                               background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
