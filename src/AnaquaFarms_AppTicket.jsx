@@ -68,13 +68,17 @@ function roundToQtrGal(oz) {
   return Math.ceil(oz / QTR) * QTR;
 }
 
-// Format oz as decimal gallons (e.g. 8.25 gal)
+// Format oz as fractional gallons (e.g. 37½ gal, 8¼ gal)
 function fmtOzAsDecimalGal(totalOz) {
   if (!totalOz || isNaN(totalOz) || totalOz <= 0) return null;
   const gals = totalOz / OZ_PER_GAL;
-  // Display as fraction of quarters: ¼ increments → .00 .25 .50 .75
+  // Snap to nearest ¼ gal
   const rounded = Math.round(gals * 4) / 4;
-  return `${rounded} gal`;
+  const whole = Math.floor(rounded);
+  const frac  = Math.round((rounded - whole) * 4); // 0,1,2,3 → 0,¼,½,¾
+  const fracStr = ["", "¼", "½", "¾"][frac] || "";
+  if (whole === 0) return `${fracStr} gal`;
+  return fracStr ? `${whole}${fracStr} gal` : `${whole} gal`;
 }
 
 function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
