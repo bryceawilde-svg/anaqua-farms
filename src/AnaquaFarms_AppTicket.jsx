@@ -1212,18 +1212,32 @@ export default function App() {
       .filter(r => r.chemId && (r.ratePerAcre || (r.inputMode === 'galtank' && r.galPerTank)))
       .map(r => {
         const c = chemicals.find(x => x.id === r.chemId);
-        const { totalPerTank } = calcTotals({ ...form, totalAcres, ratePerAcre: r.ratePerAcre });
         const inputMode = r.inputMode || "rate";
+        const unitNorm  = (c.unit||"oz").toLowerCase().replace(/\s+/g,"");
+        const isOzUnit  = unitNorm === "oz";
         let effectiveRate = r.ratePerAcre;
         if (inputMode === "galtank" && r.galPerTank) {
           effectiveRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
         }
-        const totalOz = parseFloat(calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate }).totalPerTank) || 0;
-        const calc2       = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
-        const tankFmt     = fmtTankAmount(calc2.totalPerTankRaw, c.unit);
-        const partialFmt  = calc2.partialAcres > 0.01 ? fmtTankAmount(calc2.partialPerTankRaw, c.unit) : null;
+        // Apply ¼-gal rounding exactly as printTicket and ChemicalRow do
+        const roundQtr = !!(r.roundQtrGal && isOzUnit);
+        if (roundQtr && acreLoadsRaw > 0) {
+          const calc0 = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
+          const rawOz = calc0.totalPerTankRaw;
+          if (rawOz > 0) {
+            const rounded = roundToQtrGal(rawOz);
+            effectiveRate = (rounded / acreLoadsRaw).toFixed(4);
+          }
+        }
+        const calc2      = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
+        const fmtFull    = (oz) => roundQtr && isOzUnit ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, c.unit);
+        const tankFmt    = fmtFull(calc2.totalPerTankRaw);
+        const partialFmt = calc2.partialAcres > 0.01 ? fmtFull(calc2.partialPerTankRaw) : null;
         return { name:c.name, epa:c.epa, rei:c.rei, unit:c.unit,
-          ratePerAcre: parseFloat(effectiveRate||0).toFixed(2),
+          ratePerAcre: parseFloat(effectiveRate||0).toFixed(4),
+          roundQtrGal: r.roundQtrGal || false,
+          inputMode,
+          galPerTank: r.galPerTank || "",
           totalPerTank: calc2.totalPerTank,
           totalPerTankFmt: tankFmt,
           partialPerTankFmt: partialFmt,
@@ -2323,8 +2337,12 @@ export default function App() {
                             ...t,
                             targetPest: Array.isArray(t.targetPest) ? t.targetPest : (t.targetPest ? t.targetPest.split(", ") : []),
                             chemRows: t.chemicals.map((c,i) => ({
-                              id: Date.now()+i, chemId: chemicals.find(x=>x.name===c.name)?.id || "",
-                              ratePerAcre: c.ratePerAcre, inputMode:"rate", galPerTank:""
+                              id: Date.now()+i,
+                              chemId: chemicals.find(x=>x.name===c.name)?.id || "",
+                              ratePerAcre: c.ratePerAcre,
+                              inputMode: c.inputMode || "rate",
+                              galPerTank: c.galPerTank || "",
+                              roundQtrGal: c.roundQtrGal || false,
                             }))
                           });
                           setEditingId(t.id);
