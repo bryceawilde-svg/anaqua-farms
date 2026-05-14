@@ -62,9 +62,14 @@ const DEFAULT_NONLICENSED = [{ id:1, name:"Bryce" }]; // { id, name }
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const OZ_PER_GAL = 128;
 
-// Round a raw oz value UP to the nearest ¼ gallon (32 oz), return result in oz
+// Round a raw oz value UP to the nearest ¼ gallon (32 oz), return result in oz.
+// Uses a 0.01 oz epsilon snap: if the value is already within 0.01 oz of a
+// ¼-gal boundary (floating-point drift from a previously back-calculated rate),
+// it snaps DOWN to that boundary instead of rounding up to the next one.
 function roundToQtrGal(oz) {
   const QTR = OZ_PER_GAL / 4; // 32 oz per ¼ gal
+  const nearest = Math.round(oz / QTR) * QTR;
+  if (Math.abs(oz - nearest) < 0.01) return nearest;
   return Math.ceil(oz / QTR) * QTR;
 }
 
