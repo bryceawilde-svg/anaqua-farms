@@ -132,12 +132,11 @@ function fmtDryOzAsLbOz(totalDryOz) {
   return `${lbs} lb ${oz} oz`;
 }
 
-// Format oz as total gallons + 2.5-gal jug count (e.g. "9 gal (3.6 jugs)")
+// Format oz as 2.5-gal jug count (e.g. "3.6 jugs")
 function fmtJugCount(totalOz) {
   if (!totalOz || isNaN(totalOz) || totalOz <= 0) return null;
-  const gals = totalOz / OZ_PER_GAL;
-  const jugs = gals / 2.5;
-  return `${parseFloat(gals.toFixed(2))} gal (${parseFloat(jugs.toFixed(1))} jugs)`;
+  const jugs = (totalOz / OZ_PER_GAL) / 2.5;
+  return `${parseFloat(jugs.toFixed(1))} jugs`;
 }
 
 // Unified formatter: handles oz (→ gal+oz), dry oz (→ lb+oz), and other units
@@ -579,7 +578,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       <div class="farm-sub">(956) 465-6430 &middot; (956) 535-0482</div>
     </div>
     <div>
-      <div class="ticket-title">Application Ticket</div>
+      <div class="ticket-title">Application Ticket${form.ticketNumber ? ` #${String(form.ticketNumber).padStart(3,'0')}` : ''}</div>
       <div class="ticket-meta">Date: ${form.date || "___________"} &nbsp;|&nbsp; ${form.crop||""} &nbsp;|&nbsp; Printed: ${new Date().toLocaleDateString()}</div>
     </div>
   </div>
@@ -2174,7 +2173,10 @@ export default function App() {
                 }}>{editingId ? "✏ Update Ticket" : "💾 Save Ticket"}</button>
                 <button onClick={() => {
                   const sched = buildFieldSchedule(form.selectedFields, form.timeStart);
-                  printTicket(form, chemicals, totalAcres, sched);
+                  const nextNum = editingId
+                    ? (tickets.find(x=>x.id===editingId)?.ticketNumber || 0)
+                    : (tickets.length ? Math.max(...tickets.map(x=>x.ticketNumber||0)) + 1 : 1);
+                  printTicket({ ...form, ticketNumber: nextNum }, chemicals, totalAcres, sched);
                   saveTicket();
                 }} style={{
                   background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)",
