@@ -132,6 +132,14 @@ function fmtDryOzAsLbOz(totalDryOz) {
   return `${lbs} lb ${oz} oz`;
 }
 
+// Format oz as total gallons + 2.5-gal jug count (e.g. "9 gal (3.6 jugs)")
+function fmtJugCount(totalOz) {
+  if (!totalOz || isNaN(totalOz) || totalOz <= 0) return null;
+  const gals = totalOz / OZ_PER_GAL;
+  const jugs = gals / 2.5;
+  return `${parseFloat(gals.toFixed(2))} gal (${parseFloat(jugs.toFixed(1))} jugs)`;
+}
+
 // Unified formatter: handles oz (→ gal+oz), dry oz (→ lb+oz), and other units
 function fmtTankAmount(rawValue, unit) {
   const v = parseFloat(rawValue) || 0;
@@ -228,7 +236,10 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     // For dry oz: compute the lbs+oz sub-line shown under the amount
     const fullLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.totalPerTankRaw) : null;
     const partLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.partialPerTankRaw) : null;
-    return { chem, effRate, fullFmt, partFmt, fullLbOz, partLbOz, calc, roundQtr, isOzUnit, isDryOzUnit };
+    const jug2_5gal = !!(r.jug2_5gal && isOzUnit);
+    const fullJugs = jug2_5gal ? fmtJugCount(calc.totalPerTankRaw) : null;
+    const partJugs = jug2_5gal && calc.partialPerTankRaw > 0 ? fmtJugCount(calc.partialPerTankRaw) : null;
+    return { chem, effRate, fullFmt, partFmt, fullLbOz, partLbOz, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, fullJugs, partJugs };
   }).filter(Boolean);
 
   // Field list rows — no times
@@ -263,7 +274,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       Fill to ${target} gal
     </td>
   </tr>`;
-  const buildRows = (chems, amtFn, lbOzFn) => {
+  const buildRows = (chems, amtFn, lbOzFn, jugFn) => {
     const sorted = sortByWales2(chems);
     const water = `<tr style="background:#eef6ff">
       <td style="text-align:center;padding:7px 4px"><div style="background:#1a3a6a;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">1</div></td>
@@ -276,12 +287,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       const rateLabel = parseFloat(effRate||0).toFixed(2) + " " + chem.unit + "/ac"
         + (roundQtr && isOzUnit ? " ↑¼gal" : "");
       const lbOzLine = lbOzFn ? lbOzFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }) : null;
+      const jugLine  = jugFn  ? jugFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }) : null;
       return `<tr>
         <td style="text-align:center;padding:7px 4px"><div style="background:${cc};color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
         <td style="padding:7px 8px;font-weight:700;font-size:12px">${chem.name}<div style="font-size:9px;font-weight:400;color:#aaa;margin-top:1px">${rateLabel}</div></td>
         <td style="padding:7px 8px;text-align:right;font-size:18px;font-weight:900">
           ${amtFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest })}
           ${lbOzLine ? `<div style="font-size:10px;font-weight:400;color:#888;margin-top:1px">${lbOzLine}</div>` : ""}
+          ${jugLine  ? `<div style="font-size:10px;font-weight:700;color:#7a3a9a;margin-top:1px">${jugLine}</div>` : ""}
         </td>
         <td style="padding:7px 8px;font-size:10px;color:#c05000;font-weight:700">${chem.rei}</td>
       </tr>`;
@@ -291,17 +304,19 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   const thisLoadChemRows = buildRows(
     resolvedChems,
     ({partFmt,fullFmt}) => `<span style="color:#c05000">${partFmt||fullFmt}</span>`,
-    ({isDryOzUnit,partLbOz,fullLbOz}) => isDryOzUnit ? (partLbOz||fullLbOz) : null
+    ({isDryOzUnit,partLbOz,fullLbOz}) => isDryOzUnit ? (partLbOz||fullLbOz) : null,
+    ({jug2_5gal,partJugs,fullJugs}) => jug2_5gal ? (partJugs||fullJugs) : null
   ) + fillRow2(thisLoadTankGal||"—");
   const fullChemRows = buildRows(
     resolvedChems,
     ({fullFmt}) => `<span style="color:#2a5c0f">${fullFmt}</span>`,
-    ({isDryOzUnit,fullLbOz}) => isDryOzUnit ? fullLbOz : null
+    ({isDryOzUnit,fullLbOz}) => isDryOzUnit ? fullLbOz : null,
+    ({jug2_5gal,fullJugs}) => jug2_5gal ? fullJugs : null
   ) + fillRow2(form.tankSize||"—");
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
   const partialChemCompact = hasPartial
-    ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit, isDryOzUnit }) => {
+    ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, partJugs }) => {
         const amt = roundQtr && isOzUnit
           ? (fmtOzAsDecimalGal(calc.partialPerTankRaw) || "—")
           : fmtTankAmount(calc.partialPerTankRaw, chem.unit);
@@ -311,6 +326,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
           <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">
             ${amt}
             ${lbOzSub ? `<div style="font-size:9px;font-weight:400;color:#888">${lbOzSub}</div>` : ""}
+            ${jug2_5gal && partJugs ? `<div style="font-size:9px;font-weight:700;color:#7a3a9a">${partJugs}</div>` : ""}
           </td>
         </tr>`;
       }).join("")
@@ -402,7 +418,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
           ? (fmtOzAsDecimalGal(r.calc.totalPerTankRaw) || "—")
           : fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit);
         const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(r.calc.totalPerTankRaw) : null;
-        return `${r.chem.name} — ${fmtAmt}${lbOzSub ? ` <span style="font-size:9px;color:#888">(${lbOzSub})</span>` : ""}`;
+        const jugSub  = r.jug2_5gal   ? fmtJugCount(r.calc.totalPerTankRaw) : null;
+        return `${r.chem.name} — ${fmtAmt}${lbOzSub ? ` <span style="font-size:9px;color:#888">(${lbOzSub})</span>` : ""}${jugSub ? ` <span style="font-size:9px;font-weight:700;color:#7a3a9a">(${jugSub})</span>` : ""}`;
       }).join("<br/>");
       return `<tr>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid #dde;vertical-align:middle;"><div style="background:${s.color};color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
@@ -593,11 +610,13 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
             ? (fmtOzAsDecimalGal(allLoadsOz) || "—")
             : fmtTankAmount(allLoadsOz, r.chem.unit);
           const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(allLoadsOz) : null;
+          const jugSub  = r.jug2_5gal   ? fmtJugCount(allLoadsOz) : null;
           return `<tr>
             <td style="padding:4px 6px;font-weight:400;font-size:9.5px;color:#111;">${r.chem.name}</td>
             <td style="padding:4px 6px;text-align:right;font-size:9.5px;font-weight:400;color:#111;">
               ${fmt}
               ${lbOzSub ? `<div style="font-size:8px;color:#888">${lbOzSub}</div>` : ""}
+              ${jugSub  ? `<div style="font-size:8px;font-weight:700;color:#7a3a9a">${jugSub}</div>` : ""}
             </td>
           </tr>`;
         }).join("")}</tbody>
@@ -883,6 +902,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const unitNorm    = (baseUnit||"oz").toLowerCase().replace(/\s+/g,"");
   const isOzUnit    = unitNorm === "oz";               // liquid oz → gal+oz display
   const isDryOzUnit = unitNorm === "dryoz";            // dry oz → lb+oz display
+  const jug2_5      = !!(chem.jug2_5gal && isOzUnit); // 2.5-gal jug display
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
   // Effective rate/acre — either entered directly or back-calculated from gal/tank
@@ -1004,6 +1024,29 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
             ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac (rounded)
           </div>
         )}
+        {/* 2.5-gal jug toggle — only for liquid oz chemicals */}
+        {isOzUnit && (
+          <label
+            title="Display total as gallons and 2.5-gal jug count"
+            style={{
+              display:"inline-flex", alignItems:"center", gap:5, marginTop:5, cursor:"pointer",
+              padding:"3px 7px", borderRadius:5,
+              border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
+              background: jug2_5 ? "#f5eeff" : "#f9fdf5",
+              userSelect:"none"
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={jug2_5}
+              onChange={e => onChange("jug2_5gal", e.target.checked)}
+              style={{ accentColor:"#7a3a9a", width:13, height:13, margin:0, cursor:"pointer" }}
+            />
+            <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777", whiteSpace:"nowrap" }}>
+              2.5 gal jugs
+            </span>
+          </label>
+        )}
       </td>
 
       {/* Total per tank — full + partial */}
@@ -1016,6 +1059,9 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
               <div>
                 <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>This Load ({parseFloat(totalAcres).toFixed(1)} ac)</div>
                 <div style={{ fontWeight:700, color:"#e07020", fontSize:14, lineHeight:1.2 }}>{partialDisplay || tankDisplay}</div>
+                {jug2_5 && isOzUnit && (partialRaw || tankRaw) > 0 && (
+                  <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{fmtJugCount(partialRaw || tankRaw)}</div>
+                )}
               </div>
             ) : (
               <>
@@ -1027,11 +1073,17 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
                     <div style={{ fontSize:10, color:"#aaa" }}>{Math.round(tankRaw)} oz total</div>
                   )}
                   {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
+                  {jug2_5 && isOzUnit && tankRaw > 0 && (
+                    <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{fmtJugCount(tankRaw)}</div>
+                  )}
                 </div>
                 {partialDisplay && (
                   <div style={{ borderTop:"1px dashed #c8dbb0", paddingTop:3 }}>
                     <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>Partial Load ({partialAc.toFixed(1)} ac)</div>
                     <div style={{ fontWeight:700, color:"#e07020", fontSize:13 }}>{partialDisplay}</div>
+                    {jug2_5 && isOzUnit && partialRaw > 0 && (
+                      <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{fmtJugCount(partialRaw)}</div>
+                    )}
                   </div>
                 )}
               </>
@@ -1236,6 +1288,7 @@ export default function App() {
         return { name:c.name, epa:c.epa, rei:c.rei, unit:c.unit,
           ratePerAcre: parseFloat(effectiveRate||0).toFixed(4),
           roundQtrGal: r.roundQtrGal || false,
+          jug2_5gal: r.jug2_5gal || false,
           inputMode,
           galPerTank: r.galPerTank || "",
           totalPerTank: calc2.totalPerTank,
@@ -2354,6 +2407,7 @@ export default function App() {
                               inputMode: c.inputMode || "rate",
                               galPerTank: c.galPerTank || "",
                               roundQtrGal: c.roundQtrGal || false,
+                              jug2_5gal: c.jug2_5gal || false,
                             }))
                           });
                           setEditingId(t.id);
