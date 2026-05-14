@@ -1147,7 +1147,7 @@ export default function App() {
     licensedApplicantLicense: "",
     nonLicensedApplicant: "Bryce",
     notes: "",
-    chemRows: [{ id: Date.now(), chemId: "", ratePerAcre: "", inputMode: "rate", galPerTank: "" }],
+    chemRows: [],
   });
   const [form,        setForm]        = useState(blank());
   const [fieldSearch, setFieldSearch] = useState("");
@@ -2102,34 +2102,30 @@ export default function App() {
                 })()}
               </div>
 
-              <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-                {isMobile && <div style={{ fontSize:10, color:"#888", marginBottom:3, textAlign:"right" }}>← swipe to scroll →</div>}
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 11 : 13, minWidth: isMobile ? 540 : "auto" }}>
-                  <thead>
-                    <tr>
-                      {["Chemical","Mode","Input","","Total/Tank","","REI","EPA #",""].map((h,i) => (
-                        <th key={i} style={{...th, fontSize: isMobile ? 9 : 11, padding:"5px 4px"}}>{h}</th>
+              {form.chemRows.length > 0 && (
+                <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+                  {isMobile && <div style={{ fontSize:10, color:"#888", marginBottom:3, textAlign:"right" }}>← swipe to scroll →</div>}
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 11 : 13, minWidth: isMobile ? 540 : "auto" }}>
+                    <thead>
+                      <tr>
+                        {["Chemical","Mode","Input","","Total/Tank","","REI","EPA #",""].map((h,i) => (
+                          <th key={i} style={{...th, fontSize: isMobile ? 9 : 11, padding:"5px 4px"}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.chemRows.map(row => (
+                        <ChemicalRow
+                          key={row.id} chem={row} chemicals={chemicals}
+                          tankSize={form.tankSize} galPerAcre={form.galPerAcre} totalAcres={totalAcres}
+                          onChange={(k,v) => updateChemRow(row.id,k,v)}
+                          onRemove={() => removeChemRow(row.id)}
+                        />
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {form.chemRows.map(row => (
-                      <ChemicalRow
-                        key={row.id} chem={row} chemicals={chemicals}
-                        tankSize={form.tankSize} galPerAcre={form.galPerAcre} totalAcres={totalAcres}
-                        onChange={(k,v) => updateChemRow(row.id,k,v)}
-                        onRemove={() => removeChemRow(row.id)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <button onClick={() => addChemRow()} style={{
-                marginTop:10, background:"#2a5c0f", color:"#fff", border:"none",
-                borderRadius:6, padding: isMobile ? "12px 0" : "8px 16px",
-                cursor:"pointer", fontSize:14, fontWeight:700,
-                display:"block", width: isMobile ? "100%" : "auto"
-              }}>+ Add Row</button>
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
 
