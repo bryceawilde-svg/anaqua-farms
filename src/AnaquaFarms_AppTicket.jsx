@@ -2333,6 +2333,17 @@ export default function App() {
                       {/* Actions */}
                       <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
                         <button onClick={() => {
+                          printTicket(
+                            t,
+                            chemicals,
+                            parseFloat(t.totalAcres) || 0,
+                            t.fieldSchedule || buildFieldSchedule(t.selectedFields || [], t.timeStart)
+                          );
+                        }} style={{
+                          background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)", color:"#fff", border:"none", borderRadius:5,
+                          padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
+                        }}>🖨 Print</button>
+                        <button onClick={() => {
                           setForm({
                             ...t,
                             targetPest: Array.isArray(t.targetPest) ? t.targetPest : (t.targetPest ? t.targetPest.split(", ") : []),
@@ -2347,6 +2358,9 @@ export default function App() {
                           });
                           setEditingId(t.id);
                           setManualTank(!["1600","1200","1000"].includes(String(t.tankSize)));
+                          setAcresOverride("");
+                          setShowAcresInput(false);
+                          setManualGpa(false);
                           setExpandedTicket(null);
                           setView("form");
                         }} style={{
