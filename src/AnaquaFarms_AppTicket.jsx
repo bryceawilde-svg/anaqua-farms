@@ -1661,6 +1661,8 @@ export default function App() {
                     />
                   </div>
                   {showDrop && (
+                    <>
+                    <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowDrop(false)} />
                     <div style={{
                       position:"absolute", top:"100%", left:0, right:0, zIndex:99,
                       background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
@@ -1680,10 +1682,8 @@ export default function App() {
                           <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{f.acres} ac</span>
                         </div>
                       ))}
-                      <div onClick={() => setShowDrop(false)} style={{ padding:"6px 12px", fontSize:11, color:"#aaa", cursor:"pointer", textAlign:"right" }}>
-                        close ×
-                      </div>
                     </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -2078,6 +2078,8 @@ export default function App() {
                     c.name.toLowerCase().includes(q) && !selectedIds.includes(c.id)
                   );
                   return (
+                    <>
+                    <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowChemDrop(s=>({...s,__main__:false}))} />
                     <div style={{
                       position:"absolute", bottom:"100%", left:0, right:0, zIndex:99,
                       background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
@@ -2108,11 +2110,8 @@ export default function App() {
                           <span style={{ fontSize:11, color:"#888" }}>{c.epa} · REI {c.rei}</span>
                         </div>
                       ))}
-                      <div onClick={() => setShowChemDrop(s=>({...s,__main__:false}))}
-                        style={{ padding:"6px 12px", fontSize:11, color:"#aaa", cursor:"pointer", textAlign:"right" }}>
-                        close ×
-                      </div>
                     </div>
+                    </>
                   );
                 })()}
               </div>
