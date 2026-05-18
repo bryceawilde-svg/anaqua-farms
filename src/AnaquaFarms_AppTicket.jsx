@@ -2508,8 +2508,7 @@ export default function App() {
                     {fieldLibrary.map(f => (
                       <tr key={f.id}>
                         <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
-                       <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
-                       <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
+                        <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
                         <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{f.acres}</td>
                         <td style={td}>
                           <button onClick={() => deleteField(f.id)} style={{
