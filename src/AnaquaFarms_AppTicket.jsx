@@ -1186,7 +1186,7 @@ export default function App() {
         supabase.from("tickets").select("*").order("created_at", { ascending: false }),
       ]);
       setFieldLibrary(f.data?.length ? f.data : DEFAULT_FIELDS);
-      setChemicals(c.data?.length ? c.data : DEFAULT_CHEMICALS);
+      setChemicals(c.data?.length ? c.data.map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L" })) : DEFAULT_CHEMICALS);
       setEquipment(e.data?.length ? e.data : DEFAULT_EQUIPMENT);
       setLicensed(la.data || []);
       setNonLicensed(nla.data || []);
