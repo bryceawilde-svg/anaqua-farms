@@ -637,6 +637,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
 
+  <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px;padding:6px 8px;border:1px solid #c8dbb0;border-radius:5px;background:#f9fdf5;">
+    <div style="text-align:right;">
+      <div style="font-size:9px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.06em;">REI Re-Entry Report</div>
+      <div style="font-size:8px;color:#555;margin-top:2px;">Scan to view earliest re-entry<br/>times for all chemicals applied</div>
+    </div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://docs.google.com/spreadsheets/d/1oDxcfQFT3birHqYmJaBh9CvGKdD1QI18nX9X46bHm3I/edit?usp=sharing')}" width="80" height="80" style="display:block;border:2px solid #2a5c0f;border-radius:4px;"/>
+  </div>
+
   <div class="footer">
     <span>Anaqua Farms &mdash; Application Ticket</span>
     <span>Printed ${new Date().toLocaleString()}</span>
