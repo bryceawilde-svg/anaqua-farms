@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const CROPS_LIST = ["Cotton", "Corn", "Sorghum"];
+const CROPS_LIST = ["Cotton", "Corn"];
 const WIND_DIRS  = ["N","NE","E","SE","S","SW","W","NW"];
 
 // ── Responsive helpers ────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ const DEFAULT_CHEMICALS = [
 ];
 
 const DEFAULT_EQUIPMENT = [
-  { id: 1, name: "4440 Sprayer" },
+  { id: 1, name: "New 4440 Sprayer" },
   { id: 2, name: "8R370 Tractor" },
 ];
 
@@ -1141,7 +1141,7 @@ export default function App() {
     galPerAcre: "",
     primeBoom: false,
     flushCleanout: false,
-    equipmentType: "4440 Sprayer",
+    equipmentType: "New 4440 Sprayer",
     equipmentTypeCustom: "",
     licensedApplicant: "Glenn Wilde 0186663",
     licensedApplicantLicense: "",
@@ -1587,7 +1587,7 @@ export default function App() {
               <div style={{ marginBottom:12 }}>
                 <label style={labelStyle}>Crop / Site</label>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {[...new Set([...fieldLibrary.map(f=>f.crop).filter(Boolean),"Cotton","Corn","Sorghum","Fallow"])].sort().map(crop => (
+                  {[...new Set([...fieldLibrary.map(f=>f.crop).filter(Boolean),"Cotton","Corn","Fallow"])].sort().map(crop => (
                     <button key={crop} type="button"
                       onClick={() => set("crop", crop)}
                       style={{
@@ -1721,7 +1721,7 @@ export default function App() {
                 <div>
                   <label style={labelStyle}>Target Pest / Weed / Disease</label>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
-                    {["Grass Weeds","Broadleaf Weeds","Aphids","Spider Mites","Worms","Plant Health"].map(opt => {
+                    {["Grass Weeds","Broadleaf Weeds","Aphids","Spider Mites","Plant bugs","Plant Health"].map(opt => {
                       const on = (form.targetPest||[]).includes(opt);
                       return (
                         <button key={opt} type="button"
@@ -2066,9 +2066,10 @@ export default function App() {
                   );
                   return (
                     <div style={{
-                      position:"absolute", top:"100%", left:0, right:0, zIndex:99,
+                      position:"absolute", bottom:"100%", left:0, right:0, zIndex:99,
                       background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
-                      boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight:220, overflowY:"auto"
+                      boxShadow:"0 -4px 16px rgba(0,0,0,0.12)", maxHeight:220, overflowY:"auto",
+                      marginBottom:4
                     }}>
                       {filtered.length === 0 ? (
                         <div style={{ padding:"10px 12px", fontSize:13, color:"#999" }}>
@@ -2165,7 +2166,7 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ display:"flex", gap:12 }}>
+              <div style={{ display:"flex", gap:12, paddingBottom: isMobile ? 120 : 0 }}>
                 <button onClick={saveTicket} style={{
                   background: editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)",
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
