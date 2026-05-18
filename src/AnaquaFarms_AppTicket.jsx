@@ -235,14 +235,16 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     }
     const calc    = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
     const fmtFull = (oz) => roundQtr && isOzUnit ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, chem.unit);
+    // galtank: fixed amount per tank — partial load uses same quantity as full tank
+    const partRaw = r.inputMode === "galtank" ? calc.totalPerTankRaw : calc.partialPerTankRaw;
     const fullFmt = fmtFull(calc.totalPerTankRaw);
-    const partFmt = fmtFull(calc.partialPerTankRaw);
+    const partFmt = fmtFull(partRaw);
     // For dry oz: compute the lbs+oz sub-line shown under the amount
     const fullLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.totalPerTankRaw) : null;
-    const partLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.partialPerTankRaw) : null;
+    const partLbOz = isDryOzUnit ? fmtDryOzAsLbOz(partRaw) : null;
     const jug2_5gal = !!(r.jug2_5gal && isOzUnit);
     const fullJugs = jug2_5gal ? fmtJugCount(calc.totalPerTankRaw) : null;
-    const partJugs = jug2_5gal && calc.partialPerTankRaw > 0 ? fmtJugCount(calc.partialPerTankRaw) : null;
+    const partJugs = jug2_5gal && partRaw > 0 ? fmtJugCount(partRaw) : null;
     return { chem, effRate, fullFmt, partFmt, fullLbOz, partLbOz, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, fullJugs, partJugs };
   }).filter(Boolean);
 
@@ -931,8 +933,9 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
 
   const displayRate = roundQtr && isOzUnit ? roundedEffectiveRate : effectiveRate;
   const calc        = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: displayRate });
-  const tankRaw     = calc.totalPerTankRaw;     // raw number in product's own unit
-  const partialRaw  = calc.partialPerTankRaw;
+  const tankRaw     = calc.totalPerTankRaw;
+  // galtank mode: amount is fixed per tank, not rate-based — partial load uses same quantity
+  const partialRaw  = inputMode === "galtank" ? calc.totalPerTankRaw : calc.partialPerTankRaw;
   const partialAc   = calc.partialAcres;
 
   // Display helpers
@@ -1287,8 +1290,10 @@ export default function App() {
         }
         const calc2      = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
         const fmtFull    = (oz) => roundQtr && isOzUnit ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, c.unit);
+        // galtank: fixed amount per tank — partial load gets same quantity
+        const partRaw2   = inputMode === "galtank" ? calc2.totalPerTankRaw : calc2.partialPerTankRaw;
         const tankFmt    = fmtFull(calc2.totalPerTankRaw);
-        const partialFmt = calc2.partialAcres > 0.01 ? fmtFull(calc2.partialPerTankRaw) : null;
+        const partialFmt = calc2.partialAcres > 0.01 ? fmtFull(partRaw2) : null;
         return { name:c.name, epa:c.epa, rei:c.rei, unit:c.unit,
           ratePerAcre: parseFloat(effectiveRate||0).toFixed(4),
           roundQtrGal: r.roundQtrGal || false,
@@ -2031,7 +2036,7 @@ export default function App() {
                     <span style={{ fontSize:10, color:"#888", fontWeight:700, alignSelf:"center", whiteSpace:"nowrap" }}>Recent:</span>
                     {available.map(c => (
                       <button key={c.id} type="button"
-                        onClick={() => addChemRow(c.id)}
+                        onClick={() => { addChemRow(c.id); setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50); }}
                         style={{
                           padding:"4px 10px", border:"1.5px solid #b0c8e8",
                           borderRadius:5, cursor:"pointer", fontSize:12, fontWeight:700,
@@ -2081,6 +2086,7 @@ export default function App() {
                             addChemRow(c.id);
                             setChemSearch(s => ({...s, __main__: ""}));
                             setShowChemDrop(s => ({...s, __main__: false}));
+                            setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50);
                           }}
                           style={{
                             padding:"10px 12px", cursor:"pointer", fontSize:13,
