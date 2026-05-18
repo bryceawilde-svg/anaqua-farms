@@ -642,7 +642,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
       <div style="font-size:9px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.06em;">REI Re-Entry Report</div>
       <div style="font-size:8px;color:#555;margin-top:2px;">Scan to view earliest re-entry<br/>times for all chemicals applied</div>
     </div>
-    <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://docs.google.com/spreadsheets/d/1oDxcfQFT3birHqYmJaBh9CvGKdD1QI18nX9X46bHm3I/edit?usp=sharing')}" width="80" height="80" style="display:block;border:2px solid #2a5c0f;border-radius:4px;"/>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://drive.google.com/drive/folders/1dM5v_307Px_bh7FqgHUlCKokMvrwh75O?usp=sharing')}" width="80" height="80" style="display:block;border:2px solid #2a5c0f;border-radius:4px;"/>
   </div>
 
   <div class="footer">
