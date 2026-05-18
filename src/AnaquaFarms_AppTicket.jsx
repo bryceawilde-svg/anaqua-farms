@@ -2166,7 +2166,13 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ display:"flex", gap:12, paddingBottom: isMobile ? 120 : 0 }}>
+              {isMobile && <div style={{ height: 80 }} />}
+              <div style={isMobile ? {
+                position:"fixed", bottom:0, left:0, right:0, zIndex:200,
+                display:"flex", gap:8, padding:"10px 12px 18px",
+                background:"#fff", borderTop:"1.5px solid #c8dbb0",
+                boxShadow:"0 -2px 12px rgba(0,0,0,0.1)"
+              } : { display:"flex", gap:12 }}>
                 <button onClick={saveTicket} style={{
                   background: editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)",
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
