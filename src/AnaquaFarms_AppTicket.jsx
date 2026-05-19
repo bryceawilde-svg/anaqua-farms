@@ -2143,17 +2143,7 @@ export default function App() {
             </div>
 
 
-            <div style={{ display:"flex", gap:10, flexDirection:"column",
-              position: isMobile ? "fixed" : "relative",
-              bottom: isMobile ? 0 : "auto",
-              left: isMobile ? 0 : "auto",
-              right: isMobile ? 0 : "auto",
-              background: isMobile ? "#f0f7e8" : "transparent",
-              padding: isMobile ? "10px 12px" : 0,
-              zIndex: isMobile ? 100 : "auto",
-              boxShadow: isMobile ? "0 -2px 12px rgba(0,0,0,0.10)" : "none",
-              borderTop: isMobile ? "1.5px solid #c8dbb0" : "none",
-            }}>
+            <div style={{ display:"flex", gap:10, flexDirection:"column", marginTop:16 }}>
               {editingId && (
                 <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"6px 12px", fontSize:12, color:"#7a5800", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:6 }}>
                   <span>✏ Editing saved ticket — Save will update the existing record.</span>
@@ -2179,13 +2169,7 @@ export default function App() {
                 </div>
               )}
 
-              {isMobile && <div style={{ height: 80 }} />}
-              <div style={isMobile ? {
-                position:"fixed", bottom:0, left:0, right:0, zIndex:200,
-                display:"flex", gap:8, padding:"10px 12px 18px",
-                background:"#fff", borderTop:"1.5px solid #c8dbb0",
-                boxShadow:"0 -2px 12px rgba(0,0,0,0.1)"
-              } : { display:"flex", gap:12 }}>
+              <div style={{ display:"flex", gap:isMobile ? 8 : 12, marginTop:16 }}>
                 <button onClick={saveTicket} style={{
                   background: editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)",
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
