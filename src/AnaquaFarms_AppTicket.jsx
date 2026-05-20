@@ -145,26 +145,23 @@ function fmtJugCount(totalOz) {
 }
 
 // Container count from library-level containerSize.
-// containerSize is in gallons (oz chemicals) or lb (dry oz / lb chemicals).
-// Returns e.g. "1.3 × 2.5 gal" or "2.0 × 8 lb"
+// containerSize is in gallons (oz liquid) or lb (dry oz / lb chemicals).
+// Returns e.g. "3.8 jugs" or "2.0 bags"
 function fmtContainerCount(totalRaw, chem) {
   const cs = parseFloat(chem?.containerSize);
   if (!cs || !totalRaw || isNaN(totalRaw) || totalRaw <= 0) return null;
   const unitNorm = (chem.unit || "oz").toLowerCase().replace(/\s+/g, "");
-  let count, label;
+  let count;
   if (unitNorm === "oz") {
     count = totalRaw / (cs * OZ_PER_GAL);
-    label = `${cs} gal`;
   } else if (unitNorm === "dryoz") {
     count = totalRaw / (cs * 16);
-    label = `${cs} lb`;
   } else if (unitNorm === "lb" || unitNorm === "lbs") {
     count = totalRaw / cs;
-    label = `${cs} lb`;
   } else {
     return null;
   }
-  return `${parseFloat(count.toFixed(2))} × ${label}`;
+  return `${parseFloat(count.toFixed(2))} containers`;
 }
 
 // Unified formatter: handles oz (→ gal+oz), dry oz (→ lb+oz), and other units
@@ -338,13 +335,13 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     resolvedChems,
     ({partFmt,fullFmt}) => `<span style="color:#c05000">${partFmt||fullFmt}</span>`,
     ({isDryOzUnit,partLbOz,fullLbOz}) => isDryOzUnit ? (partLbOz||fullLbOz) : null,
-    ({jug2_5gal,partJugs,fullJugs}) => jug2_5gal ? (partJugs||fullJugs) : null
+    ({partJugs,fullJugs}) => partJugs || fullJugs || null
   ) + fillRow2(thisLoadTankGal||"—");
   const fullChemRows = buildRows(
     resolvedChems,
     ({fullFmt}) => `<span style="color:#2a5c0f">${fullFmt}</span>`,
     ({isDryOzUnit,fullLbOz}) => isDryOzUnit ? fullLbOz : null,
-    ({jug2_5gal,fullJugs}) => jug2_5gal ? fullJugs : null
+    ({fullJugs}) => fullJugs || null
   ) + fillRow2(form.tankSize||"—");
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
@@ -451,7 +448,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
           ? (fmtOzAsDecimalGal(r.calc.totalPerTankRaw) || "—")
           : fmtTankAmount(r.calc.totalPerTankRaw, r.chem.unit);
         const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(r.calc.totalPerTankRaw) : null;
-        const jugSub  = r.jug2_5gal   ? fmtJugCount(r.calc.totalPerTankRaw) : null;
+        const jugSub  = r.fullJugs || (r.jug2_5gal ? fmtJugCount(r.calc.totalPerTankRaw) : null);
         return `${r.chem.name} — ${fmtAmt}${lbOzSub ? ` <span style="font-size:9px;color:#888">(${lbOzSub})</span>` : ""}${jugSub ? ` <span style="font-size:9px;font-weight:700;color:#7a3a9a">(${jugSub})</span>` : ""}`;
       }).join("<br/>");
       return `<tr>
@@ -643,7 +640,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
             ? (fmtOzAsDecimalGal(allLoadsOz) || "—")
             : fmtTankAmount(allLoadsOz, r.chem.unit);
           const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(allLoadsOz) : null;
-          const jugSub  = r.jug2_5gal   ? fmtJugCount(allLoadsOz) : null;
+          const jugSub  = r.chem.containerSize ? fmtContainerCount(allLoadsOz, r.chem) : (r.jug2_5gal ? fmtJugCount(allLoadsOz) : null);
           return `<tr>
             <td style="padding:4px 6px;font-weight:400;font-size:9.5px;color:#111;">${r.chem.name}</td>
             <td style="padding:4px 6px;text-align:right;font-size:9.5px;font-weight:400;color:#111;">
@@ -1075,13 +1072,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
           </div>
         )}
         {/* Container count — auto from library if containerSize set, else manual checkbox */}
-        {selected?.containerSize ? (
-          <div style={{ marginTop:5, padding:"3px 7px", borderRadius:5, background:"#f5eeff", border:"1.5px solid #7a3a9a", fontSize:10, fontWeight:700, color:"#5a1a7a" }}>
-            {(selected.unit||"oz").toLowerCase().replace(/\s+/g,"") === "oz"
-              ? `${selected.containerSize} gal containers`
-              : `${selected.containerSize} lb containers`}
-          </div>
-        ) : isOzUnit && (
+        {selected?.containerSize ? null : isOzUnit && (
           <label
             title="Display total as gallons and 2.5-gal jug count"
             style={{
@@ -1431,8 +1422,10 @@ export default function App() {
 
   // ── Field Manager
   const fieldFileRef = useRef();
-  const [fieldUpMsg, setFieldUpMsg] = useState("");
-  const [newField,   setNewField]   = useState({ name:"", acres:"", crop:"" });
+  const [fieldUpMsg,    setFieldUpMsg]    = useState("");
+  const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"" });
+  const [editingFieldId, setEditingFieldId] = useState(null);
+  const [editFieldDraft, setEditFieldDraft] = useState({});
 
   const handleFieldCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -1475,11 +1468,23 @@ export default function App() {
       if (error) showToast("Failed to delete field: " + error.message);
     });
   };
+  const saveFieldEdit = () => {
+    if (!editFieldDraft.name || !editFieldDraft.acres) return alert("Field name and acres are required.");
+    const updated = { ...editFieldDraft, acres: parseFloat(editFieldDraft.acres) };
+    setFieldLibrary(fl => fl.map(f => f.id === updated.id ? updated : f));
+    supabase.from("fields").upsert(updated).then(({ error }) => {
+      if (error) showToast("Failed to update field: " + error.message);
+      else showToast("Field saved.", "success");
+    });
+    setEditingFieldId(null);
+  };
 
   // ── Chemical Manager
   const chemFileRef  = useRef();
-  const [chemUpMsg,  setChemUpMsg]  = useState("");
-  const [newChem,    setNewChem]    = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
+  const [chemUpMsg,     setChemUpMsg]     = useState("");
+  const [newChem,       setNewChem]       = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
+  const [editingChemId, setEditingChemId] = useState(null);
+  const [editChemDraft, setEditChemDraft] = useState({});
 
   const handleChemCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -1520,6 +1525,19 @@ export default function App() {
     supabase.from("chemicals").delete().eq("id", id).then(({ error }) => {
       if (error) showToast("Failed to delete chemical: " + error.message);
     });
+  };
+  const saveChemEdit = () => {
+    if (!editChemDraft.name || !editChemDraft.epa || !editChemDraft.rei) return alert("Name, EPA #, and REI are required.");
+    const updated = {
+      ...editChemDraft,
+      containerSize: editChemDraft.containerSize ? parseFloat(editChemDraft.containerSize) : null,
+    };
+    setChemicals(c => c.map(x => x.id === updated.id ? updated : x));
+    supabase.from("chemicals").upsert({ ...updated, form_type: updated.formType, container_size: updated.containerSize }).then(({ error }) => {
+      if (error) showToast("Failed to update chemical: " + error.message);
+      else showToast("Chemical saved.", "success");
+    });
+    setEditingChemId(null);
   };
 
   const filteredFields = fieldLibrary.filter(f =>
@@ -2572,18 +2590,37 @@ export default function App() {
                     <tr>{["Field Name","Crop","Acres",""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
                   </thead>
                   <tbody>
-                    {fieldLibrary.map(f => (
-                      <tr key={f.id}>
-                        <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
-                        <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
-                        <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{f.acres}</td>
-                        <td style={td}>
-                          <button onClick={() => deleteField(f.id)} style={{
-                            background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                          }}>×</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {fieldLibrary.map(f => {
+                      const isEditing = editingFieldId === f.id;
+                      if (isEditing) return (
+                        <tr key={f.id} style={{ background:"#f5fff0" }}>
+                          <td style={td}>
+                            <input value={editFieldDraft.name||""} onChange={e=>setEditFieldDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                          </td>
+                          <td style={td}>
+                            <input value={editFieldDraft.crop||""} onChange={e=>setEditFieldDraft(d=>({...d,crop:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="optional" />
+                          </td>
+                          <td style={td}>
+                            <input type="number" value={editFieldDraft.acres||""} onChange={e=>setEditFieldDraft(d=>({...d,acres:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px", width:70 }} min="0" step="0.1" />
+                          </td>
+                          <td style={{ ...td, whiteSpace:"nowrap" }}>
+                            <button onClick={saveFieldEdit} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer", fontSize:12, fontWeight:700, marginRight:4 }}>Save</button>
+                            <button onClick={() => setEditingFieldId(null)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"3px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
+                          </td>
+                        </tr>
+                      );
+                      return (
+                        <tr key={f.id}>
+                          <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
+                          <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
+                          <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{f.acres}</td>
+                          <td style={{ ...td, whiteSpace:"nowrap" }}>
+                            <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
+                            <button onClick={() => deleteField(f.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2839,6 +2876,59 @@ export default function App() {
                   </thead>
                   <tbody>
                     {chemicals.map(c => {
+                      const isEditing = editingChemId === c.id;
+                      if (isEditing) {
+                        const draftUnitNorm = (editChemDraft.unit||"oz").toLowerCase().replace(/\s+/g,"");
+                        const draftIsDryOrLb = draftUnitNorm === "dryoz" || draftUnitNorm === "lb" || draftUnitNorm === "lbs";
+                        return (
+                          <tr key={c.id} style={{ background:"#f5fff0" }}>
+                            <td style={td} colSpan={7}>
+                              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"6px 0" }}>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Chemical Name</label>
+                                  <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>EPA #</label>
+                                  <input value={editChemDraft.epa||""} onChange={e=>setEditChemDraft(d=>({...d,epa:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>REI</label>
+                                  <input value={editChemDraft.rei||""} onChange={e=>setEditChemDraft(d=>({...d,rei:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Unit</label>
+                                  <select value={editChemDraft.unit||"oz"} onChange={e=>setEditChemDraft(d=>({...d,unit:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
+                                    <option value="oz">oz (liquid)</option>
+                                    <option value="dry oz">dry oz</option>
+                                    <option value="lb">lb</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Form. Type</label>
+                                  <select value={editChemDraft.formType||"L"} onChange={e=>setEditChemDraft(d=>({...d,formType:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
+                                    <option value="L">L</option>
+                                    <option value="E">E</option>
+                                    <option value="S">S</option>
+                                    <option value="WDG">WDG</option>
+                                    <option value="WP">WP</option>
+                                    <option value="D">D</option>
+                                    <option value="A">A</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Container ({draftIsDryOrLb ? "lb" : "gal"})</label>
+                                  <input type="number" min="0" step="0.01" value={editChemDraft.containerSize||""} onChange={e=>setEditChemDraft(d=>({...d,containerSize:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="blank=tote" />
+                                </div>
+                                <div style={{ display:"flex", gap:4, alignItems:"flex-end", paddingBottom:1 }}>
+                                  <button onClick={saveChemEdit} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
+                                  <button onClick={() => setEditingChemId(null)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
                       const unitNorm = (c.unit||"oz").toLowerCase().replace(/\s+/g,"");
                       const isDryOz  = unitNorm === "dryoz";
                       const isLb     = unitNorm === "lb" || unitNorm === "lbs";
@@ -2859,10 +2949,9 @@ export default function App() {
                           <td style={td}>{c.rei}</td>
                           <td style={td}>{c.unit}{unitBadge}</td>
                           <td style={td}>{containerCell}</td>
-                          <td style={td}>
-                            <button onClick={() => deleteChem(c.id)} style={{
-                              background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                            }}>×</button>
+                          <td style={{ ...td, whiteSpace:"nowrap" }}>
+                            <button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
+                            <button onClick={() => deleteChem(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
                           </td>
                         </tr>
                       );
