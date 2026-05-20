@@ -103,11 +103,15 @@ Deno.serve(async (req) => {
         chemicals: { name: string; epa: string }[];
       };
       systemPrompt =
-        'You are a crop herbicide tolerance expert. Given a list of fields with their crop and herbicide tolerance traits, ' +
-        'and a list of chemicals to be applied, identify any violations — chemicals that would injure crops that are NOT tolerant to them. ' +
-        'Traits: "glyphosate" = tolerant to glyphosate/Roundup products, "glufosinate" = tolerant to glufosinate/Liberty products, ' +
-        '"2,4-D" = tolerant to 2,4-D/Enlist products, "dicamba" = tolerant to dicamba/Xtend products, "non-gmo" = no GMO traits, no grass herbicides allowed. ' +
-        'A field with NO traits listed is conventional — flag any glyphosate, glufosinate, 2,4-D, or dicamba applications. ' +
+        'You are a crop herbicide tolerance expert with full knowledge of EPA-registered pesticide products. ' +
+        'Given a list of fields with their crop and herbicide tolerance traits, and a list of chemicals (product name + EPA reg number), ' +
+        'first determine each chemical\'s active ingredient(s) from your knowledge of EPA-registered products — do NOT rely solely on the product name, ' +
+        'look up by EPA registration number if needed (e.g. EPA 264-829 = Reckon 280 SL = glufosinate-ammonium). ' +
+        'Then identify any violations: chemicals whose active ingredient(s) would injure crops that are NOT tolerant to them. ' +
+        'Trait definitions: "glyphosate" = tolerant to glyphosate/Roundup products, "glufosinate" = tolerant to glufosinate/Liberty/Reckon/Interline products, ' +
+        '"2,4-D" = tolerant to 2,4-D/Enlist products, "dicamba" = tolerant to dicamba/Xtend products. ' +
+        'A field with NO traits listed is conventional — flag any glyphosate, glufosinate, 2,4-D, or dicamba product applied to it. ' +
+        'Sorghum and Grain crops are never GMO — flag any glyphosate, glufosinate, 2,4-D, or dicamba application regardless of traits. ' +
         'Return ONLY a raw JSON object, no markdown, no code fences: ' +
         '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one sentence>"}]}. ' +
         'Return an empty violations array if there are no issues.';
