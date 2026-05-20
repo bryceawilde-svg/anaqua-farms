@@ -97,6 +97,24 @@ Deno.serve(async (req) => {
       break;
     }
 
+    case "suggest-adjuvants": {
+      const { products } = payload as {
+        products: { name: string; epa: string }[];
+      };
+      systemPrompt =
+        'You are a pesticide label expert. Given a list of pesticide products in a tank mix, ' +
+        'identify any adjuvants or surfactants that are required or strongly recommended by the product labels. ' +
+        'Use EPA registration numbers and product names to look up label requirements from your training knowledge. ' +
+        'Include required non-ionic surfactants (NIS), crop oil concentrates (COC), methylated seed oils (MSO), ' +
+        'ammonium sulfate (AMS), or any other adjuvants specified on the labels. ' +
+        'Only include adjuvants that are label-required or label-recommended — do not invent generic suggestions. ' +
+        'Return ONLY a raw JSON object, no markdown, no code fences: ' +
+        '{"adjuvants":[{"name":"<adjuvant type e.g. Non-ionic surfactant (NIS)>","rate":"<label rate e.g. 0.25% v/v>","reason":"<one sentence citing which product requires it and why>"}]}. ' +
+        'Return an empty adjuvants array if none are required or recommended.';
+      userMessage = `Tank mix products: ${JSON.stringify(products)}`;
+      break;
+    }
+
     case "crop-safety": {
       const { fields, chemicals: chems } = payload as {
         fields: { name: string; crop: string; traits: string[] }[];

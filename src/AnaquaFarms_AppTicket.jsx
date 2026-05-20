@@ -1245,10 +1245,13 @@ export default function App() {
   const [aiChatQuery,      setAiChatQuery]      = useState("");
   const [aiChatAnswer,     setAiChatAnswer]     = useState("");
   const [aiChatLoading,    setAiChatLoading]    = useState(false);
-  const compatDebounceRef   = useRef(null);
-  const cropSafetyDebounceRef = useRef(null);
-  const [aiCropSafety,     setAiCropSafety]     = useState(null);
+  const compatDebounceRef      = useRef(null);
+  const cropSafetyDebounceRef  = useRef(null);
+  const adjuvantDebounceRef    = useRef(null);
+  const [aiCropSafety,        setAiCropSafety]        = useState(null);
   const [aiCropSafetyLoading, setAiCropSafetyLoading] = useState(false);
+  const [aiAdjuvants,         setAiAdjuvants]         = useState(null);
+  const [aiAdjuvantsLoading,  setAiAdjuvantsLoading]  = useState(false);
 
   const showToast = (message, type = "error") => {
     setToast({ message, type });
@@ -1432,6 +1435,25 @@ export default function App() {
       finally { setAiCropSafetyLoading(false); }
     }, 800);
   }, [form.chemRows, form.selectedFields, fieldLibrary, chemicals, form.crop]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced adjuvant recommendation — fires when 1+ chemicals have rates entered
+  useEffect(() => {
+    const filledRows = form.chemRows.filter(r => r.chemId && (r.ratePerAcre || r.galPerTank));
+    if (!filledRows.length) { setAiAdjuvants(null); return; }
+    if (adjuvantDebounceRef.current) clearTimeout(adjuvantDebounceRef.current);
+    adjuvantDebounceRef.current = setTimeout(async () => {
+      setAiAdjuvantsLoading(true);
+      try {
+        const products = filledRows.map(r => {
+          const c = chemicals.find(x => x.id === r.chemId);
+          return c ? { name: c.name, epa: c.epa } : null;
+        }).filter(Boolean);
+        const res = await callAI("suggest-adjuvants", { products });
+        setAiAdjuvants(res);
+      } catch { setAiAdjuvants(null); }
+      finally { setAiAdjuvantsLoading(false); }
+    }, 700);
+  }, [form.chemRows, chemicals]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTicket = () => {
     if (!form.selectedFields.length) return alert("Please select at least one field.");
@@ -2442,6 +2464,23 @@ export default function App() {
                   {aiCropSafety.violations.map((v, i) => (
                     <div key={i} style={{ fontSize:12, color:"#7a0000", marginTop:2 }}>
                       🚫 <strong>{v.field}</strong>: {v.chemical} — {v.reason}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Adjuvant recommendations */}
+              {aiAdjuvantsLoading && (
+                <div style={{ fontSize:12, color:"#888", marginTop:6 }}>Checking adjuvant requirements…</div>
+              )}
+              {!aiAdjuvantsLoading && aiAdjuvants?.adjuvants?.length > 0 && (
+                <div style={{ background:"#f0f9f0", border:"1.5px solid #2a8a10", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
+                  <div style={{ fontWeight:700, color:"#1a5c08", fontSize:12, marginBottom:4 }}>
+                    Adjuvant / Surfactant Recommendations
+                    <span style={{ fontWeight:400, fontSize:10, marginLeft:6 }}>(AI-based — verify against product labels)</span>
+                  </div>
+                  {aiAdjuvants.adjuvants.map((a, i) => (
+                    <div key={i} style={{ fontSize:12, color:"#1a5c08", marginTop:2 }}>
+                      🧪 <strong>{a.name}</strong>{a.rate ? ` @ ${a.rate}` : ""} — {a.reason}
                     </div>
                   ))}
                 </div>
