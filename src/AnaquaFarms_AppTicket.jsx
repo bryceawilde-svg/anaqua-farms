@@ -1428,7 +1428,8 @@ export default function App() {
     cropSafetyDebounceRef.current = setTimeout(async () => {
       setAiCropSafetyLoading(true);
       try {
-        const chems = filledRows.map(r => { const c = chemicals.find(x => x.id === r.chemId); return c ? { name: c.name, epa: c.epa } : null; }).filter(Boolean);
+        const chems = filledRows.map(r => { const c = chemicals.find(x => x.id === r.chemId); return c && c.epa?.trim() ? { name: c.name, epa: c.epa } : null; }).filter(Boolean);
+        if (!chems.length) { setAiCropSafety(null); return; }
         const res = await callAI("crop-safety", { fields: fieldsWithTraits, chemicals: chems });
         setAiCropSafety(res);
       } catch { setAiCropSafety(null); }
@@ -1446,8 +1447,9 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c ? { name: c.name, epa: c.epa } : null;
+          return c && c.epa?.trim() ? { name: c.name, epa: c.epa } : null;
         }).filter(Boolean);
+        if (!products.length) { setAiAdjuvants(null); return; }
         const res = await callAI("suggest-adjuvants", { products });
         setAiAdjuvants(res);
       } catch { setAiAdjuvants(null); }
