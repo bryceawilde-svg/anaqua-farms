@@ -1238,8 +1238,6 @@ export default function App() {
   const [toast,       setToast]       = useState(null);
 
   // ── AI state
-  const [aiNlInput,        setAiNlInput]        = useState("");
-  const [aiNlLoading,      setAiNlLoading]      = useState(false);
   const [aiCompatWarning,  setAiCompatWarning]  = useState(null);
   const [aiCompatLoading,  setAiCompatLoading]  = useState(false);
   const [aiSuggestions,    setAiSuggestions]    = useState([]);
@@ -1722,61 +1720,6 @@ export default function App() {
         {/* ══ NEW TICKET ══════════════════════════════════════════════════════════ */}
         {view === "form" && (
           <div>
-            {/* ── AI Natural Language Fill ── */}
-            <div style={{...card, background:"#f0f6ff", border:"1.5px solid #b0c8e8", padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={{...sectionTitle, color:"#1a3a6a", borderBottomColor:"#b0c8e8"}}>AI Fill from Description</div>
-              <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
-                <textarea
-                  value={aiNlInput}
-                  onChange={e => setAiNlInput(e.target.value)}
-                  placeholder='e.g. "Spray Roundup 24 oz and Atrazine 16 oz on all cotton fields for broadleaf weeds"'
-                  style={{...inp, height:64, resize:"vertical", flex:1}}
-                />
-                <button
-                  disabled={!aiNlInput.trim() || aiNlLoading}
-                  onClick={async () => {
-                    setAiNlLoading(true);
-                    try {
-                      const res = await callAI("fill-ticket", {
-                        text: aiNlInput,
-                        fieldLib: fieldLibrary.map(f => ({ id: f.id, name: f.name, crop: f.crop })),
-                        chemLib: chemicals.map(c => ({ id: c.id, name: c.name, unit: c.unit })),
-                      });
-                      if (res.fields?.length) {
-                        const matched = fieldLibrary.filter(f => res.fields.includes(f.id));
-                        set("selectedFields", matched);
-                      }
-                      if (res.chemRows?.length) {
-                        setForm(f => ({
-                          ...f,
-                          chemRows: res.chemRows.map(r => ({
-                            id: crypto.randomUUID(),
-                            chemId: r.chemId,
-                            ratePerAcre: String(r.rate || ""),
-                            inputMode: "rate",
-                            galPerTank: "",
-                          })),
-                        }));
-                      }
-                      if (res.targetPest?.length) set("targetPest", res.targetPest);
-                      setAiNlInput("");
-                      showToast("Form filled from description — review and save.", "success");
-                    } catch (e) {
-                      showToast("AI fill failed: " + e.message);
-                    } finally {
-                      setAiNlLoading(false);
-                    }
-                  }}
-                  style={{
-                    background: aiNlLoading ? "#aaa" : "#1a3a6a",
-                    color:"#fff", border:"none", borderRadius:7,
-                    padding:"10px 16px", cursor: aiNlLoading ? "default" : "pointer",
-                    fontWeight:700, fontSize:13, whiteSpace:"nowrap", flexShrink:0,
-                  }}
-                >{aiNlLoading ? "Filling…" : "Fill Form"}</button>
-              </div>
-            </div>
-
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Application Info</div>
               {/* Weather fetch button */}
