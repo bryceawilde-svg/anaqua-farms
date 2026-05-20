@@ -52,8 +52,8 @@ const DEFAULT_CHEMICALS = [
 ];
 
 const DEFAULT_EQUIPMENT = [
-  { id: 1, name: "New 4440 Sprayer" },
-  { id: 2, name: "8R370 Tractor" },
+  { id: 1, name: "New 4440 Sprayer", acresPerHour: 75 },
+  { id: 2, name: "8R370 Tractor",   acresPerHour: 75 },
 ];
 
 const DEFAULT_LICENSED = [{ id:1, name:"Glenn Wilde 0186663", license:"" }];   // { id, name, license }
@@ -174,8 +174,6 @@ function rateFromGalPerTank(galPerTank, acreLoads) {
 }
 
 
-const ACRES_PER_HOUR = 75;
-
 function addMinutes(timeStr, minutes) {
   if (!timeStr) return "";
   const [h, m] = timeStr.split(":").map(Number);
@@ -194,15 +192,35 @@ function fmtTime(t) {
 }
 
 // Returns array of { id, name, acres, timeStart, timeEnd } in application order
-function buildFieldSchedule(fields, globalStart) {
+function buildFieldSchedule(fields, globalStart, acresPerHour = 75) {
   let cursor = globalStart || "";
   return fields.map(f => {
     const start    = cursor;
-    const minutes  = (parseFloat(f.acres) / ACRES_PER_HOUR) * 60;
+    const minutes  = (parseFloat(f.acres) / acresPerHour) * 60;
     const end      = cursor ? addMinutes(cursor, minutes) : "";
     cursor         = end;
     return { id: f.id, name: f.name, acres: f.acres, timeStart: start, timeEnd: end };
   });
+}
+
+// Shared helper: resolves effective rate + calc totals for a chem row
+function resolveChemRow(r, chem, acreLoadsRaw, form, totalAcres) {
+  const unitNorm    = (chem.unit || "oz").toLowerCase().replace(/\s+/g, "");
+  const isOzUnit    = unitNorm === "oz";
+  const isDryOzUnit = unitNorm === "dryoz";
+  let effRate = r.ratePerAcre;
+  if (r.inputMode === "galtank" && r.galPerTank) {
+    effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
+  }
+  const roundQtr = !!(r.roundQtrGal && isOzUnit);
+  if (roundQtr && acreLoadsRaw > 0) {
+    const calc0 = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
+    if (calc0.totalPerTankRaw > 0) {
+      effRate = (roundToQtrGal(calc0.totalPerTankRaw) / acreLoadsRaw).toFixed(4);
+    }
+  }
+  const calc = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
+  return { effRate, isOzUnit, isDryOzUnit, roundQtr, calc };
 }
 
 function printTicket(form, chemicals, totalAcres, fieldSchedule) {
@@ -216,30 +234,11 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   const resolvedChems = chemRows.map(r => {
     const chem = chemicals.find(c => c.id === r.chemId);
     if (!chem) return null;
-    const unitNorm  = (chem.unit || "oz").toLowerCase().replace(/\s+/g,"");
-    const isOzUnit  = unitNorm === "oz";
-    const isDryOzUnit = unitNorm === "dryoz";
-    let effRate = r.ratePerAcre;
-    if (r.inputMode === "galtank" && r.galPerTank) {
-      effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
-    }
-    // Apply ¼ gal rounding — round full-tank oz up to nearest ¼ gal, back-calc rate
-    const roundQtr = !!(r.roundQtrGal && isOzUnit);
-    if (roundQtr && acreLoadsRaw > 0) {
-      const calc0  = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
-      const rawOz  = calc0.totalPerTankRaw;
-      if (rawOz > 0) {
-        const rounded = roundToQtrGal(rawOz);
-        effRate = (rounded / acreLoadsRaw).toFixed(4);
-      }
-    }
-    const calc    = calcTotals({ ...form, totalAcres, ratePerAcre: effRate });
+    const { effRate, isOzUnit, isDryOzUnit, roundQtr, calc } = resolveChemRow(r, chem, acreLoadsRaw, form, totalAcres);
     const fmtFull = (oz) => roundQtr && isOzUnit ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, chem.unit);
-    // galtank: fixed amount per tank — partial load uses same quantity as full tank
     const partRaw = r.inputMode === "galtank" ? calc.totalPerTankRaw : calc.partialPerTankRaw;
     const fullFmt = fmtFull(calc.totalPerTankRaw);
     const partFmt = fmtFull(partRaw);
-    // For dry oz: compute the lbs+oz sub-line shown under the amount
     const fullLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.totalPerTankRaw) : null;
     const partLbOz = isDryOzUnit ? fmtDryOzAsLbOz(partRaw) : null;
     const jug2_5gal = !!(r.jug2_5gal && isOzUnit);
@@ -671,7 +670,7 @@ function downloadCSV(tickets) {
   ].join(",");
 
   const rows = tickets.flatMap(t => {
-    const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart);
+    const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
     const chems    = t.chemicals.length ? t.chemicals : [{ name:"", epa:"", rei:"", ratePerAcre:"", unit:"", totalPerTank:"" }];
     return schedule.flatMap(fs =>
       chems.map(c => [
@@ -702,7 +701,7 @@ function downloadCSV(tickets) {
 function downloadTDAReport(tickets) {
   if (!tickets.length) return;
   const rows = tickets.flatMap(t => {
-    const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart);
+    const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
     const chems    = t.chemicals.length ? t.chemicals : [{ name:"—", epa:"—", rei:"—", ratePerAcre:"—", unit:"—", totalPerTank:"—" }];
     return schedule.flatMap(fs =>
       chems.map(c => `
@@ -1172,6 +1171,12 @@ export default function App() {
   const [wxLoading,   setWxLoading]   = useState(false);
   const [wxError,     setWxError]     = useState("");
   const [editingId,   setEditingId]   = useState(null);
+  const [toast,       setToast]       = useState(null);
+
+  const showToast = (message, type = "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4500);
+  };
 
   // ── Load all data from Supabase on mount
   useEffect(() => {
@@ -1187,7 +1192,7 @@ export default function App() {
       ]);
       setFieldLibrary(f.data?.length ? f.data : DEFAULT_FIELDS);
       setChemicals(c.data?.length ? c.data.map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L" })) : DEFAULT_CHEMICALS);
-      setEquipment(e.data?.length ? e.data : DEFAULT_EQUIPMENT);
+      setEquipment(e.data?.length ? e.data.map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })) : DEFAULT_EQUIPMENT);
       setLicensed(la.data || []);
       setNonLicensed(nla.data || []);
       setTickets((t.data || []).map(tk => ({
@@ -1208,6 +1213,7 @@ export default function App() {
         primeBoom:                tk.prime_boom      ?? tk.primeBoom      ?? false,
         flushCleanout:            tk.flush_cleanout  ?? tk.flushCleanout  ?? false,
         equipmentType:            tk.equipment_type  || tk.equipmentType  || "",
+        acresPerHour:             tk.acres_per_hour  || tk.acresPerHour   || 75,
         licensedApplicant:        tk.licensed_applicant         || tk.licensedApplicant        || "",
         licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense || "",
         nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant     || "",
@@ -1215,6 +1221,12 @@ export default function App() {
         fullLoads:                tk.full_loads      || tk.fullLoads      || "—",
         partialAcres:             tk.partial_acres   || tk.partialAcres   || null,
         acreLoads:                tk.acre_loads      || tk.acreLoads      || "—",
+        targetPest: (() => {
+          const raw = tk.target_pest ?? tk.targetPest;
+          if (Array.isArray(raw)) return raw;
+          if (!raw) return [];
+          try { return JSON.parse(raw); } catch { return typeof raw === "string" ? raw.split(", ").filter(Boolean) : []; }
+        })(),
       })));
       setDbLoading(false);
     }
@@ -1235,11 +1247,14 @@ export default function App() {
   };
   const removeField = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
 
-  const addChemRow    = (chemId)   => setForm(f => ({ ...f, chemRows: [...f.chemRows, { id: Date.now(), chemId: chemId||'', ratePerAcre:"", inputMode:"rate", galPerTank:"" }] }));
+  const addChemRow    = (chemId)   => setForm(f => ({ ...f, chemRows: [...f.chemRows, { id: crypto.randomUUID(), chemId: chemId||'', ratePerAcre:"", inputMode:"rate", galPerTank:"" }] }));
   const removeChemRow = (id)       => setForm(f => ({ ...f, chemRows: f.chemRows.filter(r => r.id !== id) }));
   const updateChemRow = (id, k, v) => setForm(f => ({ ...f, chemRows: f.chemRows.map(r => r.id===id ? {...r,[k]:v} : r) }));
 
   const { acreLoads, fullLoads } = calcTotals({ ...form, totalAcres });
+
+  const selectedEquip = equipment.find(e => e.name === form.equipmentType);
+  const acresPerHour  = selectedEquip?.acresPerHour || 75;
 
   // Convert wind degrees to compass direction
   const degreesToDir = (deg) => {
@@ -1274,48 +1289,37 @@ export default function App() {
   const saveTicket = () => {
     if (!form.selectedFields.length) return alert("Please select at least one field.");
     if (!form.crop)                  return alert("Please select a crop.");
+    const hasChems = form.chemRows.some(r => r.chemId);
+    if (hasChems && !form.tankSize)   return alert("Tank size is required when chemicals are added.");
+    if (hasChems && !form.galPerAcre) return alert("Gal/acre is required when chemicals are added.");
     const { acreLoadsRaw } = calcTotals({ ...form, totalAcres });
     const chemDetails = form.chemRows
-      .filter(r => r.chemId && (r.ratePerAcre || (r.inputMode === 'galtank' && r.galPerTank)))
+      .filter(r => r.chemId && (r.ratePerAcre || (r.inputMode === "galtank" && r.galPerTank)))
       .map(r => {
         const c = chemicals.find(x => x.id === r.chemId);
-        const inputMode = r.inputMode || "rate";
-        const unitNorm  = (c.unit||"oz").toLowerCase().replace(/\s+/g,"");
-        const isOzUnit  = unitNorm === "oz";
-        let effectiveRate = r.ratePerAcre;
-        if (inputMode === "galtank" && r.galPerTank) {
-          effectiveRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
-        }
-        // Apply ¼-gal rounding exactly as printTicket and ChemicalRow do
-        const roundQtr = !!(r.roundQtrGal && isOzUnit);
-        if (roundQtr && acreLoadsRaw > 0) {
-          const calc0 = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
-          const rawOz = calc0.totalPerTankRaw;
-          if (rawOz > 0) {
-            const rounded = roundToQtrGal(rawOz);
-            effectiveRate = (rounded / acreLoadsRaw).toFixed(4);
-          }
-        }
-        const calc2      = calcTotals({ ...form, totalAcres, ratePerAcre: effectiveRate });
+        if (!c) return null;
+        const { effRate, isOzUnit, roundQtr, calc } = resolveChemRow(r, c, acreLoadsRaw, form, totalAcres);
         const fmtFull    = (oz) => roundQtr && isOzUnit ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, c.unit);
-        // galtank: fixed amount per tank — partial load gets same quantity
-        const partRaw2   = inputMode === "galtank" ? calc2.totalPerTankRaw : calc2.partialPerTankRaw;
-        const tankFmt    = fmtFull(calc2.totalPerTankRaw);
-        const partialFmt = calc2.partialAcres > 0.01 ? fmtFull(partRaw2) : null;
-        return { name:c.name, epa:c.epa, rei:c.rei, unit:c.unit,
-          ratePerAcre: parseFloat(effectiveRate||0).toFixed(4),
+        const partRaw    = r.inputMode === "galtank" ? calc.totalPerTankRaw : calc.partialPerTankRaw;
+        const tankFmt    = fmtFull(calc.totalPerTankRaw);
+        const partialFmt = calc.partialAcres > 0.01 ? fmtFull(partRaw) : null;
+        return {
+          name: c.name, epa: c.epa, rei: c.rei, unit: c.unit,
+          ratePerAcre: parseFloat(effRate||0).toFixed(4),
           roundQtrGal: r.roundQtrGal || false,
           jug2_5gal: r.jug2_5gal || false,
-          inputMode,
+          inputMode: r.inputMode || "rate",
           galPerTank: r.galPerTank || "",
-          totalPerTank: calc2.totalPerTank,
+          totalPerTank: calc.totalPerTank,
           totalPerTankFmt: tankFmt,
           partialPerTankFmt: partialFmt,
-          partialAcres: calc2.partialAcres > 0.01 ? calc2.partialAcres.toFixed(1) : null };
-      });
-    const fieldSchedule = buildFieldSchedule(form.selectedFields, form.timeStart);
+          partialAcres: calc.partialAcres > 0.01 ? calc.partialAcres.toFixed(1) : null,
+        };
+      }).filter(Boolean);
+    const fieldSchedule = buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour);
     const computedEnd   = fieldSchedule.length ? fieldSchedule[fieldSchedule.length - 1].timeEnd : form.timeEnd;
     const mainCalc = calcTotals({ ...form, totalAcres });
+    const resolvedEquipType = form.equipmentType === "__other__" ? (form.equipmentTypeCustom || "") : form.equipmentType;
     const newTicket = {
       ...form, totalAcres: totalAcresDisplay,
       chemicals: chemDetails, acreLoads, fullLoads: mainCalc.fullLoads,
@@ -1324,8 +1328,13 @@ export default function App() {
       id: editingId || Date.now(),
       timeStart: form.timeStart, timeEnd: computedEnd || form.timeEnd,
       fieldSchedule,
-      targetPest: Array.isArray(form.targetPest) ? form.targetPest.join(', ') : (form.targetPest||''), airTemp: form.airTemp, primeBoom: form.primeBoom, flushCleanout: form.flushCleanout,
-      equipmentType: form.equipmentType === '__other__' ? (form.equipmentTypeCustom||'') : form.equipmentType, licensedApplicant: form.licensedApplicant, licensedApplicantLicense: form.licensedApplicantLicense, nonLicensedApplicant: form.nonLicensedApplicant
+      targetPest: Array.isArray(form.targetPest) ? form.targetPest : [],
+      airTemp: form.airTemp, primeBoom: form.primeBoom, flushCleanout: form.flushCleanout,
+      equipmentType: resolvedEquipType,
+      acresPerHour,
+      licensedApplicant: form.licensedApplicant,
+      licensedApplicantLicense: form.licensedApplicantLicense,
+      nonLicensedApplicant: form.nonLicensedApplicant,
     };
     const nextNum = editingId
       ? (tickets.find(x=>x.id===editingId)?.ticketNumber || 0)
@@ -1335,7 +1344,6 @@ export default function App() {
       ? t.map(x => x.id === editingId ? finalTicket : x)
       : [finalTicket, ...t]
     );
-    // Persist to Supabase
     supabase.from("tickets").upsert({
       id:                         finalTicket.id,
       ticket_number:              finalTicket.ticketNumber,
@@ -1343,7 +1351,7 @@ export default function App() {
       time_start:                 finalTicket.timeStart,
       time_end:                   finalTicket.timeEnd,
       crop:                       finalTicket.crop,
-      target_pest:                finalTicket.targetPest,
+      target_pest:                JSON.stringify(finalTicket.targetPest),
       wind_speed:                 finalTicket.windSpeed,
       wind_dir:                   finalTicket.windDir,
       air_temp:                   finalTicket.airTemp,
@@ -1353,6 +1361,7 @@ export default function App() {
       prime_boom:                 finalTicket.primeBoom,
       flush_cleanout:             finalTicket.flushCleanout,
       equipment_type:             finalTicket.equipmentType,
+      acres_per_hour:             finalTicket.acresPerHour,
       licensed_applicant:         finalTicket.licensedApplicant,
       licensed_applicant_license: finalTicket.licensedApplicantLicense,
       non_licensed_applicant:     finalTicket.nonLicensedApplicant,
@@ -1366,7 +1375,9 @@ export default function App() {
       chemicals:                  finalTicket.chemicals,
       chem_rows:                  finalTicket.chemRows,
       field_schedule:             finalTicket.fieldSchedule,
-    }).then(({ error }) => { if (error) console.error("Ticket save error:", error); });
+    }).then(({ error }) => {
+      if (error) showToast("Failed to save ticket: " + error.message);
+    });
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -1396,7 +1407,9 @@ export default function App() {
         imported++;
       });
       setFieldLibrary(fl => [...fl, ...added]);
-      supabase.from("fields").upsert(added).then(({ error }) => { if (error) console.error("Field import error:", error); });
+      supabase.from("fields").upsert(added).then(({ error }) => {
+        if (error) showToast("Failed to import fields: " + error.message);
+      });
       setFieldUpMsg(`✓ Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setFieldUpMsg(""), 4000);
     };
@@ -1409,10 +1422,17 @@ export default function App() {
     const nextId = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) + 1 : 1;
     const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" };
     setFieldLibrary(fl => [...fl, newFieldRec]);
-    supabase.from("fields").upsert(newFieldRec).then(({ error }) => { if (error) console.error("Add field error:", error); });
+    supabase.from("fields").upsert(newFieldRec).then(({ error }) => {
+      if (error) showToast("Failed to save field: " + error.message);
+    });
     setNewField({ name:"", acres:"", crop:"" });
   };
-  const deleteField = (id) => { setFieldLibrary(fl => fl.filter(f => f.id !== id)); supabase.from("fields").delete().eq("id", id).then(({ error }) => { if (error) console.error("Delete field error:", error); }); };
+  const deleteField = (id) => {
+    setFieldLibrary(fl => fl.filter(f => f.id !== id));
+    supabase.from("fields").delete().eq("id", id).then(({ error }) => {
+      if (error) showToast("Failed to delete field: " + error.message);
+    });
+  };
 
   // ── Chemical Manager
   const chemFileRef  = useRef();
@@ -1430,11 +1450,13 @@ export default function App() {
         const p = line.split(",").map(s => s.trim().replace(/^"|"$/g,""));
         if (!p[0] || !p[1] || !p[2]) { skipped++; return; }
         // Columns: Name, EPA #, REI, Unit, Formulation Type
-        added.push({ id: Date.now() + Math.random(), name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", formType:p[4]||"L" });
+        added.push({ id: Date.now() + imported, name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", formType:p[4]||"L" });
         imported++;
       });
       setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType }))).then(({ error }) => { if (error) console.error("Chem import error:", error); });
+      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType }))).then(({ error }) => {
+        if (error) showToast("Failed to import chemicals: " + error.message);
+      });
       setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
@@ -1446,10 +1468,17 @@ export default function App() {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
     const newChemRec = { ...newChem, id: Date.now() };
     setChemicals(c => [...c, newChemRec]);
-    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType }).then(({ error }) => { if (error) console.error("Add chem error:", error); });
+    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType }).then(({ error }) => {
+      if (error) showToast("Failed to save chemical: " + error.message);
+    });
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L" });
   };
-  const deleteChem = (id) => { setChemicals(c => c.filter(x => x.id !== id)); supabase.from("chemicals").delete().eq("id", id).then(({ error }) => { if (error) console.error("Delete chem error:", error); }); };
+  const deleteChem = (id) => {
+    setChemicals(c => c.filter(x => x.id !== id));
+    supabase.from("chemicals").delete().eq("id", id).then(({ error }) => {
+      if (error) showToast("Failed to delete chemical: " + error.message);
+    });
+  };
 
   const filteredFields = fieldLibrary.filter(f =>
     f.name.toLowerCase().includes(fieldSearch.toLowerCase()) &&
@@ -1467,6 +1496,20 @@ export default function App() {
   );
   return (
     <div style={{ minHeight:"100vh", background:"#f0f7e8", fontFamily:"'Georgia','Times New Roman',serif" }}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:9999,
+          background: toast.type === "error" ? "#c0392b" : "#2a8a10",
+          color:"#fff", borderRadius:8, padding:"12px 20px", fontSize:14, fontWeight:700,
+          boxShadow:"0 4px 20px rgba(0,0,0,0.25)", display:"flex", alignItems:"center", gap:10,
+          maxWidth:"90vw"
+        }}>
+          <span>{toast.type === "error" ? "⚠" : "✓"} {toast.message}</span>
+          <button onClick={() => setToast(null)} style={{ background:"none", border:"none", color:"#fff", cursor:"pointer", fontSize:18, lineHeight:1, padding:0, marginLeft:4 }}>×</button>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)", padding: isMobile ? "12px 14px 0" : "18px 28px 0", boxShadow:"0 3px 16px rgba(0,0,0,0.18)" }}>
@@ -1542,7 +1585,7 @@ export default function App() {
                   }}>
                     <span style={{ fontSize:14, fontWeight:700, color:"#2a5c0f" }}>
                       {form.timeStart && form.selectedFields.length
-                        ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart).slice(-1)[0]?.timeEnd)
+                        ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)
                         : "—"}
                     </span>
                   </div>
@@ -1692,7 +1735,7 @@ export default function App() {
               {form.selectedFields.length > 0 && form.timeStart && (
                 <div style={{ marginBottom:14, background:"#e6f5d0", borderRadius:6, padding:"10px 12px" }}>
                   <div style={{ fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.08em", marginBottom:6 }}>
-                    FIELD APPLICATION SCHEDULE <span style={{ fontWeight:400, color:"#6aaa40" }}>@ 75 ac/hr</span>
+                    FIELD APPLICATION SCHEDULE <span style={{ fontWeight:400, color:"#6aaa40" }}>@ {acresPerHour} ac/hr</span>
                   </div>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 11 : 12 }}>
                     <thead>
@@ -1705,8 +1748,8 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {buildFieldSchedule(form.selectedFields, form.timeStart).map((fs, i) => {
-                        const mins = Math.round((parseFloat(fs.acres) / ACRES_PER_HOUR) * 60);
+                      {buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).map((fs, i) => {
+                        const mins = Math.round((parseFloat(fs.acres) / acresPerHour) * 60);
                         const hrs  = Math.floor(mins / 60);
                         const rem  = mins % 60;
                         const dur  = hrs > 0 ? `${hrs}h ${rem}m` : `${rem}m`;
@@ -1724,7 +1767,7 @@ export default function App() {
                   </table>
                   <div style={{ marginTop:6, fontSize:11, color:"#6aaa40", textAlign:"right" }}>
                     Est. finish: <strong style={{ color:"#2a5c0f" }}>
-                      {fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart).slice(-1)[0]?.timeEnd)}
+                      {fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)}
                     </strong>
                   </div>
                 </div>
@@ -2154,8 +2197,7 @@ export default function App() {
                       if (!window.confirm("Delete this ticket? This cannot be undone.")) return;
                       const { error } = await supabase.from("tickets").delete().eq("id", editingId);
                       if (error) {
-                        alert("Failed to delete from database: " + error.message);
-                        console.error("Delete ticket error:", error);
+                        showToast("Failed to delete ticket: " + error.message);
                         return;
                       }
                       setTickets(t => t.filter(x => x.id !== editingId));
@@ -2348,8 +2390,8 @@ export default function App() {
                           ))}</tr>
                         </thead>
                         <tbody>
-                          {(t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart)).map((fs,i) => {
-                            const mins = Math.round((parseFloat(fs.acres) / ACRES_PER_HOUR) * 60);
+                          {(t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
+                            const mins = Math.round((parseFloat(fs.acres) / (t.acresPerHour || 75)) * 60);
                             const dur  = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
                             return (
                               <tr key={fs.id} style={{ borderBottom:"1px solid #eef5e8" }}>
@@ -2406,9 +2448,9 @@ export default function App() {
                         <button onClick={() => {
                           setForm({
                             ...t,
-                            targetPest: Array.isArray(t.targetPest) ? t.targetPest : (t.targetPest ? t.targetPest.split(", ") : []),
-                            chemRows: t.chemicals.map((c,i) => ({
-                              id: Date.now()+i,
+                            targetPest: Array.isArray(t.targetPest) ? t.targetPest : [],
+                            chemRows: t.chemicals.map(c => ({
+                              id: crypto.randomUUID(),
                               chemId: chemicals.find(x=>x.name===c.name)?.id || "",
                               ratePerAcre: c.ratePerAcre,
                               inputMode: c.inputMode || "rate",
@@ -2513,20 +2555,29 @@ export default function App() {
             {/* Equipment */}
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Equipment Library</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
                   <label style={labelStyle}>Equipment Name</label>
                   <input id="newEquipName" style={inp} placeholder="e.g. 4440 Sprayer"/>
                 </div>
+                <div>
+                  <label style={labelStyle}>Acres / Hr</label>
+                  <input id="newEquipAph" type="number" style={inp} placeholder="75" min="1" defaultValue="75"/>
+                </div>
                 <button onClick={() => {
-                  const el = document.getElementById("newEquipName");
-                  const name = el.value.trim();
+                  const nameEl = document.getElementById("newEquipName");
+                  const aphEl  = document.getElementById("newEquipAph");
+                  const name = nameEl.value.trim();
                   if (!name) return alert("Enter an equipment name.");
+                  const aph = parseFloat(aphEl.value) || 75;
                   const nextId = equipment.length ? Math.max(...equipment.map(e=>e.id))+1 : 1;
-                  const newEquipRec = { id: nextId, name };
+                  const newEquipRec = { id: nextId, name, acresPerHour: aph };
                   setEquipment(eq => [...eq, newEquipRec]);
-                  supabase.from("equipment").upsert(newEquipRec).then(({ error }) => { if (error) console.error("Add equip error:", error); });
-                  el.value = "";
+                  supabase.from("equipment").upsert({ id: newEquipRec.id, name: newEquipRec.name, acres_per_hour: aph }).then(({ error }) => {
+                    if (error) showToast("Failed to save equipment: " + error.message);
+                  });
+                  nameEl.value = "";
+                  aphEl.value  = "75";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
@@ -2535,14 +2586,21 @@ export default function App() {
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Equipment Name</th>
+                  <th style={th}>Ac/Hr</th>
                   <th style={th}></th>
                 </tr></thead>
                 <tbody>
                   {equipment.map(eq => (
                     <tr key={eq.id}>
                       <td style={{ ...td, fontWeight:600 }}>{eq.name}</td>
+                      <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{eq.acresPerHour || 75}</td>
                       <td style={td}>
-                        <button onClick={() => { setEquipment(e=>e.filter(x=>x.id!==eq.id)); supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => { if (error) console.error("Delete equip error:", error); }); }} style={{
+                        <button onClick={() => {
+                          setEquipment(e=>e.filter(x=>x.id!==eq.id));
+                          supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => {
+                            if (error) showToast("Failed to delete equipment: " + error.message);
+                          });
+                        }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}>×</button>
                       </td>
@@ -2569,7 +2627,9 @@ export default function App() {
                   const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
                   const newLicRec = { id: nextId, name, license: "" };
                   setLicensed(ops => [...ops, newLicRec]);
-                  supabase.from("licensed_applicators").upsert(newLicRec).then(({ error }) => { if (error) console.error("Add lic error:", error); });
+                  supabase.from("licensed_applicators").upsert(newLicRec).then(({ error }) => {
+                    if (error) showToast("Failed to save applicator: " + error.message);
+                  });
                   document.getElementById("newLicName").value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2586,7 +2646,12 @@ export default function App() {
                     <tr key={op.id}>
                       <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
                       <td style={td}>
-                        <button onClick={() => { setLicensed(ops=>ops.filter(x=>x.id!==op.id)); supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => { if (error) console.error("Delete lic error:", error); }); }} style={{
+                        <button onClick={() => {
+                          setLicensed(ops=>ops.filter(x=>x.id!==op.id));
+                          supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => {
+                            if (error) showToast("Failed to delete applicator: " + error.message);
+                          });
+                        }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}>×</button>
                       </td>
@@ -2613,7 +2678,9 @@ export default function App() {
                   const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
                   const newNonLicRec = { id: nextId, name };
                   setNonLicensed(ops => [...ops, newNonLicRec]);
-                  supabase.from("non_licensed_applicators").upsert(newNonLicRec).then(({ error }) => { if (error) console.error("Add nonlic error:", error); });
+                  supabase.from("non_licensed_applicators").upsert(newNonLicRec).then(({ error }) => {
+                    if (error) showToast("Failed to save applicator: " + error.message);
+                  });
                   document.getElementById("newNonLicName").value = "";
                 }} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -2630,7 +2697,12 @@ export default function App() {
                     <tr key={p.id}>
                       <td style={{ ...td, fontWeight:600 }}>{p.name}</td>
                       <td style={td}>
-                        <button onClick={() => { setNonLicensed(ops=>ops.filter(x=>x.id!==p.id)); supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => { if (error) console.error("Delete nonlic error:", error); }); }} style={{
+                        <button onClick={() => {
+                          setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
+                          supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
+                            if (error) showToast("Failed to delete applicator: " + error.message);
+                          });
+                        }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
                         }}>×</button>
                       </td>
