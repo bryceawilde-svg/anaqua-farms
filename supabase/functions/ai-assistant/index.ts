@@ -86,10 +86,11 @@ Deno.serve(async (req) => {
       };
       systemPrompt =
         'You answer questions about pesticide application records for a farm. ' +
-        'Be concise and accurate. Use the provided records as your only data source. ' +
-        'Your entire response must be a single raw JSON object. No prose, no markdown, no code fences. ' +
-        'Format: {"answer":"<plain English answer here>"}. ' +
-        'If the records do not contain enough information to answer, set answer to a short explanation.';
+        'Give a direct, concise answer in one or two sentences. ' +
+        'Do NOT show calculations, intermediate steps, or reasoning — only the final answer. ' +
+        'Your entire response must be exactly one raw JSON object, nothing else before or after it. ' +
+        'No prose outside the JSON, no markdown, no code fences. ' +
+        'Format: {"answer":"<one or two sentence answer>"}.';
       userMessage =
         `Application records: ${JSON.stringify(ticketData)}\n` +
         `Question: ${question}`;
@@ -114,14 +115,26 @@ Deno.serve(async (req) => {
   // Strip markdown code fences Claude sometimes adds despite instructions
   let stripped = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
-  // Validate it parses as JSON; if not, wrap plain-text answers for chat-tickets
+  // Validate it parses as JSON; if not, try to extract a JSON object from within the text
   try {
     JSON.parse(stripped);
   } catch {
-    if (action === "chat-tickets") {
-      stripped = JSON.stringify({ answer: stripped });
-    } else {
-      stripped = JSON.stringify({ error: "Model returned non-JSON response", raw: stripped });
+    const match = stripped.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        JSON.parse(match[0]);
+        stripped = match[0]; // use the embedded JSON object
+      } catch { /* fall through */ }
+    }
+    // If still not valid JSON, wrap as answer for chat-tickets or return error
+    try {
+      JSON.parse(stripped);
+    } catch {
+      if (action === "chat-tickets") {
+        stripped = JSON.stringify({ answer: stripped });
+      } else {
+        stripped = JSON.stringify({ error: "Model returned non-JSON response", raw: stripped });
+      }
     }
   }
 
