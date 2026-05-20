@@ -1222,10 +1222,53 @@ export default function App() {
   const [editingId,   setEditingId]   = useState(null);
   const [toast,       setToast]       = useState(null);
 
+  // ── AI state
+  const [aiNlInput,        setAiNlInput]        = useState("");
+  const [aiNlLoading,      setAiNlLoading]      = useState(false);
+  const [aiCompatWarning,  setAiCompatWarning]  = useState(null);
+  const [aiCompatLoading,  setAiCompatLoading]  = useState(false);
+  const [aiSuggestions,    setAiSuggestions]    = useState([]);
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+  const [aiChatQuery,      setAiChatQuery]      = useState("");
+  const [aiChatAnswer,     setAiChatAnswer]     = useState("");
+  const [aiChatLoading,    setAiChatLoading]    = useState(false);
+  const compatDebounceRef = useRef(null);
+
   const showToast = (message, type = "error") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4500);
   };
+
+  async function callAI(action, payload) {
+    const { data, error } = await supabase.functions.invoke("ai-assistant", {
+      body: { action, ...payload },
+    });
+    if (error) throw new Error(error.message);
+    return JSON.parse(data.result);
+  }
+
+  async function submitChat() {
+    setAiChatLoading(true);
+    setAiChatAnswer("");
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 90);
+      const recentTickets = tickets
+        .filter(t => !t.date || t.date >= cutoff.toISOString().slice(0, 10))
+        .map(t => ({
+          date: t.date, crop: t.crop, targetPest: t.targetPest,
+          totalAcres: t.totalAcres,
+          fields: (t.selectedFields || []).map(f => f.name),
+          chemicals: (t.chemicals || []).map(c => ({ name: c.name, ratePerAcre: c.ratePerAcre, unit: c.unit })),
+        }));
+      const res = await callAI("chat-tickets", { question: aiChatQuery, ticketData: recentTickets });
+      setAiChatAnswer(res.answer);
+    } catch (e) {
+      setAiChatAnswer("Could not get an answer: " + e.message);
+    } finally {
+      setAiChatLoading(false);
+    }
+  }
 
   // ── Load all data from Supabase on mount
   useEffect(() => {
@@ -1334,6 +1377,25 @@ export default function App() {
       setWxLoading(false);
     }
   };
+
+  // Debounced compatibility check — fires when 2+ chemicals have rates entered
+  useEffect(() => {
+    const filledRows = form.chemRows.filter(r => r.chemId && (r.ratePerAcre || r.galPerTank));
+    if (filledRows.length < 2) { setAiCompatWarning(null); return; }
+    if (compatDebounceRef.current) clearTimeout(compatDebounceRef.current);
+    compatDebounceRef.current = setTimeout(async () => {
+      setAiCompatLoading(true);
+      try {
+        const products = filledRows.map(r => {
+          const c = chemicals.find(x => x.id === r.chemId);
+          return c ? { name: c.name, epa: c.epa } : null;
+        }).filter(Boolean);
+        const res = await callAI("compatibility", { products });
+        setAiCompatWarning(res);
+      } catch { setAiCompatWarning(null); }
+      finally { setAiCompatLoading(false); }
+    }, 600);
+  }, [form.chemRows, chemicals]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTicket = () => {
     if (!form.selectedFields.length) return alert("Please select at least one field.");
@@ -1621,6 +1683,61 @@ export default function App() {
         {/* ══ NEW TICKET ══════════════════════════════════════════════════════════ */}
         {view === "form" && (
           <div>
+            {/* ── AI Natural Language Fill ── */}
+            <div style={{...card, background:"#f0f6ff", border:"1.5px solid #b0c8e8", padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={{...sectionTitle, color:"#1a3a6a", borderBottomColor:"#b0c8e8"}}>AI Fill from Description</div>
+              <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+                <textarea
+                  value={aiNlInput}
+                  onChange={e => setAiNlInput(e.target.value)}
+                  placeholder='e.g. "Spray Roundup 24 oz and Atrazine 16 oz on all cotton fields for broadleaf weeds"'
+                  style={{...inp, height:64, resize:"vertical", flex:1}}
+                />
+                <button
+                  disabled={!aiNlInput.trim() || aiNlLoading}
+                  onClick={async () => {
+                    setAiNlLoading(true);
+                    try {
+                      const res = await callAI("fill-ticket", {
+                        text: aiNlInput,
+                        fieldLib: fieldLibrary.map(f => ({ id: f.id, name: f.name, crop: f.crop })),
+                        chemLib: chemicals.map(c => ({ id: c.id, name: c.name, unit: c.unit })),
+                      });
+                      if (res.fields?.length) {
+                        const matched = fieldLibrary.filter(f => res.fields.includes(f.id));
+                        set("selectedFields", matched);
+                      }
+                      if (res.chemRows?.length) {
+                        setForm(f => ({
+                          ...f,
+                          chemRows: res.chemRows.map(r => ({
+                            id: crypto.randomUUID(),
+                            chemId: r.chemId,
+                            ratePerAcre: String(r.rate || ""),
+                            inputMode: "rate",
+                            galPerTank: "",
+                          })),
+                        }));
+                      }
+                      if (res.targetPest?.length) set("targetPest", res.targetPest);
+                      setAiNlInput("");
+                      showToast("Form filled from description — review and save.", "success");
+                    } catch (e) {
+                      showToast("AI fill failed: " + e.message);
+                    } finally {
+                      setAiNlLoading(false);
+                    }
+                  }}
+                  style={{
+                    background: aiNlLoading ? "#aaa" : "#1a3a6a",
+                    color:"#fff", border:"none", borderRadius:7,
+                    padding:"10px 16px", cursor: aiNlLoading ? "default" : "pointer",
+                    fontWeight:700, fontSize:13, whiteSpace:"nowrap", flexShrink:0,
+                  }}
+                >{aiNlLoading ? "Filling…" : "Fill Form"}</button>
+              </div>
+            </div>
+
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Application Info</div>
               {/* Weather fetch button */}
@@ -1862,6 +1979,7 @@ export default function App() {
                           onClick={() => {
                             const cur = form.targetPest || [];
                             set("targetPest", on ? cur.filter(x=>x!==opt) : [...cur, opt]);
+                            setAiSuggestions([]);
                           }}
                           style={{
                             padding:"6px 12px", border:"1.5px solid", borderRadius:20,
@@ -1875,6 +1993,60 @@ export default function App() {
                       );
                     })}
                   </div>
+                  {/* Suggest Chemicals — visible when a pest is selected */}
+                  {(form.targetPest||[]).length > 0 && (
+                    <div style={{ marginTop:8 }}>
+                      <button
+                        disabled={aiSuggestLoading}
+                        onClick={async () => {
+                          setAiSuggestLoading(true);
+                          setAiSuggestions([]);
+                          try {
+                            const res = await callAI("suggest-chems", {
+                              crop: form.crop || "unspecified",
+                              pest: form.targetPest.join(", "),
+                              chemLib: chemicals.map(c => ({ id: c.id, name: c.name, formType: c.formType, epa: c.epa })),
+                            });
+                            setAiSuggestions(res.suggestions || []);
+                          } catch (e) {
+                            showToast("Suggestion failed: " + e.message);
+                          } finally {
+                            setAiSuggestLoading(false);
+                          }
+                        }}
+                        style={{
+                          background: aiSuggestLoading ? "#aaa" : "#1a5c3a",
+                          color:"#fff", border:"none", borderRadius:6,
+                          padding:"6px 14px", cursor: aiSuggestLoading ? "default" : "pointer",
+                          fontSize:12, fontWeight:700,
+                        }}
+                      >{aiSuggestLoading ? "Suggesting…" : "Suggest Chemicals"}</button>
+                      {aiSuggestions.length > 0 && (
+                        <div style={{ marginTop:8, display:"flex", flexWrap:"wrap", gap:6 }}>
+                          {aiSuggestions.map(s => {
+                            const chem = chemicals.find(c => c.id === s.chemId);
+                            if (!chem) return null;
+                            const alreadyAdded = form.chemRows.some(r => r.chemId === chem.id);
+                            return (
+                              <button key={s.chemId}
+                                disabled={alreadyAdded}
+                                onClick={() => { if (!alreadyAdded) addChemRow(chem.id); }}
+                                title={s.reason}
+                                style={{
+                                  padding:"4px 10px", borderRadius:5, border:"1.5px solid #1a5c3a",
+                                  background: alreadyAdded ? "#e6f5d0" : "#f0fff8",
+                                  color: alreadyAdded ? "#888" : "#1a5c3a",
+                                  fontSize:12, fontWeight:700,
+                                  cursor: alreadyAdded ? "default" : "pointer",
+                                  fontFamily:"inherit",
+                                }}
+                              >{alreadyAdded ? "✓ " : "+ "}{chem.name}</button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={labelStyle}>Total Acres</label>
@@ -2261,6 +2433,21 @@ export default function App() {
                   </table>
                 </div>
               )}
+              {/* Compatibility warning */}
+              {aiCompatLoading && (
+                <div style={{ fontSize:12, color:"#888", marginTop:6 }}>Checking compatibility…</div>
+              )}
+              {!aiCompatLoading && aiCompatWarning?.warnings?.length > 0 && (
+                <div style={{ background:"#fff8e0", border:"1.5px solid #e0a020", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
+                  <div style={{ fontWeight:700, color:"#7a5000", fontSize:12, marginBottom:4 }}>
+                    Tank Mix Advisory
+                    <span style={{ fontWeight:400, fontSize:10, marginLeft:6 }}>(AI-based — verify against product labels)</span>
+                  </div>
+                  {aiCompatWarning.warnings.map((w, i) => (
+                    <div key={i} style={{ fontSize:12, color:"#7a5000", marginTop:2 }}>⚠ {w}</div>
+                  ))}
+                </div>
+              )}
             </div>
 
 
@@ -2356,6 +2543,38 @@ export default function App() {
                   }}>📋 TDA Report</button>
                 </div>
               </div>
+            </div>
+
+            {/* AI Chat over saved tickets */}
+            <div style={{ background:"#f0f6ff", border:"1.5px solid #b0c8e8", borderRadius:8, padding:"12px 14px", marginBottom:14 }}>
+              <div style={{ fontWeight:700, color:"#1a3a6a", fontSize:13, marginBottom:6 }}>Ask about your records…</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <input
+                  value={aiChatQuery}
+                  onChange={e => setAiChatQuery(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !aiChatLoading && aiChatQuery.trim() && submitChat()}
+                  placeholder='e.g. "How much Roundup have I used this season?"'
+                  style={{...inp, flex:1, fontSize:14}}
+                />
+                <button
+                  disabled={!aiChatQuery.trim() || aiChatLoading}
+                  onClick={submitChat}
+                  style={{
+                    background: !aiChatQuery.trim() || aiChatLoading ? "#aaa" : "#1a3a6a",
+                    color:"#fff", border:"none", borderRadius:6,
+                    padding:"10px 16px", cursor: !aiChatQuery.trim() || aiChatLoading ? "default" : "pointer",
+                    fontWeight:700, fontSize:13, whiteSpace:"nowrap",
+                  }}
+                >{aiChatLoading ? "…" : "Ask"}</button>
+              </div>
+              {aiChatAnswer && (
+                <div style={{
+                  marginTop:10, fontSize:13, color:"#222", lineHeight:1.6,
+                  background:"#fff", border:"1px solid #c8d8f0", borderRadius:5, padding:"8px 12px"
+                }}>
+                  {aiChatAnswer}
+                </div>
+              )}
             </div>
 
             {tickets.length === 0 ? (
