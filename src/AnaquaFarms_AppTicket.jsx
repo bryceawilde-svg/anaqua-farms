@@ -137,11 +137,34 @@ function fmtDryOzAsLbOz(totalDryOz) {
   return `${lbs} lb ${oz} oz`;
 }
 
-// Format oz as 2.5-gal jug count (e.g. "3.6 jugs")
+// Format oz as 2.5-gal jug count (e.g. "3.6 jugs") — legacy per-row checkbox
 function fmtJugCount(totalOz) {
   if (!totalOz || isNaN(totalOz) || totalOz <= 0) return null;
   const jugs = (totalOz / OZ_PER_GAL) / 2.5;
   return `${parseFloat(jugs.toFixed(1))} jugs`;
+}
+
+// Container count from library-level containerSize.
+// containerSize is in gallons (oz chemicals) or lb (dry oz / lb chemicals).
+// Returns e.g. "1.3 × 2.5 gal" or "2.0 × 8 lb"
+function fmtContainerCount(totalRaw, chem) {
+  const cs = parseFloat(chem?.containerSize);
+  if (!cs || !totalRaw || isNaN(totalRaw) || totalRaw <= 0) return null;
+  const unitNorm = (chem.unit || "oz").toLowerCase().replace(/\s+/g, "");
+  let count, label;
+  if (unitNorm === "oz") {
+    count = totalRaw / (cs * OZ_PER_GAL);
+    label = `${cs} gal`;
+  } else if (unitNorm === "dryoz") {
+    count = totalRaw / (cs * 16);
+    label = `${cs} lb`;
+  } else if (unitNorm === "lb" || unitNorm === "lbs") {
+    count = totalRaw / cs;
+    label = `${cs} lb`;
+  } else {
+    return null;
+  }
+  return `${parseFloat(count.toFixed(2))} × ${label}`;
 }
 
 // Unified formatter: handles oz (→ gal+oz), dry oz (→ lb+oz), and other units
@@ -241,9 +264,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     const partFmt = fmtFull(partRaw);
     const fullLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.totalPerTankRaw) : null;
     const partLbOz = isDryOzUnit ? fmtDryOzAsLbOz(partRaw) : null;
-    const jug2_5gal = !!(r.jug2_5gal && isOzUnit);
-    const fullJugs = jug2_5gal ? fmtJugCount(calc.totalPerTankRaw) : null;
-    const partJugs = jug2_5gal && partRaw > 0 ? fmtJugCount(partRaw) : null;
+    const useLibContainer = !!chem.containerSize;
+    const jug2_5gal = !!(r.jug2_5gal && isOzUnit && !useLibContainer);
+    const fullJugs = useLibContainer
+      ? fmtContainerCount(calc.totalPerTankRaw, chem)
+      : (jug2_5gal ? fmtJugCount(calc.totalPerTankRaw) : null);
+    const partJugs = useLibContainer
+      ? (partRaw > 0 ? fmtContainerCount(partRaw, chem) : null)
+      : (jug2_5gal && partRaw > 0 ? fmtJugCount(partRaw) : null);
     return { chem, effRate, fullFmt, partFmt, fullLbOz, partLbOz, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, fullJugs, partJugs };
   }).filter(Boolean);
 
@@ -961,6 +989,14 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   // For dry oz: show lbs+oz conversion as sub-line
   const dryOzSubline   = isDryOzUnit && tankRaw > 0
     ? fmtDryOzAsLbOz(tankRaw) : null;
+  // Container count — from library containerSize (takes priority) or legacy jug checkbox
+  const hasLibraryContainer = !!(selected?.containerSize);
+  const containerLabel      = hasLibraryContainer
+    ? fmtContainerCount(tankRaw, selected)
+    : (jug2_5 && isOzUnit && tankRaw > 0 ? fmtJugCount(tankRaw) : null);
+  const containerLabelPartial = hasLibraryContainer
+    ? fmtContainerCount(partialRaw, selected)
+    : (jug2_5 && isOzUnit && partialRaw > 0 ? fmtJugCount(partialRaw) : null);
 
   return (
     <tr>
@@ -1038,8 +1074,14 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
             ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac (rounded)
           </div>
         )}
-        {/* 2.5-gal jug toggle — only for liquid oz chemicals */}
-        {isOzUnit && (
+        {/* Container count — auto from library if containerSize set, else manual checkbox */}
+        {selected?.containerSize ? (
+          <div style={{ marginTop:5, padding:"3px 7px", borderRadius:5, background:"#f5eeff", border:"1.5px solid #7a3a9a", fontSize:10, fontWeight:700, color:"#5a1a7a" }}>
+            {(selected.unit||"oz").toLowerCase().replace(/\s+/g,"") === "oz"
+              ? `${selected.containerSize} gal containers`
+              : `${selected.containerSize} lb containers`}
+          </div>
+        ) : isOzUnit && (
           <label
             title="Display total as gallons and 2.5-gal jug count"
             style={{
@@ -1073,8 +1115,8 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
               <div>
                 <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>This Load ({parseFloat(totalAcres).toFixed(1)} ac)</div>
                 <div style={{ fontWeight:700, color:"#e07020", fontSize:14, lineHeight:1.2 }}>{partialDisplay || tankDisplay}</div>
-                {jug2_5 && isOzUnit && (partialRaw || tankRaw) > 0 && (
-                  <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{fmtJugCount(partialRaw || tankRaw)}</div>
+                {(containerLabelPartial || containerLabel) && (
+                  <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{containerLabelPartial || containerLabel}</div>
                 )}
               </div>
             ) : (
@@ -1087,16 +1129,16 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
                     <div style={{ fontSize:10, color:"#aaa" }}>{Math.round(tankRaw)} oz total</div>
                   )}
                   {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
-                  {jug2_5 && isOzUnit && tankRaw > 0 && (
-                    <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{fmtJugCount(tankRaw)}</div>
+                  {containerLabel && (
+                    <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{containerLabel}</div>
                   )}
                 </div>
                 {partialDisplay && (
                   <div style={{ borderTop:"1px dashed #c8dbb0", paddingTop:3 }}>
                     <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>Partial Load ({partialAc.toFixed(1)} ac)</div>
                     <div style={{ fontWeight:700, color:"#e07020", fontSize:13 }}>{partialDisplay}</div>
-                    {jug2_5 && isOzUnit && partialRaw > 0 && (
-                      <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{fmtJugCount(partialRaw)}</div>
+                    {containerLabelPartial && (
+                      <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{containerLabelPartial}</div>
                     )}
                   </div>
                 )}
@@ -1191,7 +1233,7 @@ export default function App() {
         supabase.from("tickets").select("*").order("created_at", { ascending: false }),
       ]);
       setFieldLibrary(f.data?.length ? f.data : DEFAULT_FIELDS);
-      setChemicals(c.data?.length ? c.data.map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L" })) : DEFAULT_CHEMICALS);
+      setChemicals(c.data?.length ? c.data.map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })) : DEFAULT_CHEMICALS);
       setEquipment(e.data?.length ? e.data.map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })) : DEFAULT_EQUIPMENT);
       setLicensed(la.data || []);
       setNonLicensed(nla.data || []);
@@ -1437,7 +1479,7 @@ export default function App() {
   // ── Chemical Manager
   const chemFileRef  = useRef();
   const [chemUpMsg,  setChemUpMsg]  = useState("");
-  const [newChem,    setNewChem]    = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L" });
+  const [newChem,    setNewChem]    = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
 
   const handleChemCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -1450,11 +1492,11 @@ export default function App() {
         const p = line.split(",").map(s => s.trim().replace(/^"|"$/g,""));
         if (!p[0] || !p[1] || !p[2]) { skipped++; return; }
         // Columns: Name, EPA #, REI, Unit, Formulation Type
-        added.push({ id: Date.now() + imported, name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", formType:p[4]||"L" });
+        added.push({ id: Date.now() + imported, name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", formType:p[4]||"L", containerSize: p[5] ? parseFloat(p[5]) : null });
         imported++;
       });
       setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType }))).then(({ error }) => {
+      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, container_size: a.containerSize ?? null }))).then(({ error }) => {
         if (error) showToast("Failed to import chemicals: " + error.message);
       });
       setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
@@ -1466,12 +1508,12 @@ export default function App() {
 
   const addManualChem = () => {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
-    const newChemRec = { ...newChem, id: Date.now() };
+    const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
-    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType }).then(({ error }) => {
+    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType, container_size: newChemRec.containerSize }).then(({ error }) => {
       if (error) showToast("Failed to save chemical: " + error.message);
     });
-    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L" });
+    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
   };
   const deleteChem = (id) => {
     setChemicals(c => c.filter(x => x.id !== id));
@@ -2723,8 +2765,8 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Formulation Type</code> — first row is header.<br/>
-                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, E, S, WDG, WP, D, A</strong></span>
+                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Formulation Type, Container Size (optional)</code> — first row is header.<br/>
+                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, E, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <button onClick={() => chemFileRef.current.click()} style={{
@@ -2738,7 +2780,7 @@ export default function App() {
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Add Chemical Manually</div>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
                 {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelStyle}>{lbl}</label>
@@ -2765,6 +2807,20 @@ export default function App() {
                     <option value="A">A — Adjuvant</option>
                   </select>
                 </div>
+                <div>
+                  <label style={labelStyle}>
+                    Container Size
+                    <span style={{ fontSize:10, fontWeight:400, color:"#888", marginLeft:4 }}>
+                      {(newChem.unit||"oz") === "oz" ? "(gal)" : "(lb)"}
+                    </span>
+                  </label>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={newChem.containerSize||""}
+                    onChange={e => setNewChem(c=>({...c,containerSize:e.target.value}))}
+                    style={inp} placeholder="blank = tote/bulk"
+                  />
+                </div>
               </div>
               <button onClick={addManualChem} style={{
                 marginTop:12, background:"#2a5c0f", color:"#fff", border:"none",
@@ -2777,7 +2833,7 @@ export default function App() {
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
-                    <tr>{["Chemical Name","Form.","EPA #","REI","Unit",""].map(h=>(
+                    <tr>{["Chemical Name","Form.","EPA #","REI","Unit","Container",""].map(h=>(
                       <th key={h} style={th}>{h}</th>
                     ))}</tr>
                   </thead>
@@ -2785,9 +2841,16 @@ export default function App() {
                     {chemicals.map(c => {
                       const unitNorm = (c.unit||"oz").toLowerCase().replace(/\s+/g,"");
                       const isDryOz  = unitNorm === "dryoz";
+                      const isLb     = unitNorm === "lb" || unitNorm === "lbs";
                       const unitBadge = isDryOz
                         ? <span style={{ background:"#fff3cc", color:"#7a5000", borderRadius:3, padding:"1px 4px", fontSize:10, fontWeight:700, marginLeft:3 }}>→ lb+oz</span>
                         : null;
+                      const csVal = parseFloat(c.containerSize);
+                      const containerCell = csVal > 0
+                        ? <span style={{ background:"#f5eeff", color:"#5a1a7a", borderRadius:3, padding:"1px 5px", fontSize:11, fontWeight:700 }}>
+                            {csVal} {(isDryOz || isLb) ? "lb" : "gal"}
+                          </span>
+                        : <span style={{ color:"#aaa", fontSize:11 }}>tote/bulk</span>;
                       return (
                         <tr key={c.id}>
                           <td style={{ ...td, fontWeight:600 }}>{c.name}</td>
@@ -2795,6 +2858,7 @@ export default function App() {
                           <td style={td}>{c.epa}</td>
                           <td style={td}>{c.rei}</td>
                           <td style={td}>{c.unit}{unitBadge}</td>
+                          <td style={td}>{containerCell}</td>
                           <td style={td}>
                             <button onClick={() => deleteChem(c.id)} style={{
                               background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
