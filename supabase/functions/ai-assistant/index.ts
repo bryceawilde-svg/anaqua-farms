@@ -112,7 +112,18 @@ Deno.serve(async (req) => {
   const rawText = resp.content[0].type === "text" ? resp.content[0].text : "";
 
   // Strip markdown code fences Claude sometimes adds despite instructions
-  const stripped = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  let stripped = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  // Validate it parses as JSON; if not, wrap plain-text answers for chat-tickets
+  try {
+    JSON.parse(stripped);
+  } catch {
+    if (action === "chat-tickets") {
+      stripped = JSON.stringify({ answer: stripped });
+    } else {
+      stripped = JSON.stringify({ error: "Model returned non-JSON response", raw: stripped });
+    }
+  }
 
   return new Response(
     JSON.stringify({ result: stripped }),
