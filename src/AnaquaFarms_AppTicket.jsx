@@ -1515,7 +1515,8 @@ export default function App() {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
     const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
-    supabase.from("chemicals").upsert({ ...newChemRec, form_type: newChemRec.formType, container_size: newChemRec.containerSize }).then(({ error }) => {
+    const { formType: ft, containerSize: cs, ...chemRest } = newChemRec;
+    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null }).then(({ error }) => {
       if (error) showToast("Failed to save chemical: " + error.message);
     });
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
@@ -1533,7 +1534,8 @@ export default function App() {
       containerSize: editChemDraft.containerSize ? parseFloat(editChemDraft.containerSize) : null,
     };
     setChemicals(c => c.map(x => x.id === updated.id ? updated : x));
-    supabase.from("chemicals").upsert({ ...updated, form_type: updated.formType, container_size: updated.containerSize }).then(({ error }) => {
+    const { formType, containerSize, ...rest } = updated;
+    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null }).then(({ error }) => {
       if (error) showToast("Failed to update chemical: " + error.message);
       else showToast("Chemical saved.", "success");
     });
