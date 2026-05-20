@@ -198,10 +198,13 @@ function canonicalUnit(u) {
   return u; // pass through anything else
 }
 
-// Back-calc rate/acre from gallons per tank
-function rateFromGalPerTank(galPerTank, acreLoads) {
+// Back-calc rate/acre from amount per tank.
+// For liquid oz chemicals: amount is in gallons → multiply by OZ_PER_GAL.
+// For dry/lb chemicals: amount is already in the rate unit (oz or lb) → no conversion.
+function rateFromGalPerTank(galPerTank, acreLoads, isDryUnit) {
   if (!galPerTank || !acreLoads || acreLoads <= 0) return "";
-  return ((parseFloat(galPerTank) * OZ_PER_GAL) / acreLoads).toFixed(2);
+  const factor = isDryUnit ? 1 : OZ_PER_GAL;
+  return ((parseFloat(galPerTank) * factor) / acreLoads).toFixed(2);
 }
 
 
@@ -241,7 +244,7 @@ function resolveChemRow(r, chem, acreLoadsRaw, form, totalAcres) {
   const isDryOzUnit = unitNorm === "dryoz";
   let effRate = r.ratePerAcre;
   if (r.inputMode === "galtank" && r.galPerTank) {
-    effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw);
+    effRate = rateFromGalPerTank(r.galPerTank, acreLoadsRaw, chemContainerIsLb(chem));
   }
   const roundQtr = !!(r.roundQtrGal && isOzUnit);
   if (roundQtr && acreLoadsRaw > 0) {
@@ -954,10 +957,12 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const jug2_5      = !!(chem.jug2_5gal && isOzUnit); // 2.5-gal jug display
   const { acreLoadsRaw } = calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre: 0 });
 
-  // Effective rate/acre — either entered directly or back-calculated from gal/tank
+  const isDryUnit = chemContainerIsLb(selected);
+
+  // Effective rate/acre — either entered directly or back-calculated from amt/tank
   let effectiveRate = chem.ratePerAcre;
   if (inputMode === "galtank" && chem.galPerTank) {
-    effectiveRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw);
+    effectiveRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw, isDryUnit);
   }
 
   // When rounding is active: round the full-tank oz up to nearest ¼ gal,
@@ -1031,7 +1036,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
               borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
               background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
               color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>
-            Gal/Tank
+            {isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "Lb/Tank" : "Oz/Tank") : "Gal/Tank"}
           </button>
         </div>
         {inputMode === "rate" ? (
@@ -1044,7 +1049,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
           <div style={{ display:"flex", alignItems:"center", gap:4 }}>
             <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
               style={{...inp, width:72}} placeholder="0" type="number" min="0" step="0.01"/>
-            <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>gal/tank</span>
+            <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/tank" : "oz/tank") : "gal/tank"}</span>
           </div>
         )}
         {inputMode === "galtank" && effectiveRate && (
