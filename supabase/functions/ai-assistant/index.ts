@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
   }
 
   const { action, ...payload } = body as { action: string; [key: string]: unknown };
-  const model = action === "compatibility" ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6";
+  const model = (action === "compatibility" || action === "crop-safety") ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6";
   let systemPrompt: string;
   let userMessage: string;
 
@@ -94,6 +94,26 @@ Deno.serve(async (req) => {
       userMessage =
         `Application records: ${JSON.stringify(ticketData)}\n` +
         `Question: ${question}`;
+      break;
+    }
+
+    case "crop-safety": {
+      const { fields, chemicals: chems } = payload as {
+        fields: { name: string; crop: string; traits: string[] }[];
+        chemicals: { name: string; epa: string }[];
+      };
+      systemPrompt =
+        'You are a crop herbicide tolerance expert. Given a list of fields with their crop and herbicide tolerance traits, ' +
+        'and a list of chemicals to be applied, identify any violations — chemicals that would injure crops that are NOT tolerant to them. ' +
+        'Traits: "glyphosate" = tolerant to glyphosate/Roundup products, "glufosinate" = tolerant to glufosinate/Liberty products, ' +
+        '"2,4-D" = tolerant to 2,4-D/Enlist products, "dicamba" = tolerant to dicamba/Xtend products, "non-gmo" = no GMO traits, no grass herbicides allowed. ' +
+        'A field with NO traits listed is conventional — flag any glyphosate, glufosinate, 2,4-D, or dicamba applications. ' +
+        'Return ONLY a raw JSON object, no markdown, no code fences: ' +
+        '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one sentence>"}]}. ' +
+        'Return an empty violations array if there are no issues.';
+      userMessage =
+        `Fields: ${JSON.stringify(fields)}\n` +
+        `Chemicals to apply: ${JSON.stringify(chems)}`;
       break;
     }
 

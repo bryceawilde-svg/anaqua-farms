@@ -36,6 +36,21 @@ const DEFAULT_FIELDS = [
 ];
 
 const WALES_ORDER  = ["W","A","L","E","S","WDG","WP","D"];
+
+const CROP_TRAITS = {
+  Cotton: [
+    { key: "glyphosate",  label: "Glyphosate (Roundup Ready)" },
+    { key: "glufosinate", label: "Glufosinate (Liberty)" },
+    { key: "2,4-D",       label: "2,4-D (Enlist One)" },
+    { key: "dicamba",     label: "Dicamba (Xtend)" },
+  ],
+  Corn: [
+    { key: "glufosinate", label: "Glufosinate (Liberty Link)" },
+    { key: "glyphosate",  label: "Glyphosate (RR)" },
+  ],
+};
+// Crops that are always non-GMO — no grass herbicides
+const NON_GMO_CROPS = ["Grain", "Sorghum"];
 const FORM_LABELS  = {
   L:"Liquid Flowable / SC", E:"Emulsifiable Concentrate (EC)", S:"Soluble Liquid (SL)",
   WDG:"Water Dispersible Granule / DF", WP:"Wettable Powder", D:"Dry Flowable", A:"Adjuvant / Surfactant",
@@ -1232,7 +1247,10 @@ export default function App() {
   const [aiChatQuery,      setAiChatQuery]      = useState("");
   const [aiChatAnswer,     setAiChatAnswer]     = useState("");
   const [aiChatLoading,    setAiChatLoading]    = useState(false);
-  const compatDebounceRef = useRef(null);
+  const compatDebounceRef   = useRef(null);
+  const cropSafetyDebounceRef = useRef(null);
+  const [aiCropSafety,     setAiCropSafety]     = useState(null);
+  const [aiCropSafetyLoading, setAiCropSafetyLoading] = useState(false);
 
   const showToast = (message, type = "error") => {
     setToast({ message, type });
@@ -1282,7 +1300,7 @@ export default function App() {
         supabase.from("non_licensed_applicators").select("*").order("name"),
         supabase.from("tickets").select("*").order("created_at", { ascending: false }),
       ]);
-      setFieldLibrary(f.data?.length ? f.data : DEFAULT_FIELDS);
+      setFieldLibrary(f.data?.length ? f.data.map(x => ({ ...x, traits: x.traits || [] })) : DEFAULT_FIELDS);
       setChemicals(c.data?.length ? c.data.map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })) : DEFAULT_CHEMICALS);
       setEquipment(e.data?.length ? e.data.map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })) : DEFAULT_EQUIPMENT);
       setLicensed(la.data || []);
@@ -1397,6 +1415,26 @@ export default function App() {
     }, 600);
   }, [form.chemRows, chemicals]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Debounced crop safety check — fires when fields or chemicals change
+  useEffect(() => {
+    const filledRows = form.chemRows.filter(r => r.chemId && (r.ratePerAcre || r.galPerTank));
+    const fieldsWithTraits = form.selectedFields.map(sf => {
+      const f = fieldLibrary.find(x => x.id === sf.id);
+      return f ? { name: f.name, crop: f.crop || form.crop || "", traits: f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []) } : null;
+    }).filter(Boolean);
+    if (!filledRows.length || !fieldsWithTraits.length) { setAiCropSafety(null); return; }
+    if (cropSafetyDebounceRef.current) clearTimeout(cropSafetyDebounceRef.current);
+    cropSafetyDebounceRef.current = setTimeout(async () => {
+      setAiCropSafetyLoading(true);
+      try {
+        const chems = filledRows.map(r => { const c = chemicals.find(x => x.id === r.chemId); return c ? { name: c.name, epa: c.epa } : null; }).filter(Boolean);
+        const res = await callAI("crop-safety", { fields: fieldsWithTraits, chemicals: chems });
+        setAiCropSafety(res);
+      } catch { setAiCropSafety(null); }
+      finally { setAiCropSafetyLoading(false); }
+    }, 800);
+  }, [form.chemRows, form.selectedFields, fieldLibrary, chemicals, form.crop]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const saveTicket = () => {
     if (!form.selectedFields.length) return alert("Please select at least one field.");
     if (!form.crop)                  return alert("Please select a crop.");
@@ -1501,7 +1539,7 @@ export default function App() {
   // ── Field Manager
   const fieldFileRef = useRef();
   const [fieldUpMsg,    setFieldUpMsg]    = useState("");
-  const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"" });
+  const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"", traits:[] });
   const [editingFieldId, setEditingFieldId] = useState(null);
   const [editFieldDraft, setEditFieldDraft] = useState({});
 
@@ -1533,12 +1571,13 @@ export default function App() {
   const addManualField = () => {
     if (!newField.name || !newField.acres) return alert("Field name and acres are required.");
     const nextId = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) + 1 : 1;
-    const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"" };
+    const autoTraits = NON_GMO_CROPS.includes(newField.crop) ? ["non-gmo"] : (newField.traits || []);
+    const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"", traits: autoTraits };
     setFieldLibrary(fl => [...fl, newFieldRec]);
     supabase.from("fields").upsert(newFieldRec).then(({ error }) => {
       if (error) showToast("Failed to save field: " + error.message);
     });
-    setNewField({ name:"", acres:"", crop:"" });
+    setNewField({ name:"", acres:"", crop:"", traits:[] });
   };
   const deleteField = (id) => {
     setFieldLibrary(fl => fl.filter(f => f.id !== id));
@@ -2448,6 +2487,22 @@ export default function App() {
                   ))}
                 </div>
               )}
+              {aiCropSafetyLoading && (
+                <div style={{ fontSize:12, color:"#888", marginTop:6 }}>Checking crop compatibility…</div>
+              )}
+              {!aiCropSafetyLoading && aiCropSafety?.violations?.length > 0 && (
+                <div style={{ background:"#fff0f0", border:"1.5px solid #c0392b", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
+                  <div style={{ fontWeight:700, color:"#7a0000", fontSize:12, marginBottom:4 }}>
+                    Crop Trait Warning
+                    <span style={{ fontWeight:400, fontSize:10, marginLeft:6 }}>(AI-based — verify against product labels)</span>
+                  </div>
+                  {aiCropSafety.violations.map((v, i) => (
+                    <div key={i} style={{ fontSize:12, color:"#7a0000", marginTop:2 }}>
+                      🚫 <strong>{v.field}</strong>: {v.chemical} — {v.reason}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
 
@@ -2810,11 +2865,37 @@ export default function App() {
                   <label style={labelStyle}>Acres</label>
                   <input type="number" value={newField.acres} onChange={e => setNewField(f=>({...f,acres:e.target.value}))} style={inp} placeholder="0.0" min="0" step="0.1"/>
                 </div>
+                <div>
+                  <label style={labelStyle}>Crop</label>
+                  <input value={newField.crop||""} onChange={e => setNewField(f=>({...f,crop:e.target.value,traits:[]}))} style={inp} placeholder="e.g. Cotton"/>
+                </div>
                 <button onClick={addManualField} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add Field</button>
               </div>
+              {CROP_TRAITS[newField.crop] && (
+                <div style={{ marginTop:10 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#555", marginBottom:4 }}>Herbicide Tolerances</div>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {CROP_TRAITS[newField.crop].map(t => (
+                      <label key={t.key} style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, cursor:"pointer",
+                        background: (newField.traits||[]).includes(t.key) ? "#e6f5d0" : "#f5f5f5",
+                        border: `1px solid ${(newField.traits||[]).includes(t.key) ? "#2a5c0f" : "#ccc"}`,
+                        borderRadius:4, padding:"3px 8px" }}>
+                        <input type="checkbox" checked={(newField.traits||[]).includes(t.key)}
+                          onChange={e => setNewField(f => ({ ...f, traits: e.target.checked ? [...(f.traits||[]),t.key] : (f.traits||[]).filter(x=>x!==t.key) }))} />
+                        {t.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {NON_GMO_CROPS.includes(newField.crop) && (
+                <div style={{ marginTop:8, fontSize:12, color:"#7a5000", fontWeight:600 }}>
+                  ⚠ Non-GMO crop — grass herbicide applications will be flagged automatically.
+                </div>
+              )}
             </div>
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
@@ -2824,35 +2905,72 @@ export default function App() {
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
-                    <tr>{["Field Name","Crop","Acres",""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
+                    <tr>{["Field Name","Crop","Acres","Traits",""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
                   </thead>
                   <tbody>
                     {fieldLibrary.map(f => {
                       const isEditing = editingFieldId === f.id;
-                      if (isEditing) return (
-                        <tr key={f.id} style={{ background:"#f5fff0" }}>
-                          <td style={td}>
-                            <input value={editFieldDraft.name||""} onChange={e=>setEditFieldDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
-                          </td>
-                          <td style={td}>
-                            <input value={editFieldDraft.crop||""} onChange={e=>setEditFieldDraft(d=>({...d,crop:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="optional" />
-                          </td>
-                          <td style={td}>
-                            <input type="number" value={editFieldDraft.acres||""} onChange={e=>setEditFieldDraft(d=>({...d,acres:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px", width:70 }} min="0" step="0.1" />
-                          </td>
-                          <td style={{ ...td, whiteSpace:"nowrap" }}>
-                            <button onClick={saveFieldEdit} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer", fontSize:12, fontWeight:700, marginRight:4 }}>Save</button>
-                            <button onClick={() => setEditingFieldId(null)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"3px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
-                          </td>
-                        </tr>
-                      );
+                      if (isEditing) {
+                        const editCrop = editFieldDraft.crop || "";
+                        const editTraits = editFieldDraft.traits || [];
+                        return (
+                          <tr key={f.id} style={{ background:"#f5fff0" }}>
+                            <td style={td} colSpan={5}>
+                              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"4px 0" }}>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Field Name</label>
+                                  <input value={editFieldDraft.name||""} onChange={e=>setEditFieldDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Crop</label>
+                                  <input value={editCrop} onChange={e=>setEditFieldDraft(d=>({...d,crop:e.target.value,traits:[]}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Acres</label>
+                                  <input type="number" value={editFieldDraft.acres||""} onChange={e=>setEditFieldDraft(d=>({...d,acres:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px", width:70 }} min="0" step="0.1" />
+                                </div>
+                                <div style={{ display:"flex", gap:4, alignItems:"flex-end", paddingBottom:1 }}>
+                                  <button onClick={saveFieldEdit} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
+                                  <button onClick={() => setEditingFieldId(null)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
+                                </div>
+                              </div>
+                              {CROP_TRAITS[editCrop] && (
+                                <div style={{ marginTop:6 }}>
+                                  <div style={{ fontSize:10, fontWeight:700, color:"#555", marginBottom:3 }}>Herbicide Tolerances</div>
+                                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                                    {CROP_TRAITS[editCrop].map(t => (
+                                      <label key={t.key} style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, cursor:"pointer",
+                                        background: editTraits.includes(t.key) ? "#e6f5d0" : "#f5f5f5",
+                                        border: `1px solid ${editTraits.includes(t.key) ? "#2a5c0f" : "#ccc"}`,
+                                        borderRadius:4, padding:"2px 7px" }}>
+                                        <input type="checkbox" checked={editTraits.includes(t.key)}
+                                          onChange={e => setEditFieldDraft(d => ({ ...d, traits: e.target.checked ? [...editTraits, t.key] : editTraits.filter(x=>x!==t.key) }))} />
+                                        {t.label}
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {NON_GMO_CROPS.includes(editCrop) && (
+                                <div style={{ marginTop:4, fontSize:11, color:"#7a5000" }}>⚠ Non-GMO — grass herbicide applications will be flagged.</div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      }
+                      const fieldTraits = f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []);
                       return (
                         <tr key={f.id}>
                           <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
                           <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
                           <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{f.acres}</td>
+                          <td style={td}>
+                            {fieldTraits.length > 0
+                              ? <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{fieldTraits.map(t => <span key={t} style={{ background:"#e8f0ff", color:"#1a3a7a", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{t}</span>)}</div>
+                              : <span style={{ color:"#aaa", fontSize:11 }}>none</span>}
+                          </td>
                           <td style={{ ...td, whiteSpace:"nowrap" }}>
-                            <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
+                            <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
                             <button onClick={() => deleteField(f.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
                           </td>
                         </tr>
