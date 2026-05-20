@@ -87,8 +87,9 @@ Deno.serve(async (req) => {
       systemPrompt =
         'You answer questions about pesticide application records for a farm. ' +
         'Be concise and accurate. Use the provided records as your only data source. ' +
-        'Return ONLY valid JSON with no extra text or markdown: {"answer":"<plain English answer>"}. ' +
-        'If the records do not contain enough information to answer, say so in the answer field.';
+        'Your entire response must be a single raw JSON object. No prose, no markdown, no code fences. ' +
+        'Format: {"answer":"<plain English answer here>"}. ' +
+        'If the records do not contain enough information to answer, set answer to a short explanation.';
       userMessage =
         `Application records: ${JSON.stringify(ticketData)}\n` +
         `Question: ${question}`;
@@ -110,8 +111,11 @@ Deno.serve(async (req) => {
 
   const rawText = resp.content[0].type === "text" ? resp.content[0].text : "";
 
+  // Strip markdown code fences Claude sometimes adds despite instructions
+  const stripped = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
   return new Response(
-    JSON.stringify({ result: rawText }),
+    JSON.stringify({ result: stripped }),
     { headers: { ...CORS, "Content-Type": "application/json" } },
   );
 });
