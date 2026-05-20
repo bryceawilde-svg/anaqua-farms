@@ -144,22 +144,33 @@ function fmtJugCount(totalOz) {
   return `${parseFloat(jugs.toFixed(1))} jugs`;
 }
 
+const DRY_FORM_TYPES = ["WDG","WP","D","WG"];
+
+// True when a chemical's container size is measured in lb (not gal).
+function chemContainerIsLb(chem) {
+  const unitNorm = (chem?.unit || "oz").toLowerCase().replace(/\s+/g, "");
+  return unitNorm === "dryoz" || unitNorm === "lb" || unitNorm === "lbs"
+    || DRY_FORM_TYPES.includes(chem?.formType);
+}
+
 // Container count from library-level containerSize.
-// containerSize is in gallons (oz liquid) or lb (dry oz / lb chemicals).
-// Returns e.g. "3.8 jugs" or "2.0 bags"
+// containerSize is in gallons (liquid oz) or lb (dry formulations).
+// Returns e.g. "3.8 containers"
 function fmtContainerCount(totalRaw, chem) {
   const cs = parseFloat(chem?.containerSize);
   if (!cs || !totalRaw || isNaN(totalRaw) || totalRaw <= 0) return null;
   const unitNorm = (chem.unit || "oz").toLowerCase().replace(/\s+/g, "");
+  const isLbContainer = chemContainerIsLb(chem);
   let count;
-  if (unitNorm === "oz") {
-    count = totalRaw / (cs * OZ_PER_GAL);
-  } else if (unitNorm === "dryoz") {
-    count = totalRaw / (cs * 16);
-  } else if (unitNorm === "lb" || unitNorm === "lbs") {
-    count = totalRaw / cs;
+  if (isLbContainer) {
+    // totalRaw is oz (weight) for "oz"/"dryoz" units, or lb for "lb" units
+    if (unitNorm === "lb" || unitNorm === "lbs") {
+      count = totalRaw / cs;
+    } else {
+      count = totalRaw / (cs * 16); // oz ÷ (lb * 16 oz/lb)
+    }
   } else {
-    return null;
+    count = totalRaw / (cs * OZ_PER_GAL); // fl oz ÷ (gal * 128 fl oz/gal)
   }
   return `${parseFloat(count.toFixed(2))} containers`;
 }
@@ -2850,7 +2861,7 @@ export default function App() {
                   <label style={labelStyle}>
                     Container Size
                     <span style={{ fontSize:10, fontWeight:400, color:"#888", marginLeft:4 }}>
-                      {(newChem.unit||"oz") === "oz" ? "(gal)" : "(lb)"}
+                      {chemContainerIsLb(newChem) ? "(lb)" : "(gal)"}
                     </span>
                   </label>
                   <input
@@ -2880,8 +2891,7 @@ export default function App() {
                     {chemicals.map(c => {
                       const isEditing = editingChemId === c.id;
                       if (isEditing) {
-                        const draftUnitNorm = (editChemDraft.unit||"oz").toLowerCase().replace(/\s+/g,"");
-                        const draftIsDryOrLb = draftUnitNorm === "dryoz" || draftUnitNorm === "lb" || draftUnitNorm === "lbs";
+                        const draftIsDryOrLb = chemContainerIsLb(editChemDraft);
                         return (
                           <tr key={c.id} style={{ background:"#f5fff0" }}>
                             <td style={td} colSpan={7}>
@@ -2940,7 +2950,7 @@ export default function App() {
                       const csVal = parseFloat(c.containerSize);
                       const containerCell = csVal > 0
                         ? <span style={{ background:"#f5eeff", color:"#5a1a7a", borderRadius:3, padding:"1px 5px", fontSize:11, fontWeight:700 }}>
-                            {csVal} {(isDryOz || isLb) ? "lb" : "gal"}
+                            {csVal} {chemContainerIsLb(c) ? "lb" : "gal"}
                           </span>
                         : <span style={{ color:"#aaa", fontSize:11 }}>tote/bulk</span>;
                       return (
