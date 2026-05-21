@@ -2165,36 +2165,9 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ marginBottom:10 }}>
-                  <label style={labelStyle}>Total Acres</label>
-                  {showAcresInput ? (
-                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                      <input
-                        type="number" value={acresOverride}
-                        onChange={e => setAcresOverride(e.target.value)}
-                        style={{...inp, fontSize:16, flex:1}} placeholder={autoAcres.toFixed(2)}
-                        min="0" step="0.1" autoFocus
-                      />
-                      <button onClick={() => { setAcresOverride(""); setShowAcresInput(false); }}
-                        style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}>
-                        ↺ auto
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{
-                      border:`1.5px solid ${acresOverride ? "#e0a020" : "#a8d870"}`,
-                      borderRadius:5, padding:"6px 10px",
-                      background: acresOverride ? "#fff8e0" : "#e6f5d0",
-                      display:"flex", alignItems:"center", gap:8, cursor:"pointer"
-                    }} onClick={() => setShowAcresInput(true)}>
-                      <span style={{ fontSize:18, fontWeight:700, color: acresOverride ? "#c08000" : "#2a5c0f" }}>
-                        {totalAcresDisplay}
-                      </span>
-                      <span style={{ fontSize:11, color: acresOverride ? "#c08000" : "#6aaa30" }}>
-                        {acresOverride ? "override ✏" : "auto ✏"}
-                      </span>
-                    </div>
-                  )}
+              <div style={{ marginBottom:12 }}>
+                <label style={labelStyle}>Notes</label>
+                <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
               </div>
             </div>
 
@@ -2414,10 +2387,6 @@ export default function App() {
                 );
               })()}
 
-              <div style={{ marginBottom:12 }}>
-                <label style={labelStyle}>Notes</label>
-                <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
-              </div>
               {(() => {
                 const mainCalcLive = calcTotals({ ...form, totalAcres });
                 const partAcLive   = mainCalcLive.partialAcres;
