@@ -2000,6 +2000,86 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Target Pest / Weed / Disease */}
+              <div style={{ marginBottom:14 }}>
+                <label style={labelStyle}>Target Pest / Weed / Disease</label>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+                  {["Grass Weeds","Broadleaf Weeds","Aphids","Spider Mites","Plant bugs","Plant Health"].map(opt => {
+                    const on = (form.targetPest||[]).includes(opt);
+                    return (
+                      <button key={opt} type="button"
+                        onClick={() => {
+                          const cur = form.targetPest || [];
+                          set("targetPest", on ? cur.filter(x=>x!==opt) : [...cur, opt]);
+                          setAiSuggestions([]);
+                        }}
+                        style={{
+                          padding:"6px 12px", border:"1.5px solid", borderRadius:20,
+                          cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"inherit",
+                          borderColor: on ? "#2a5c0f" : "#c8dbb0",
+                          background:  on ? "#2a5c0f" : "#f9fdf5",
+                          color:       on ? "#fff"    : "#555",
+                          transition:"all 0.12s"
+                        }}
+                      >{opt}</button>
+                    );
+                  })}
+                </div>
+                {(form.targetPest||[]).length > 0 && (
+                  <div style={{ marginTop:8 }}>
+                    <button
+                      disabled={aiSuggestLoading}
+                      onClick={async () => {
+                        setAiSuggestLoading(true);
+                        setAiSuggestions([]);
+                        try {
+                          const res = await callAI("suggest-chems", {
+                            crop: form.crop || "unspecified",
+                            pest: form.targetPest.join(", "),
+                            chemLib: chemicals.map(c => ({ id: c.id, name: c.name, formType: c.formType, epa: c.epa })),
+                          });
+                          setAiSuggestions(res.suggestions || []);
+                        } catch (e) {
+                          showToast("Suggestion failed: " + e.message);
+                        } finally {
+                          setAiSuggestLoading(false);
+                        }
+                      }}
+                      style={{
+                        background: aiSuggestLoading ? "#aaa" : "#1a5c3a",
+                        color:"#fff", border:"none", borderRadius:6,
+                        padding:"6px 14px", cursor: aiSuggestLoading ? "default" : "pointer",
+                        fontSize:12, fontWeight:700,
+                      }}
+                    >{aiSuggestLoading ? "Suggesting…" : "Suggest Chemicals"}</button>
+                    {aiSuggestions.length > 0 && (
+                      <div style={{ marginTop:8, display:"flex", flexWrap:"wrap", gap:6 }}>
+                        {aiSuggestions.map(s => {
+                          const chem = chemicals.find(c => c.id === s.chemId);
+                          if (!chem) return null;
+                          const alreadyAdded = form.chemRows.some(r => r.chemId === chem.id);
+                          return (
+                            <button key={s.chemId}
+                              disabled={alreadyAdded}
+                              onClick={() => { if (!alreadyAdded) addChemRow(chem.id); }}
+                              title={s.reason}
+                              style={{
+                                padding:"4px 10px", borderRadius:5, border:"1.5px solid #1a5c3a",
+                                background: alreadyAdded ? "#e6f5d0" : "#f0fff8",
+                                color: alreadyAdded ? "#888" : "#1a5c3a",
+                                fontSize:12, fontWeight:700,
+                                cursor: alreadyAdded ? "default" : "pointer",
+                                fontFamily:"inherit",
+                              }}
+                            >{alreadyAdded ? "✓ " : "+ "}{chem.name}</button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Field Picker */}
               <div style={{ marginBottom:14 }}>
                 <label style={labelStyle}>
@@ -2085,87 +2165,7 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ display:"grid", gridTemplateColumns:rGrid(1, 2, isMobile), gap:10 }}>
-                <div>
-                  <label style={labelStyle}>Target Pest / Weed / Disease</label>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
-                    {["Grass Weeds","Broadleaf Weeds","Aphids","Spider Mites","Plant bugs","Plant Health"].map(opt => {
-                      const on = (form.targetPest||[]).includes(opt);
-                      return (
-                        <button key={opt} type="button"
-                          onClick={() => {
-                            const cur = form.targetPest || [];
-                            set("targetPest", on ? cur.filter(x=>x!==opt) : [...cur, opt]);
-                            setAiSuggestions([]);
-                          }}
-                          style={{
-                            padding:"6px 12px", border:"1.5px solid", borderRadius:20,
-                            cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"inherit",
-                            borderColor: on ? "#2a5c0f" : "#c8dbb0",
-                            background:  on ? "#2a5c0f" : "#f9fdf5",
-                            color:       on ? "#fff"    : "#555",
-                            transition:"all 0.12s"
-                          }}
-                        >{opt}</button>
-                      );
-                    })}
-                  </div>
-                  {/* Suggest Chemicals — visible when a pest is selected */}
-                  {(form.targetPest||[]).length > 0 && (
-                    <div style={{ marginTop:8 }}>
-                      <button
-                        disabled={aiSuggestLoading}
-                        onClick={async () => {
-                          setAiSuggestLoading(true);
-                          setAiSuggestions([]);
-                          try {
-                            const res = await callAI("suggest-chems", {
-                              crop: form.crop || "unspecified",
-                              pest: form.targetPest.join(", "),
-                              chemLib: chemicals.map(c => ({ id: c.id, name: c.name, formType: c.formType, epa: c.epa })),
-                            });
-                            setAiSuggestions(res.suggestions || []);
-                          } catch (e) {
-                            showToast("Suggestion failed: " + e.message);
-                          } finally {
-                            setAiSuggestLoading(false);
-                          }
-                        }}
-                        style={{
-                          background: aiSuggestLoading ? "#aaa" : "#1a5c3a",
-                          color:"#fff", border:"none", borderRadius:6,
-                          padding:"6px 14px", cursor: aiSuggestLoading ? "default" : "pointer",
-                          fontSize:12, fontWeight:700,
-                        }}
-                      >{aiSuggestLoading ? "Suggesting…" : "Suggest Chemicals"}</button>
-                      {aiSuggestions.length > 0 && (
-                        <div style={{ marginTop:8, display:"flex", flexWrap:"wrap", gap:6 }}>
-                          {aiSuggestions.map(s => {
-                            const chem = chemicals.find(c => c.id === s.chemId);
-                            if (!chem) return null;
-                            const alreadyAdded = form.chemRows.some(r => r.chemId === chem.id);
-                            return (
-                              <button key={s.chemId}
-                                disabled={alreadyAdded}
-                                onClick={() => { if (!alreadyAdded) addChemRow(chem.id); }}
-                                title={s.reason}
-                                style={{
-                                  padding:"4px 10px", borderRadius:5, border:"1.5px solid #1a5c3a",
-                                  background: alreadyAdded ? "#e6f5d0" : "#f0fff8",
-                                  color: alreadyAdded ? "#888" : "#1a5c3a",
-                                  fontSize:12, fontWeight:700,
-                                  cursor: alreadyAdded ? "default" : "pointer",
-                                  fontFamily:"inherit",
-                                }}
-                              >{alreadyAdded ? "✓ " : "+ "}{chem.name}</button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div>
+              <div style={{ marginBottom:10 }}>
                   <label style={labelStyle}>Total Acres</label>
                   {showAcresInput ? (
                     <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -2195,7 +2195,6 @@ export default function App() {
                       </span>
                     </div>
                   )}
-                </div>
               </div>
             </div>
 
