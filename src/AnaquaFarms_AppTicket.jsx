@@ -1042,42 +1042,41 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
         <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:22, padding:"0 2px", lineHeight:1, flexShrink:0 }}>×</button>
       </div>
 
-      {/* Row 2: mode toggle + input | full tank amount */}
-      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-        {/* Mode + input */}
-        <div style={{ display:"flex", alignItems:"center", gap:6, flex:1, minWidth:0 }}>
-          <div style={{ display:"flex", gap:3, flexShrink:0 }}>
+      {/* Row 2: input first, mode chips stacked beside it, full tank on right */}
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
+        {/* Left: input + stacked mode buttons + unit */}
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:1, minWidth:0 }}>
+          {inputMode === "rate" ? (
+            <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
+              style={{...inp, width:88}} placeholder="0" type="number" min="0" step="0.1"/>
+          ) : (
+            <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
+              style={{...inp, width:88}} placeholder="0" type="number" min="0" step="0.01"/>
+          )}
+          <div style={{ display:"flex", flexDirection:"column", gap:3, flexShrink:0 }}>
             <button onClick={() => onChange("inputMode","rate")}
-              style={{ padding:"4px 10px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
+              style={{ padding:"3px 9px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700, whiteSpace:"nowrap",
                 borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
                 background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
                 color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>Rate/Acre</button>
             <button onClick={() => onChange("inputMode","galtank")}
-              style={{ padding:"4px 10px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
+              style={{ padding:"3px 9px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700, whiteSpace:"nowrap",
                 borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
                 background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
                 color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>{galtankLabel}</button>
           </div>
-          {inputMode === "rate" ? (
-            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-              <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
-                style={{...inp, width:90}} placeholder="0" type="number" min="0" step="0.1"/>
-              <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{baseUnit}/ac</span>
-            </div>
-          ) : (
-            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-              <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
-                style={{...inp, width:90}} placeholder="0" type="number" min="0" step="0.01"/>
-              <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{galtankLabel}</span>
-            </div>
-          )}
-          {inputMode === "galtank" && effectiveRate && (
-            <span style={{ fontSize:10, color:"#6aaa30", whiteSpace:"nowrap" }}>= {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</span>
-          )}
+          <div style={{ flexShrink:0 }}>
+            <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>
+              {inputMode === "rate" ? `${baseUnit}/ac` : galtankLabel}
+            </span>
+            {inputMode === "galtank" && effectiveRate && (
+              <div style={{ fontSize:10, color:"#6aaa30", whiteSpace:"nowrap" }}>= {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</div>
+            )}
+          </div>
         </div>
 
-        {/* Full tank amount — right side */}
-        <div style={{ textAlign:"right", flexShrink:0, minWidth:110 }}>
+        {/* Right: full tank amount */}
+        <div style={{ textAlign:"right", flexShrink:0 }}>
           {lessThanOneTank ? (
             <>
               <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>This Load</div>
