@@ -2261,7 +2261,9 @@ export default function App() {
                 </div>
                 <div>
                   <label style={labelStyle}>Pressure (PSI)</label>
-                  <input type="number" value={form.pressure} onChange={e => set("pressure",e.target.value)} style={inp} placeholder="0" min="0"/>
+                  <input type="number" value={form.pressure} onChange={e => set("pressure",e.target.value)}
+                    style={{ ...inp, ...(isMobile ? { padding:"6px 8px", fontSize:14 } : {}) }}
+                    placeholder="0" min="0"/>
                 </div>
                 <div>
                   <label style={labelStyle}>Gal / Acre</label>
@@ -2363,34 +2365,34 @@ export default function App() {
                 }
                 suggestions.sort((a, b) => a.n - b.n);
 
-                // Filter: only show ones where idealGpa differs meaningfully from current
-                const filtered = suggestions.filter(s => Math.abs(s.idealGpa - gpa) > 0.005);
+                // Filter: meaningful difference, and only suggest 5–15 gal/acre range, cap at 2
+                const filtered = suggestions
+                  .filter(s => Math.abs(s.idealGpa - gpa) > 0.005 && s.idealGpa >= 5 && s.idealGpa <= 15)
+                  .slice(0, 2);
                 if (!filtered.length) return (
-                  <div style={{ background:"#d4e8c2", borderRadius:6, padding:"7px 12px", fontSize:12, color:"#2a5c0f", fontWeight:600, marginBottom:12 }}>
-                    ✓ Current gal/acre already makes exact full loads
+                  <div style={{ background:"#d4e8c2", borderRadius:6, padding:"5px 10px", fontSize:11, color:"#2a5c0f", fontWeight:600, marginBottom:8 }}>
+                    ✓ Exact full loads
                   </div>
                 );
 
                 return (
-                  <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"10px 12px", marginBottom:12 }}>
-                    <div style={{ fontSize:11, fontWeight:800, color:"#7a5800", letterSpacing:"0.06em", marginBottom:7 }}>
-                      🎯 ADJUST GAL/ACRE FOR FULL LOADS ONLY
-                    </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:8, flexDirection: isMobile ? "column" : "row" }}>
+                  <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"7px 10px", marginBottom:8 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#7a5800", marginBottom:5 }}>Adjust for full loads:</div>
+                    <div style={{ display:"flex", gap:6 }}>
                       {filtered.map(s => {
                         const partAc = ta - s.n * (ts / s.idealGpa);
                         return (
                           <button key={s.n} onClick={() => set("galPerAcre", String(s.idealGpa))}
                             style={{
-                              border:"1.5px solid #c0a020", borderRadius:6, padding:"7px 14px",
+                              flex:1, border:"1.5px solid #c0a020", borderRadius:6, padding:"5px 8px",
                               background:"#fffbe6", cursor:"pointer", fontFamily:"inherit",
                               display:"flex", flexDirection:"column", alignItems:"flex-start", gap:1
                             }}>
                             <span style={{ fontSize:13, fontWeight:800, color:"#2a5c0f" }}>
-                              {s.idealGpa.toFixed(2) === String(s.idealGpa) ? s.idealGpa : s.idealGpa.toFixed(4)} gal/ac
+                              {s.idealGpa % 1 === 0 ? s.idealGpa : s.idealGpa.toFixed(2)} gal/ac
                             </span>
                             <span style={{ fontSize:10, color:"#7a5800" }}>
-                              {s.n} full load{s.n!==1?"s":""} · {(ts/s.idealGpa).toFixed(1)} ac/tank
+                              {s.n} load{s.n!==1?"s":""} · {(ts/s.idealGpa).toFixed(1)} ac/tank
                             </span>
                             <span style={{ fontSize:10, color: Math.abs(partAc) < 0.1 ? "#2a8a10" : "#c07000" }}>
                               {Math.abs(partAc) < 0.1 ? "✓ no partial" : `~${partAc.toFixed(1)} ac partial`}
@@ -2398,9 +2400,6 @@ export default function App() {
                           </button>
                         );
                       })}
-                    </div>
-                    <div style={{ fontSize:10, color:"#999", marginTop:6 }}>
-                      Click any option to apply — or keep your current value.
                     </div>
                   </div>
                 );
