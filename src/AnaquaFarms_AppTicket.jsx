@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import AgResearchFeed from "./AgResearchFeed";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CROPS_LIST = ["Cotton", "Corn"];
@@ -1713,7 +1714,7 @@ export default function App() {
         </div>
         {/* Tab nav: scrollable row on mobile */}
         <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
-          {[["form","🌱 Ticket"],["log","📋 Saved"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"]].map(([v,l]) => (
+          {[["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"]].map(([v,l]) => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: isMobile ? "8px 12px" : "8px 16px",
               border:"none", cursor:"pointer",
@@ -3204,6 +3205,13 @@ export default function App() {
         )}
 
         {/* ══ CHEMICAL MANAGER ═══════════════════════════════════════════════════ */}
+        {/* ══ AG RESEARCH FEED ══════════════════════════════════════════════════ */}
+        {view === "research" && (
+          <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <AgResearchFeed />
+          </div>
+        )}
+
         {view === "chemMgr" && (
           <div>
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>

@@ -21,9 +21,12 @@ Deno.serve(async (req) => {
   }
 
   const { action, ...payload } = body as { action: string; [key: string]: unknown };
-  const model = action === "compatibility" ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6";
+  const model = (action === "compatibility" || action === "research")
+    ? "claude-haiku-4-5-20251001"
+    : "claude-sonnet-4-6";
   let systemPrompt: string;
   let userMessage: string;
+  let useWebSearch = false;
 
   switch (action) {
     case "fill-ticket": {
@@ -150,6 +153,39 @@ Deno.serve(async (req) => {
       break;
     }
 
+    case "research": {
+      const { crop, topicId } = payload as { crop: string; topicId: string };
+      const TOPIC_QUERIES: Record<string,string> = {
+        chemicals: "new herbicide fungicide insecticide chemistry",
+        pest:      "pest disease management resistance",
+        agronomy:  "agronomic practices planting population tillage",
+        variety:   "new variety hybrid seed performance trial",
+        irrigation:"water irrigation scheduling deficit",
+      };
+      const TOPIC_LABELS: Record<string,string> = {
+        chemicals: "New Chemicals", pest: "Pest & Disease",
+        agronomy: "Agronomy & Tactics", variety: "Variety Research", irrigation: "Water & Irrigation",
+      };
+      const cropPart  = crop === "All" ? "cotton corn grain sorghum" : crop;
+      const topicPart = TOPIC_QUERIES[topicId] || "research extension";
+      const topicLabel = TOPIC_LABELS[topicId] || topicId;
+      const query = `${cropPart} ${topicPart} 2024 2025 research extension`;
+      useWebSearch = true;
+      systemPrompt =
+        'You are an agricultural research assistant helping a Texas crop producer stay current on research for cotton, corn, and grain sorghum in the South Texas / Rio Grande Valley region. ' +
+        'Search the web and return a JSON array of exactly 2 high-quality, recent research articles or extension publications. ' +
+        'Return ONLY valid JSON — no markdown, no backticks, no preamble. Each object must have: ' +
+        'title (string), source (string — publication or university), year (string e.g. "2025"), ' +
+        'crop (string: "Cotton", "Corn", "Sorghum", or "General"), topic (string — brief label), ' +
+        'summary (string — 3-5 sentences, plain language, actionable for a working farmer), url (string or ""). ' +
+        'Prioritize: Texas A&M AgriLife Extension, USDA ARS, university extension, Delta Farm Press, Progressive Farmer. Prefer 2023-2025 sources.';
+      userMessage =
+        `Find 2 of the best recent research or extension articles on: ${topicLabel} for ${crop} production.\n` +
+        `Web search query: "${query}"\n` +
+        `Return exactly 2 results as a JSON array.`;
+      break;
+    }
+
     default:
       return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
@@ -158,25 +194,30 @@ Deno.serve(async (req) => {
 
   const resp = await client.messages.create({
     model,
-    max_tokens: 1024,
+    max_tokens: action === "research" ? 1500 : 1024,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
-  });
+    ...(useWebSearch ? { tools: [{ type: "web_search_20250305", name: "web_search" }] } : {}),
+  } as Parameters<typeof client.messages.create>[0]);
 
-  const rawText = resp.content[0].type === "text" ? resp.content[0].text : "";
+  // Filter for text blocks — web search responses have mixed block types
+  const rawText = resp.content
+    .filter((b: { type: string }) => b.type === "text")
+    .map((b: { type: string; text?: string }) => b.text ?? "")
+    .join("\n");
 
   // Strip markdown code fences Claude sometimes adds despite instructions
   let stripped = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
-  // Validate it parses as JSON; if not, try to extract a JSON object from within the text
+  // Validate it parses as JSON; if not, try to extract a JSON object or array from within the text
   try {
     JSON.parse(stripped);
   } catch {
-    const match = stripped.match(/\{[\s\S]*\}/);
+    const match = stripped.match(/\[[\s\S]*\]/) || stripped.match(/\{[\s\S]*\}/);
     if (match) {
       try {
         JSON.parse(match[0]);
-        stripped = match[0]; // use the embedded JSON object
+        stripped = match[0];
       } catch { /* fall through */ }
     }
     // If still not valid JSON, wrap as answer for chat-tickets or return error
