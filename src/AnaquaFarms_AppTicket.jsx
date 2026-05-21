@@ -1026,7 +1026,8 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   // ── Mobile card layout ────────────────────────────────────────────────────────
   if (isMobile) {
     const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
-    const galtankLabel = isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/t" : "oz/t") : "gal/t";
+    const galtankLabel = isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/tank" : "oz/tank") : "gal/tank";
+    const mobileInp = { ...inp, fontSize:14, padding:"6px 8px" };
     return (
       <tr>
         <td colSpan={7} style={{ padding:"6px 0", borderBottom:"1px solid #e8f5e0" }}>
@@ -1034,7 +1035,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
             {/* Row 1: chemical select + remove */}
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <select value={chem.chemId || ""} onChange={e => onChange("chemId", parseInt(e.target.value))}
-                style={{ ...sel, flex:1, fontSize:13, minWidth:0 }}>
+                style={{ ...mobileInp, flex:1, minWidth:0 }}>
                 <option value="">— select —</option>
                 {chemicals.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -1044,12 +1045,12 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
             <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap" }}>
               <div style={{ display:"flex", gap:2, flexShrink:0 }}>
                 <button onClick={() => onChange("inputMode","rate")}
-                  style={{ padding:"2px 6px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
+                  style={{ padding:"3px 8px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
                     borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
                     background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
-                    color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>r/ac</button>
+                    color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>Rate/Acre</button>
                 <button onClick={() => onChange("inputMode","galtank")}
-                  style={{ padding:"2px 6px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
+                  style={{ padding:"3px 8px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
                     borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
                     background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
                     color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>{galtankLabel}</button>
@@ -1057,14 +1058,14 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
               {inputMode === "rate" ? (
                 <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
                   <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
-                    style={{...inp, width:60}} placeholder="0" type="number" min="0" step="0.1"/>
-                  <span style={{ fontSize:10, color:"#555", whiteSpace:"nowrap" }}>{baseUnit}/ac</span>
+                    style={{...mobileInp, width:85}} placeholder="0" type="number" min="0" step="0.1"/>
+                  <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{baseUnit}/ac</span>
                 </div>
               ) : (
                 <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
                   <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
-                    style={{...inp, width:60}} placeholder="0" type="number" min="0" step="0.01"/>
-                  <span style={{ fontSize:10, color:"#555", whiteSpace:"nowrap" }}>{galtankLabel}</span>
+                    style={{...mobileInp, width:85}} placeholder="0" type="number" min="0" step="0.01"/>
+                  <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{galtankLabel}</span>
                 </div>
               )}
               {/* Total/tank pushed to right */}
