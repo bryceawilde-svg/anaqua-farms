@@ -1325,8 +1325,9 @@ export default function App() {
   const [showDrop,    setShowDrop]    = useState(false);
   const [chemSearch,  setChemSearch]  = useState({});   // keyed by chemRow.id
   const [showChemDrop,setShowChemDrop]= useState({});   // keyed by chemRow.id
-  const [manualTank,  setManualTank]  = useState(false);
+  const [manualTank,     setManualTank]     = useState(false);
   const [manualGpa,      setManualGpa]      = useState(false);
+  const [manualPsi,      setManualPsi]      = useState(false);
   const [acresOverride,  setAcresOverride]  = useState("");   // empty = use auto-sum
   const [showAcresInput, setShowAcresInput] = useState(false);
   const [wxLoading,   setWxLoading]   = useState(false);
@@ -2240,9 +2241,39 @@ export default function App() {
                 </div>
                 <div>
                   <label style={labelStyle}>Pressure (PSI)</label>
-                  <input type="number" value={form.pressure} onChange={e => set("pressure",e.target.value)}
-                    style={{ ...inp, ...(isMobile ? { padding:"6px 8px", fontSize:14 } : {}) }}
-                    placeholder="0" min="0"/>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    <div style={{ display:"flex", gap:4 }}>
+                      {[30,40,45,50].map(psi => (
+                        <button key={psi} type="button"
+                          onClick={() => { set("pressure", String(psi)); setManualPsi(false); }}
+                          style={{
+                            flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
+                            borderColor: !manualPsi && form.pressure===String(psi) ? "#2a5c0f" : "#c8dbb0",
+                            borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 12, fontWeight:700,
+                            background: !manualPsi && form.pressure===String(psi) ? "#2a5c0f" : "#f9fdf5",
+                            color:      !manualPsi && form.pressure===String(psi) ? "#fff"    : "#3a6b1a",
+                            transition:"all 0.12s"
+                          }}
+                        >{psi}</button>
+                      ))}
+                      <button type="button"
+                        onClick={() => { setManualPsi(true); set("pressure",""); }}
+                        style={{
+                          flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
+                          borderColor: manualPsi ? "#2a5c0f" : "#c8dbb0",
+                          borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 11, fontWeight:700,
+                          background: manualPsi ? "#2a5c0f" : "#f9fdf5",
+                          color: manualPsi ? "#fff" : "#3a6b1a",
+                          transition:"all 0.12s"
+                        }}
+                      >Other</button>
+                    </div>
+                    {manualPsi && (
+                      <input type="number" value={form.pressure}
+                        onChange={e => set("pressure", e.target.value)}
+                        style={inp} placeholder="PSI" min="0" max="100" autoFocus/>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label style={labelStyle}>Gal / Acre</label>
