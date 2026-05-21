@@ -1878,98 +1878,105 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Application Info</div>
               {/* Weather fetch button */}
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: isMobile ? 8 : 12, flexWrap:"wrap" }}>
                 <button onClick={fetchWeather} disabled={wxLoading} style={{
                   background: wxLoading ? "#aaa" : "linear-gradient(135deg,#1a6a8a,#0e3a5c)",
-                  color:"#fff", border:"none", borderRadius:7, padding:"10px 18px",
-                  cursor: wxLoading ? "default" : "pointer", fontSize:14, fontWeight:700,
-                  display:"flex", alignItems:"center", gap:7,
+                  color:"#fff", border:"none", borderRadius:7,
+                  padding: isMobile ? "7px 12px" : "10px 18px",
+                  cursor: wxLoading ? "default" : "pointer",
+                  fontSize: isMobile ? 12 : 14, fontWeight:700,
+                  display:"flex", alignItems:"center", gap:6,
                   boxShadow:"0 2px 8px rgba(14,58,92,0.20)"
                 }}>
                   {wxLoading
-                    ? <><span style={{ fontSize:16 }}>⏳</span> Getting weather…</>
-                    : <><span style={{ fontSize:16 }}>📍</span> Get Current Weather</>
+                    ? <><span style={{ fontSize: isMobile ? 13 : 16 }}>⏳</span> {isMobile ? "Getting…" : "Getting weather…"}</>
+                    : <><span style={{ fontSize: isMobile ? 13 : 16 }}>📍</span> {isMobile ? "Weather" : "Get Current Weather"}</>
                   }
                 </button>
                 {wxError && (
-                  <span style={{ fontSize:12, color:"#c03020", fontWeight:600 }}>⚠ {wxError}</span>
+                  <span style={{ fontSize:11, color:"#c03020", fontWeight:600 }}>⚠ {wxError}</span>
                 )}
                 {!wxLoading && !wxError && form.windSpeed && (
-                  <span style={{ fontSize:12, color:"#2a8a10", fontWeight:600 }}>
+                  <span style={{ fontSize:11, color:"#2a8a10", fontWeight:600 }}>
                     ✓ {form.windSpeed} mph {form.windDir}, {form.airTemp}°F
                   </span>
                 )}
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:rGrid(2, 6, isMobile), gap:10, marginBottom:12 }}>
+              {(() => {
+                const ci = isMobile ? { ...inp, fontSize:12, padding:"5px 7px" } : inp;
+                const cs = isMobile ? { ...sel, fontSize:12, padding:"5px 7px" } : sel;
+                const cl = isMobile ? { ...labelStyle, fontSize:9 } : labelStyle;
+                const endTime = form.timeStart && form.selectedFields.length
+                  ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)
+                  : "—";
+                return (<>
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : rGrid(2,6,false), gap: isMobile ? 6 : 10, marginBottom: isMobile ? 6 : 12 }}>
                 <div>
-                  <label style={labelStyle}>Date</label>
-                  <input type="date" value={form.date} onChange={e => set("date",e.target.value)} style={inp}/>
+                  <label style={cl}>Date</label>
+                  <input type="date" value={form.date} onChange={e => set("date",e.target.value)} style={ci}/>
                 </div>
                 <div>
-                  <label style={labelStyle}>Time Start</label>
-                  <input type="time" value={form.timeStart} onChange={e => set("timeStart",e.target.value)} style={inp}/>
+                  <label style={cl}>Start</label>
+                  <input type="time" value={form.timeStart} onChange={e => set("timeStart",e.target.value)} style={ci}/>
                 </div>
                 <div>
-                  <label style={labelStyle}>Est. End Time</label>
+                  <label style={cl}>Est. End</label>
                   <div style={{
-                    border:"1.5px solid #a8d870", borderRadius:5, padding:"6px 10px",
-                    background:"#e6f5d0", display:"flex", alignItems:"center", minHeight:32
+                    border:"1.5px solid #a8d870", borderRadius:5,
+                    padding: isMobile ? "5px 7px" : "6px 10px",
+                    background:"#e6f5d0", display:"flex", alignItems:"center", minHeight: isMobile ? 28 : 32
                   }}>
-                    <span style={{ fontSize:14, fontWeight:700, color:"#2a5c0f" }}>
-                      {form.timeStart && form.selectedFields.length
-                        ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)
-                        : "—"}
-                    </span>
+                    <span style={{ fontSize: isMobile ? 12 : 14, fontWeight:700, color:"#2a5c0f" }}>{endTime}</span>
                   </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Wind Speed (mph)</label>
-                  <input type="number" value={form.windSpeed} onChange={e => set("windSpeed",e.target.value)} style={inp} placeholder="e.g. 8" min="0"/>
+                  <label style={cl}>Wind (mph)</label>
+                  <input type="number" value={form.windSpeed} onChange={e => set("windSpeed",e.target.value)} style={ci} placeholder="8" min="0"/>
                 </div>
                 <div>
-                  <label style={labelStyle}>Wind Direction</label>
-                  <select value={form.windDir} onChange={e => set("windDir",e.target.value)} style={sel}>
+                  <label style={cl}>Wind Dir</label>
+                  <select value={form.windDir} onChange={e => set("windDir",e.target.value)} style={cs}>
                     <option value="">—</option>
                     {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>Air Temp (°F)</label>
-                  <input type="number" value={form.airTemp} onChange={e => set("airTemp",e.target.value)} style={inp} placeholder="e.g. 85" min="0"/>
+                  <label style={cl}>Air Temp (°F)</label>
+                  <input type="number" value={form.airTemp} onChange={e => set("airTemp",e.target.value)} style={ci} placeholder="85" min="0"/>
                 </div>
               </div>
-              {/* Equipment / Applicator — 2x2 grid */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+              {/* Equipment / Applicator */}
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "1fr 1fr", gap: isMobile ? 6 : 10, marginBottom:14 }}>
                 <div>
-                  <label style={labelStyle}>Equipment</label>
-                  <select value={form.equipmentType} onChange={e => set("equipmentType",e.target.value)} style={sel}>
+                  <label style={cl}>Equipment</label>
+                  <select value={form.equipmentType} onChange={e => set("equipmentType",e.target.value)} style={cs}>
                     <option value="">— select —</option>
                     {equipment.map(eq => <option key={eq.id} value={eq.name}>{eq.name}</option>)}
                     <option value="__other__">Other…</option>
                   </select>
                   {form.equipmentType === "__other__" && (
                     <input value={form.equipmentTypeCustom||""} onChange={e => set("equipmentTypeCustom",e.target.value)}
-                      style={{...inp, marginTop:5}} placeholder="Enter name"/>
+                      style={{...ci, marginTop:5}} placeholder="Enter name"/>
                   )}
                 </div>
                 <div>
-                  <label style={labelStyle}>Licensed Applicator</label>
+                  <label style={cl}>Licensed Applicator</label>
                   <select value={form.licensedApplicant} onChange={e => {
-                    const op = licensed.find(o=>o.name===e.target.value);
                     set("licensedApplicant", e.target.value);
-                  }} style={sel}>
+                  }} style={cs}>
                     <option value="">— select —</option>
                     {licensed.map(op => <option key={op.id} value={op.name}>{op.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>Non-Licensed Applicator</label>
-                  <select value={form.nonLicensedApplicant} onChange={e => set("nonLicensedApplicant", e.target.value)} style={sel}>
-                    <option value="">— select / optional —</option>
+                  <label style={cl}>Non-Licensed</label>
+                  <select value={form.nonLicensedApplicant} onChange={e => set("nonLicensedApplicant", e.target.value)} style={cs}>
+                    <option value="">— optional —</option>
                     {nonLicensed.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                 </div>
               </div>
+              </>); })()}
 
               {/* Crop / Site — button presets above fields */}
               <div style={{ marginBottom:12 }}>
