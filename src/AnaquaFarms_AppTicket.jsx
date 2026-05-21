@@ -2065,39 +2065,11 @@ export default function App() {
 
               {/* Live field schedule preview */}
               {form.selectedFields.length > 0 && form.timeStart && (
-                <div style={{ marginBottom:14, background:"#e6f5d0", borderRadius:6, padding:"10px 12px" }}>
-                  <div style={{ fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.08em", marginBottom:6 }}>
-                    FIELD APPLICATION SCHEDULE <span style={{ fontWeight:400, color:"#6aaa40" }}>@ {acresPerHour} ac/hr</span>
+                <div style={{ marginBottom:14, background:"#e6f5d0", borderRadius:6, padding:"8px 12px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.08em" }}>
+                    FIELD SCHEDULE <span style={{ fontWeight:400, color:"#6aaa40" }}>@ {acresPerHour} ac/hr</span>
                   </div>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 11 : 12 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign:"left", color:"#2a5c0f", fontWeight:700, paddingBottom:4, fontSize:10 }}>Field</th>
-                        <th style={{ textAlign:"right", color:"#2a5c0f", fontWeight:700, paddingBottom:4, fontSize:10 }}>Acres</th>
-                        {!isMobile && <th style={{ textAlign:"right", color:"#2a5c0f", fontWeight:700, paddingBottom:4, fontSize:10 }}>Start</th>}
-                        {!isMobile && <th style={{ textAlign:"right", color:"#2a5c0f", fontWeight:700, paddingBottom:4, fontSize:10 }}>End</th>}
-                        <th style={{ textAlign:"right", color:"#2a5c0f", fontWeight:700, paddingBottom:4, fontSize:10 }}>Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).map((fs, i) => {
-                        const mins = Math.round((parseFloat(fs.acres) / acresPerHour) * 60);
-                        const hrs  = Math.floor(mins / 60);
-                        const rem  = mins % 60;
-                        const dur  = hrs > 0 ? `${hrs}h ${rem}m` : `${rem}m`;
-                        return (
-                          <tr key={fs.id} style={{ borderTop:"1px solid #c8dbb0" }}>
-                            <td style={{ padding:"3px 0", color:"#1a3c08", fontWeight:600 }}>{i+1}. {fs.name}</td>
-                            <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{fs.acres}</td>
-{!isMobile && <td style={{ padding:"3px 0", textAlign:"right", color:"#2a5c0f", fontWeight:700 }}>{fmtTime(fs.timeStart)}</td>}
-                            {!isMobile && <td style={{ padding:"3px 0", textAlign:"right", color:"#2a5c0f", fontWeight:700 }}>{fmtTime(fs.timeEnd)}</td>}
-                            <td style={{ padding:"3px 0", textAlign:"right", color:"#888", fontSize:11 }}>{dur}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div style={{ marginTop:6, fontSize:11, color:"#6aaa40", textAlign:"right" }}>
+                  <div style={{ fontSize:11, color:"#6aaa40" }}>
                     Est. finish: <strong style={{ color:"#2a5c0f" }}>
                       {fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)}
                     </strong>
