@@ -1283,6 +1283,7 @@ export default function App() {
   const [licensed,      setLicensed]      = useState([]);
   const [nonLicensed,   setNonLicensed]   = useState([]);
   const [tickets,       setTickets]       = useState([]);
+  const [cropSeasons,   setCropSeasons]   = useState({});
   const [view,          setView]          = useState("form");
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
   const [tdaFrom,       setTdaFrom]       = useState("");
@@ -1388,15 +1389,21 @@ export default function App() {
   useEffect(() => {
     async function loadAll() {
       setDbLoading(true);
-      const [f, c, e, la, nla, t] = await Promise.all([
+      const [f, c, e, la, nla, t, cs] = await Promise.all([
         supabase.from("fields").select("*").order("name"),
         supabase.from("chemicals").select("*").order("name"),
         supabase.from("equipment").select("*").order("name"),
         supabase.from("licensed_applicators").select("*").order("name"),
         supabase.from("non_licensed_applicators").select("*").order("name"),
         supabase.from("tickets").select("*").order("created_at", { ascending: false }),
+        supabase.from("crop_seasons").select("*"),
       ]);
       setFieldLibrary(f.data?.length ? f.data.map(x => ({ ...x, traits: x.traits || [] })) : DEFAULT_FIELDS);
+      if (cs.data?.length) {
+        const seasons = {};
+        cs.data.forEach(r => { seasons[r.crop_name] = r.season; });
+        setCropSeasons(seasons);
+      }
       setChemicals(c.data?.length ? c.data.map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })) : DEFAULT_CHEMICALS);
       setEquipment(e.data?.length ? e.data.map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })) : DEFAULT_EQUIPMENT);
       setLicensed(la.data || []);
@@ -1452,6 +1459,11 @@ export default function App() {
     setFieldSearch(""); setShowDrop(false);
   };
   const removeField = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
+
+  const updateCropSeason = async (cropName, season) => {
+    setCropSeasons(s => ({ ...s, [cropName]: season }));
+    await supabase.from("crop_seasons").upsert({ crop_name: cropName, season });
+  };
 
   const addChemRow    = (chemId) => {
     let lastRate = "";
@@ -1536,7 +1548,9 @@ export default function App() {
     const filledRows = chemRows.filter(r => r.chemId);
     const fieldsWithTraits = form.selectedFields.map(sf => {
       const f = fieldLibrary.find(x => x.id === sf.id);
-      return f ? { name: f.name, crop: f.crop || form.crop || "", traits: f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []) } : null;
+      if (!f) return null;
+      const crop = f.crop || form.crop || "";
+      return { name: f.name, crop, traits: f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []), season: cropSeasons[crop] || "in_season" };
     }).filter(Boolean);
     if (!filledRows.length || !fieldsWithTraits.length) { setAiCropSafety(null); return; }
     if (cropSafetyDebounceRef.current) clearTimeout(cropSafetyDebounceRef.current);
@@ -1550,7 +1564,7 @@ export default function App() {
       } catch { setAiCropSafety(null); }
       finally { setAiCropSafetyLoading(false); }
     }, 800);
-  }, [chemIdKey, fieldKey, form.crop]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chemIdKey, fieldKey, form.crop, JSON.stringify(cropSeasons)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced adjuvant recommendation — fires only when the set of chemicals changes
   useEffect(() => {
@@ -3066,6 +3080,52 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* ── Crop Season Status ──────────────────────────────────────────── */}
+            {(() => {
+              const crops = [...new Set(fieldLibrary.map(f => f.crop).filter(Boolean))].sort();
+              if (!crops.length) return null;
+              const SEASONS = [
+                { key: "pre_season",  label: "Pre-Season" },
+                { key: "in_season",   label: "In Season" },
+                { key: "post_harvest",label: "Post-Harvest" },
+              ];
+              return (
+                <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+                  <div style={sectionTitle}>Crop Season Status</div>
+                  <div style={{ fontSize:11, color:"#888", marginBottom:10 }}>
+                    Set the current growing stage for each crop. Pre-Season and Post-Harvest suppress crop safety warnings for chemicals used to manage volunteer plants.
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {crops.map(crop => {
+                      const current = cropSeasons[crop] || "in_season";
+                      return (
+                        <div key={crop} style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:13, fontWeight:700, color:"#2a5c0f", minWidth:110 }}>{crop}</span>
+                          <div style={{ display:"flex", gap:4 }}>
+                            {SEASONS.map(s => {
+                              const active = current === s.key;
+                              const color = s.key === "in_season" ? "#2a5c0f" : s.key === "pre_season" ? "#1a6a8a" : "#7a5000";
+                              return (
+                                <button key={s.key} onClick={() => updateCropSeason(crop, s.key)}
+                                  style={{
+                                    padding:"3px 10px", borderRadius:5, cursor:"pointer", fontSize:11, fontWeight:700,
+                                    fontFamily:"inherit", border:`1.5px solid ${active ? color : "#c8dbb0"}`,
+                                    background: active ? color : "#f9fdf5",
+                                    color: active ? "#fff" : "#666",
+                                  }}>
+                                  {s.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>

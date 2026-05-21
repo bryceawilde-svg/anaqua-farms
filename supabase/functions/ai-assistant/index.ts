@@ -118,12 +118,12 @@ Deno.serve(async (req) => {
 
     case "crop-safety": {
       const { fields, chemicals: chems } = payload as {
-        fields: { name: string; crop: string; traits: string[] }[];
+        fields: { name: string; crop: string; traits: string[]; season: string }[];
         chemicals: { name: string; epa: string }[];
       };
       systemPrompt =
         'You are a pesticide label compliance expert with comprehensive knowledge of all EPA-registered pesticide products, their labeled crops, use restrictions, and active ingredients. ' +
-        'Given a list of fields (each with a crop type and optional herbicide tolerance traits) and a list of chemicals (product name + EPA reg number), ' +
+        'Given a list of fields (each with a crop type, herbicide tolerance traits, and growing season) and a list of chemicals (product name + EPA reg number), ' +
         'identify EVERY potential violation by checking three categories:\n\n' +
         '1. LABEL CROP VIOLATIONS — the crop is not on the product label at all, or the product is known to injure/kill that crop. ' +
         'Examples: clethodim (Select Max, Volunteer, Arrow) kills corn and grain sorghum; bromoxynil injures corn; ' +
@@ -136,6 +136,10 @@ Deno.serve(async (req) => {
         'Sorghum and Grain are never GMO — flag those same active ingredients regardless of traits listed.\n\n' +
         '3. EPA NUMBER LOOKUP — use the EPA registration number to confirm the active ingredient when the product name is ambiguous ' +
         '(e.g. EPA 264-829 = Reckon 280 SL = glufosinate-ammonium). Do not rely on product names alone.\n\n' +
+        'SEASON RULE — each field has a season: "in_season", "pre_season", or "post_harvest".\n' +
+        'If a field\'s season is "pre_season" or "post_harvest", DO NOT flag chemicals that would injure or kill that crop — ' +
+        'the crop is not actively growing and applying these chemicals to manage volunteer plants is intentional and acceptable. ' +
+        'Only flag violations for fields where season is "in_season".\n\n' +
         'Return ONLY a raw JSON object, no markdown, no code fences: ' +
         '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one concise sentence — state the product name, its active ingredient, and the specific issue>"}]}. ' +
         'IMPORTANT: Never mention EPA registration numbers anywhere in your response text. ' +
