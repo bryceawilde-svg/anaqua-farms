@@ -1023,255 +1023,115 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
     ? fmtContainerCount(partialRaw, selected)
     : (jug2_5 && isOzUnit && partialRaw > 0 ? fmtJugCount(partialRaw) : null);
 
-  // ── Mobile card layout ────────────────────────────────────────────────────────
-  if (isMobile) {
-    const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
-    const galtankLabel = isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/tank" : "oz/tank") : "gal/tank";
-    const mobileInp = { ...inp, fontSize:14, padding:"6px 8px" };
-    return (
-      <tr>
-        <td colSpan={7} style={{ padding:"6px 0", borderBottom:"1px solid #e8f5e0" }}>
-          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {/* Row 1: chemical select + remove */}
-            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <select value={chem.chemId || ""} onChange={e => onChange("chemId", parseInt(e.target.value))}
-                style={{ ...mobileInp, flex:1, minWidth:0 }}>
-                <option value="">— select —</option>
-                {chemicals.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:20, padding:"0 2px", lineHeight:1 }}>×</button>
-            </div>
-            {/* Row 2: mode toggle + input + total */}
-            <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap" }}>
-              <div style={{ display:"flex", gap:2, flexShrink:0 }}>
-                <button onClick={() => onChange("inputMode","rate")}
-                  style={{ padding:"3px 8px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
-                    borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
-                    background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
-                    color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>Rate/Acre</button>
-                <button onClick={() => onChange("inputMode","galtank")}
-                  style={{ padding:"3px 8px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
-                    borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
-                    background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
-                    color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>{galtankLabel}</button>
-              </div>
-              {inputMode === "rate" ? (
-                <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
-                  <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
-                    style={{...mobileInp, width:85}} placeholder="0" type="number" min="0" step="0.1"/>
-                  <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{baseUnit}/ac</span>
-                </div>
-              ) : (
-                <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
-                  <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
-                    style={{...mobileInp, width:85}} placeholder="0" type="number" min="0" step="0.01"/>
-                  <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{galtankLabel}</span>
-                </div>
-              )}
-              {/* Total/tank pushed to right */}
-              <div style={{ marginLeft:"auto", textAlign:"right", flexShrink:0 }}>
-                {lessThanOneTank ? (
-                  <>
-                    <div style={{ fontSize:8, color:"#e07020", fontWeight:700, textTransform:"uppercase" }}>This Load</div>
-                    <div style={{ fontWeight:700, color:"#e07020", fontSize:16, lineHeight:1.1 }}>{partialDisplay || tankDisplay}</div>
-                    {(containerLabelPartial || containerLabel) && <div style={{ fontSize:9, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial || containerLabel}</div>}
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontSize:8, color:"#888", fontWeight:700, textTransform:"uppercase" }}>Full Tank</div>
-                    <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:16, lineHeight:1.1 }}>{tankDisplay}</div>
-                    {dryOzSubline && <div style={{ fontSize:9, color:"#888" }}>{dryOzSubline}</div>}
-                    {containerLabel && <div style={{ fontSize:9, color:"#7a3a9a", fontWeight:700 }}>{containerLabel}</div>}
-                    {partialDisplay && <div style={{ fontWeight:700, color:"#e07020", fontSize:13, marginTop:2 }}>↳ {partialDisplay}</div>}
-                    {containerLabelPartial && <div style={{ fontSize:9, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial}</div>}
-                  </>
-                )}
-              </div>
-            </div>
-            {/* Row 3: options (¼ gal, jug) */}
-            {isOzUnit && (
-              <div style={{ display:"flex", gap:6 }}>
-                <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
-                  padding:"2px 7px", borderRadius:5, userSelect:"none",
-                  border:`1.5px solid ${roundQtr ? "#1a6a8a" : "#c8dbb0"}`,
-                  background: roundQtr ? "#e8f4ff" : "#f9fdf5" }}>
-                  <input type="checkbox" checked={roundQtr} onChange={e => onChange("roundQtrGal", e.target.checked)}
-                    style={{ accentColor:"#1a6a8a", width:12, height:12, margin:0, cursor:"pointer" }}/>
-                  <span style={{ fontSize:10, fontWeight:700, color: roundQtr ? "#0e3a5c" : "#777" }}>¼ gal</span>
-                </label>
-                {!selected?.containerSize && (
-                  <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
-                    padding:"2px 7px", borderRadius:5, userSelect:"none",
-                    border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
-                    background: jug2_5 ? "#f5eeff" : "#f9fdf5" }}>
-                    <input type="checkbox" checked={jug2_5} onChange={e => onChange("jug2_5gal", e.target.checked)}
-                      style={{ accentColor:"#7a3a9a", width:12, height:12, margin:0, cursor:"pointer" }}/>
-                    <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777" }}>2.5 gal jugs</span>
-                  </label>
-                )}
-              </div>
-            )}
-            {roundQtr && isOzUnit && roundedEffectiveRate && (
-              <div style={{ fontSize:10, color:"#1a6a8a", fontWeight:700 }}>
-                ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac (rounded)
-              </div>
-            )}
-            {inputMode === "galtank" && effectiveRate && (
-              <div style={{ fontSize:10, color:"#6aaa30" }}>= {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</div>
-            )}
-          </div>
-        </td>
-      </tr>
-    );
-  }
+  // ── Unified card layout (mobile + desktop) ───────────────────────────────────
+  const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
+  const galtankLabel = isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/tank" : "oz/tank") : "gal/tank";
 
   return (
-    <tr>
-      {/* Chemical select */}
-      <td style={td}>
-        <select value={chem.chemId || ""} onChange={e => onChange("chemId", parseInt(e.target.value))} style={sel}>
-          <option value="">— select —</option>
+    <div style={{
+      border:"1.5px solid #c8dbb0", borderRadius:8, padding:"10px 12px",
+      background:"#f9fdf5", display:"flex", flexDirection:"column", gap:8
+    }}>
+      {/* Row 1: chemical select + remove button */}
+      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+        <select value={chem.chemId || ""} onChange={e => onChange("chemId", parseInt(e.target.value))}
+          style={{ ...sel, flex:1, minWidth:0 }}>
+          <option value="">— select chemical —</option>
           {chemicals.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-      </td>
+        <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:22, padding:"0 2px", lineHeight:1, flexShrink:0 }}>×</button>
+      </div>
 
-      {/* Input mode toggle */}
-      <td style={td} colSpan={2}>
-        <div style={{ display:"flex", gap:3, marginBottom:4 }}>
-          <button onClick={() => onChange("inputMode","rate")}
-            style={{ padding:"2px 7px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
-              borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
-              background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
-              color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>
-            Rate/Acre
-          </button>
-          <button onClick={() => onChange("inputMode","galtank")}
-            style={{ padding:"2px 7px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
-              borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
-              background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
-              color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>
-            {isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "Lb/Tank" : "Oz/Tank") : "Gal/Tank"}
-          </button>
+      {/* Row 2: mode toggle + input | full tank amount */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+        {/* Mode + input */}
+        <div style={{ display:"flex", alignItems:"center", gap:6, flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", gap:3, flexShrink:0 }}>
+            <button onClick={() => onChange("inputMode","rate")}
+              style={{ padding:"4px 10px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
+                borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
+                background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
+                color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>Rate/Acre</button>
+            <button onClick={() => onChange("inputMode","galtank")}
+              style={{ padding:"4px 10px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700,
+                borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
+                background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
+                color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>{galtankLabel}</button>
+          </div>
+          {inputMode === "rate" ? (
+            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+              <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
+                style={{...inp, width:90}} placeholder="0" type="number" min="0" step="0.1"/>
+              <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{baseUnit}/ac</span>
+            </div>
+          ) : (
+            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+              <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
+                style={{...inp, width:90}} placeholder="0" type="number" min="0" step="0.01"/>
+              <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{galtankLabel}</span>
+            </div>
+          )}
+          {inputMode === "galtank" && effectiveRate && (
+            <span style={{ fontSize:10, color:"#6aaa30", whiteSpace:"nowrap" }}>= {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</span>
+          )}
         </div>
-        {inputMode === "rate" ? (
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-            <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
-              style={{...inp, width:72}} placeholder="0" type="number" min="0" step="0.1"/>
-            <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{baseUnit}/ac</span>
-          </div>
-        ) : (
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-            <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
-              style={{...inp, width:72}} placeholder="0" type="number" min="0" step="0.01"/>
-            <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>{isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/tank" : "oz/tank") : "gal/tank"}</span>
-          </div>
-        )}
-        {inputMode === "galtank" && effectiveRate && (
-          <div style={{ fontSize:10, color:"#6aaa30", marginTop:2 }}>
-            = {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac
-          </div>
-        )}
 
-        {/* ¼ Gal rounding toggle — only shown for liquid oz-unit chemicals */}
-        {isOzUnit && (
-          <label
-            title="Round up to nearest ¼ gallon — displays amount in decimal gallons"
-            style={{
-              display:"inline-flex", alignItems:"center", gap:5, marginTop:5, cursor:"pointer",
-              padding:"3px 7px", borderRadius:5,
-              border:`1.5px solid ${roundQtr ? "#1a6a8a" : "#c8dbb0"}`,
-              background: roundQtr ? "#e8f4ff" : "#f9fdf5",
-              userSelect:"none"
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={roundQtr}
-              onChange={e => onChange("roundQtrGal", e.target.checked)}
-              style={{ accentColor:"#1a6a8a", width:13, height:13, margin:0, cursor:"pointer" }}
-            />
-            <span style={{ fontSize:10, fontWeight:700, color: roundQtr ? "#0e3a5c" : "#777", whiteSpace:"nowrap" }}>
-              ¼ gal
-            </span>
-          </label>
-        )}
-        {/* Show the rounded rate/acre when rounding is active */}
-        {roundQtr && isOzUnit && roundedEffectiveRate && (
-          <div style={{ fontSize:10, color:"#1a6a8a", marginTop:3, fontWeight:700 }}>
-            ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac (rounded)
-          </div>
-        )}
-        {/* Container count — auto from library if containerSize set, else manual checkbox */}
-        {selected?.containerSize ? null : isOzUnit && (
-          <label
-            title="Display total as gallons and 2.5-gal jug count"
-            style={{
-              display:"inline-flex", alignItems:"center", gap:5, marginTop:5, cursor:"pointer",
-              padding:"3px 7px", borderRadius:5,
-              border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
-              background: jug2_5 ? "#f5eeff" : "#f9fdf5",
-              userSelect:"none"
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={jug2_5}
-              onChange={e => onChange("jug2_5gal", e.target.checked)}
-              style={{ accentColor:"#7a3a9a", width:13, height:13, margin:0, cursor:"pointer" }}
-            />
-            <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777", whiteSpace:"nowrap" }}>
-              2.5 gal jugs
-            </span>
-          </label>
-        )}
-      </td>
-
-      {/* Total per tank — full + partial */}
-      {(() => {
-        const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
-        return (
-          <td style={{ ...td, minWidth:130 }} colSpan={2}>
-            {lessThanOneTank ? (
-              // Total acres < one full tank — show only the partial (actual) amount
-              <div>
-                <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>This Load ({parseFloat(totalAcres).toFixed(1)} ac)</div>
-                <div style={{ fontWeight:700, color:"#e07020", fontSize:14, lineHeight:1.2 }}>{partialDisplay || tankDisplay}</div>
-                {(containerLabelPartial || containerLabel) && (
-                  <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{containerLabelPartial || containerLabel}</div>
-                )}
-              </div>
-            ) : (
-              <>
-                <div style={{ marginBottom: partialDisplay ? 4 : 0 }}>
-                  <div style={{ fontSize:9, color:"#888", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>Full Tank</div>
-                  <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:14, lineHeight:1.2 }}>{tankDisplay}</div>
-                  {roundQtr && isOzUnit && tankRaw > 0 && (
-                    <div style={{ fontSize:10, color:"#aaa" }}>{Math.round(tankRaw)} oz total</div>
-                  )}
-                  {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
-                  {containerLabel && (
-                    <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{containerLabel}</div>
-                  )}
+        {/* Full tank amount — right side */}
+        <div style={{ textAlign:"right", flexShrink:0, minWidth:110 }}>
+          {lessThanOneTank ? (
+            <>
+              <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>This Load</div>
+              <div style={{ fontWeight:700, color:"#e07020", fontSize:18, lineHeight:1.1 }}>{partialDisplay || tankDisplay}</div>
+              {(containerLabelPartial || containerLabel) && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial || containerLabel}</div>}
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize:9, color:"#888", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>Full Tank</div>
+              <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:18, lineHeight:1.1 }}>{tankDisplay}</div>
+              {roundQtr && isOzUnit && tankRaw > 0 && <div style={{ fontSize:9, color:"#aaa" }}>{Math.round(tankRaw)} oz</div>}
+              {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
+              {containerLabel && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabel}</div>}
+              {partialDisplay && (
+                <div style={{ marginTop:3, paddingTop:3, borderTop:"1px dashed #c8dbb0" }}>
+                  <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase" }}>Partial ({partialAc.toFixed(1)} ac)</div>
+                  <div style={{ fontWeight:700, color:"#e07020", fontSize:14 }}>{partialDisplay}</div>
+                  {containerLabelPartial && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial}</div>}
                 </div>
-                {partialDisplay && (
-                  <div style={{ borderTop:"1px dashed #c8dbb0", paddingTop:3 }}>
-                    <div style={{ fontSize:9, color:"#e07020", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>Partial Load ({partialAc.toFixed(1)} ac)</div>
-                    <div style={{ fontWeight:700, color:"#e07020", fontSize:13 }}>{partialDisplay}</div>
-                    {containerLabelPartial && (
-                      <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:1 }}>{containerLabelPartial}</div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </td>
-        );
-      })()}
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
-      <td style={td}>
-        <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:18 }}>×</button>
-      </td>
-    </tr>
+      {/* Row 3: options (¼ gal, 2.5 gal jugs) + rounded rate feedback */}
+      {isOzUnit && (
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+          <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
+            padding:"3px 8px", borderRadius:5, userSelect:"none",
+            border:`1.5px solid ${roundQtr ? "#1a6a8a" : "#c8dbb0"}`,
+            background: roundQtr ? "#e8f4ff" : "#f9fdf5" }}>
+            <input type="checkbox" checked={roundQtr} onChange={e => onChange("roundQtrGal", e.target.checked)}
+              style={{ accentColor:"#1a6a8a", width:12, height:12, margin:0, cursor:"pointer" }}/>
+            <span style={{ fontSize:10, fontWeight:700, color: roundQtr ? "#0e3a5c" : "#777" }}>¼ gal</span>
+          </label>
+          {!selected?.containerSize && (
+            <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
+              padding:"3px 8px", borderRadius:5, userSelect:"none",
+              border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
+              background: jug2_5 ? "#f5eeff" : "#f9fdf5" }}>
+              <input type="checkbox" checked={jug2_5} onChange={e => onChange("jug2_5gal", e.target.checked)}
+                style={{ accentColor:"#7a3a9a", width:12, height:12, margin:0, cursor:"pointer" }}/>
+              <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777" }}>2.5 gal jugs</span>
+            </label>
+          )}
+          {roundQtr && roundedEffectiveRate && (
+            <span style={{ fontSize:10, color:"#1a6a8a", fontWeight:700 }}>
+              ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac (rounded)
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2524,29 +2384,16 @@ export default function App() {
               </div>
 
               {form.chemRows.length > 0 && (
-                <div style={isMobile ? {} : { overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 13 : 13, minWidth: isMobile ? 0 : "auto" }}>
-                    {!isMobile && (
-                      <thead>
-                        <tr>
-                          {["Chemical","Mode","Input","","Total/Tank","",""].map((h,i) => (
-                            <th key={i} style={{...th, fontSize:11, padding:"5px 4px"}}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                    )}
-                    <tbody>
-                      {form.chemRows.map(row => (
-                        <ChemicalRow
-                          key={row.id} chem={row} chemicals={chemicals}
-                          tankSize={form.tankSize} galPerAcre={form.galPerAcre} totalAcres={totalAcres}
-                          onChange={(k,v) => updateChemRow(row.id,k,v)}
-                          onRemove={() => removeChemRow(row.id)}
-                          isMobile={isMobile}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {form.chemRows.map(row => (
+                    <ChemicalRow
+                      key={row.id} chem={row} chemicals={chemicals}
+                      tankSize={form.tankSize} galPerAcre={form.galPerAcre} totalAcres={totalAcres}
+                      onChange={(k,v) => updateChemRow(row.id,k,v)}
+                      onRemove={() => removeChemRow(row.id)}
+                      isMobile={isMobile}
+                    />
+                  ))}
                 </div>
               )}
               {/* Compatibility warning */}
