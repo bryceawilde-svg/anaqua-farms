@@ -1023,113 +1023,112 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
     ? fmtContainerCount(partialRaw, selected)
     : (jug2_5 && isOzUnit && partialRaw > 0 ? fmtJugCount(partialRaw) : null);
 
-  // ── Unified card layout (mobile + desktop) ───────────────────────────────────
+  // ── Card layout: left half = controls, right half = full tank ────────────────
   const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
   const galtankLabel = isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/tank" : "oz/tank") : "gal/tank";
 
   return (
     <div style={{
       border:"1.5px solid #c8dbb0", borderRadius:8, padding:"10px 12px",
-      background:"#f9fdf5", display:"flex", flexDirection:"column", gap:8
+      background:"#f9fdf5", display:"grid", gridTemplateColumns:"1fr 1fr", gap:0
     }}>
-      {/* Row 1: chemical select + remove button */}
-      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-        <select value={chem.chemId || ""} onChange={e => onChange("chemId", parseInt(e.target.value))}
-          style={{ ...sel, flex:1, minWidth:0 }}>
-          <option value="">— select chemical —</option>
-          {chemicals.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:22, padding:"0 2px", lineHeight:1, flexShrink:0 }}>×</button>
-      </div>
+      {/* LEFT HALF: name + rate controls + options */}
+      <div style={{ display:"flex", flexDirection:"column", gap:7, paddingRight:12, borderRight:"1px solid #d8ecc0" }}>
+        {/* Chemical name + remove */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:4 }}>
+          <span style={{
+            fontWeight:700, fontSize:14, color:"#1a3c08",
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1
+          }}>
+            {selected?.name || "—"}
+          </span>
+          <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:20, padding:"0 2px", lineHeight:1, flexShrink:0 }}>×</button>
+        </div>
 
-      {/* Row 2: input first, mode chips stacked beside it, full tank on right */}
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
-        {/* Left: input + stacked mode buttons + unit */}
-        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:1, minWidth:0 }}>
+        {/* Rate input + stacked mode chips + unit */}
+        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
           {inputMode === "rate" ? (
             <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
-              style={{...inp, width:88}} placeholder="0" type="number" min="0" step="0.1"/>
+              style={{...inp, width:76}} placeholder="0" type="number" min="0" step="0.1"/>
           ) : (
             <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
-              style={{...inp, width:88}} placeholder="0" type="number" min="0" step="0.01"/>
+              style={{...inp, width:76}} placeholder="0" type="number" min="0" step="0.01"/>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:3, flexShrink:0 }}>
             <button onClick={() => onChange("inputMode","rate")}
-              style={{ padding:"3px 9px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700, whiteSpace:"nowrap",
+              style={{ padding:"2px 7px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
                 borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
                 background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
                 color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>Rate/Acre</button>
             <button onClick={() => onChange("inputMode","galtank")}
-              style={{ padding:"3px 9px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:11, fontWeight:700, whiteSpace:"nowrap",
+              style={{ padding:"2px 7px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
                 borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
                 background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
                 color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>{galtankLabel}</button>
           </div>
           <div style={{ flexShrink:0 }}>
-            <span style={{ fontSize:11, color:"#555", whiteSpace:"nowrap" }}>
-              {inputMode === "rate" ? `${baseUnit}/ac` : galtankLabel}
-            </span>
+            <div style={{ fontSize:10, color:"#555" }}>{inputMode === "rate" ? `${baseUnit}/ac` : galtankLabel}</div>
             {inputMode === "galtank" && effectiveRate && (
-              <div style={{ fontSize:10, color:"#6aaa30", whiteSpace:"nowrap" }}>= {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</div>
+              <div style={{ fontSize:9, color:"#6aaa30" }}>={parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</div>
             )}
           </div>
         </div>
 
-        {/* Right: full tank amount */}
-        <div style={{ textAlign:"right", flexShrink:0 }}>
-          {lessThanOneTank ? (
-            <>
-              <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>This Load</div>
-              <div style={{ fontWeight:700, color:"#e07020", fontSize:18, lineHeight:1.1 }}>{partialDisplay || tankDisplay}</div>
-              {(containerLabelPartial || containerLabel) && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial || containerLabel}</div>}
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize:9, color:"#888", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>Full Tank</div>
-              <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:18, lineHeight:1.1 }}>{tankDisplay}</div>
-              {roundQtr && isOzUnit && tankRaw > 0 && <div style={{ fontSize:9, color:"#aaa" }}>{Math.round(tankRaw)} oz</div>}
-              {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
-              {containerLabel && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabel}</div>}
-              {partialDisplay && (
-                <div style={{ marginTop:3, paddingTop:3, borderTop:"1px dashed #c8dbb0" }}>
-                  <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase" }}>Partial ({partialAc.toFixed(1)} ac)</div>
-                  <div style={{ fontWeight:700, color:"#e07020", fontSize:14 }}>{partialDisplay}</div>
-                  {containerLabelPartial && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial}</div>}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        {/* Options: ¼ gal, 2.5 gal jugs, rounded feedback */}
+        {isOzUnit && (
+          <div style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center" }}>
+            <label style={{ display:"inline-flex", alignItems:"center", gap:3, cursor:"pointer",
+              padding:"2px 6px", borderRadius:5, userSelect:"none",
+              border:`1.5px solid ${roundQtr ? "#1a6a8a" : "#c8dbb0"}`,
+              background: roundQtr ? "#e8f4ff" : "#f9fdf5" }}>
+              <input type="checkbox" checked={roundQtr} onChange={e => onChange("roundQtrGal", e.target.checked)}
+                style={{ accentColor:"#1a6a8a", width:11, height:11, margin:0, cursor:"pointer" }}/>
+              <span style={{ fontSize:10, fontWeight:700, color: roundQtr ? "#0e3a5c" : "#777" }}>¼ gal</span>
+            </label>
+            {!selected?.containerSize && (
+              <label style={{ display:"inline-flex", alignItems:"center", gap:3, cursor:"pointer",
+                padding:"2px 6px", borderRadius:5, userSelect:"none",
+                border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
+                background: jug2_5 ? "#f5eeff" : "#f9fdf5" }}>
+                <input type="checkbox" checked={jug2_5} onChange={e => onChange("jug2_5gal", e.target.checked)}
+                  style={{ accentColor:"#7a3a9a", width:11, height:11, margin:0, cursor:"pointer" }}/>
+                <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777" }}>2.5 gal jugs</span>
+              </label>
+            )}
+            {roundQtr && roundedEffectiveRate && (
+              <span style={{ fontSize:9, color:"#1a6a8a", fontWeight:700 }}>
+                ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Row 3: options (¼ gal, 2.5 gal jugs) + rounded rate feedback */}
-      {isOzUnit && (
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-          <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
-            padding:"3px 8px", borderRadius:5, userSelect:"none",
-            border:`1.5px solid ${roundQtr ? "#1a6a8a" : "#c8dbb0"}`,
-            background: roundQtr ? "#e8f4ff" : "#f9fdf5" }}>
-            <input type="checkbox" checked={roundQtr} onChange={e => onChange("roundQtrGal", e.target.checked)}
-              style={{ accentColor:"#1a6a8a", width:12, height:12, margin:0, cursor:"pointer" }}/>
-            <span style={{ fontSize:10, fontWeight:700, color: roundQtr ? "#0e3a5c" : "#777" }}>¼ gal</span>
-          </label>
-          {!selected?.containerSize && (
-            <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
-              padding:"3px 8px", borderRadius:5, userSelect:"none",
-              border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
-              background: jug2_5 ? "#f5eeff" : "#f9fdf5" }}>
-              <input type="checkbox" checked={jug2_5} onChange={e => onChange("jug2_5gal", e.target.checked)}
-                style={{ accentColor:"#7a3a9a", width:12, height:12, margin:0, cursor:"pointer" }}/>
-              <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777" }}>2.5 gal jugs</span>
-            </label>
-          )}
-          {roundQtr && roundedEffectiveRate && (
-            <span style={{ fontSize:10, color:"#1a6a8a", fontWeight:700 }}>
-              ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac (rounded)
-            </span>
-          )}
-        </div>
-      )}
+      {/* RIGHT HALF: full tank calculations */}
+      <div style={{ paddingLeft:12, display:"flex", flexDirection:"column", justifyContent:"center" }}>
+        {lessThanOneTank ? (
+          <>
+            <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>This Load</div>
+            <div style={{ fontWeight:700, color:"#e07020", fontSize:20, lineHeight:1.1 }}>{partialDisplay || tankDisplay}</div>
+            {(containerLabelPartial || containerLabel) && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:2 }}>{containerLabelPartial || containerLabel}</div>}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize:9, color:"#888", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>Full Tank</div>
+            <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:20, lineHeight:1.1 }}>{tankDisplay}</div>
+            {roundQtr && isOzUnit && tankRaw > 0 && <div style={{ fontSize:9, color:"#aaa" }}>{Math.round(tankRaw)} oz</div>}
+            {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
+            {containerLabel && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:2 }}>{containerLabel}</div>}
+            {partialDisplay && (
+              <div style={{ marginTop:5, paddingTop:5, borderTop:"1px dashed #c8dbb0" }}>
+                <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase" }}>Partial ({partialAc.toFixed(1)} ac)</div>
+                <div style={{ fontWeight:700, color:"#e07020", fontSize:15 }}>{partialDisplay}</div>
+                {containerLabelPartial && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial}</div>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
