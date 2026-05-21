@@ -1011,9 +1011,6 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
 
   const tankDisplay    = fmtFull(tankRaw);
   const partialDisplay = partialAc > 0.01 ? fmtPartial(partialRaw) : null;
-  // For liquid oz: show raw oz count as sub-line when displayed as gal+oz
-  const ozSubline      = isOzUnit && tankRaw > 0 && !roundQtr
-    ? `${Math.round(tankRaw)} oz` : null;
   // For dry oz: show lbs+oz conversion as sub-line
   const dryOzSubline   = isDryOzUnit && tankRaw > 0
     ? fmtDryOzAsLbOz(tankRaw) : null;
@@ -1146,7 +1143,6 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
                 <div style={{ marginBottom: partialDisplay ? 4 : 0 }}>
                   <div style={{ fontSize:9, color:"#888", fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>Full Tank</div>
                   <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:14, lineHeight:1.2 }}>{tankDisplay}</div>
-                  {ozSubline && <div style={{ fontSize:10, color:"#aaa" }}>{ozSubline} total</div>}
                   {roundQtr && isOzUnit && tankRaw > 0 && (
                     <div style={{ fontSize:10, color:"#aaa" }}>{Math.round(tankRaw)} oz total</div>
                   )}
@@ -1170,8 +1166,6 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
         );
       })()}
 
-      <td style={td}><span style={{fontSize:12, color:"#555"}}>{selected?.rei || "—"}</span></td>
-      <td style={td}><span style={{fontSize:12, color:"#555"}}>{selected?.epa || "—"}</span></td>
       <td style={td}>
         <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:18 }}>×</button>
       </td>
@@ -1358,7 +1352,17 @@ export default function App() {
   };
   const removeField = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
 
-  const addChemRow    = (chemId)   => setForm(f => ({ ...f, chemRows: [...f.chemRows, { id: crypto.randomUUID(), chemId: chemId||'', ratePerAcre:"", inputMode:"rate", galPerTank:"" }] }));
+  const addChemRow    = (chemId) => {
+    let lastRate = "";
+    if (chemId) {
+      for (const tk of tickets) {
+        const rows = tk.chem_rows || tk.chemRows || [];
+        const row = rows.find(r => r.chemId === chemId && r.ratePerAcre);
+        if (row) { lastRate = row.ratePerAcre; break; }
+      }
+    }
+    setForm(f => ({ ...f, chemRows: [...f.chemRows, { id: crypto.randomUUID(), chemId: chemId||'', ratePerAcre: lastRate, inputMode:"rate", galPerTank:"" }] }));
+  };
   const removeChemRow = (id)       => setForm(f => ({ ...f, chemRows: f.chemRows.filter(r => r.id !== id) }));
   const updateChemRow = (id, k, v) => setForm(f => ({ ...f, chemRows: f.chemRows.map(r => r.id===id ? {...r,[k]:v} : r) }));
 
@@ -1397,9 +1401,17 @@ export default function App() {
     }
   };
 
-  // Debounced compatibility check — fires when 2+ chemicals have rates entered
+  // Stable key of only EPA-having chemical IDs — no-EPA chemicals never trigger AI
+  const chemIdKey = form.chemRows
+    .map(r => r.chemId)
+    .filter(id => id && chemicals.find(c => c.id === id)?.epa?.trim())
+    .join(",");
+  const fieldKey  = form.selectedFields.map(sf => sf.id).join(",");
+
+  // Debounced compatibility check — fires only when the set of chemicals changes
   useEffect(() => {
-    const filledRows = form.chemRows.filter(r => r.chemId && (r.ratePerAcre || r.galPerTank));
+    const chemRows = form.chemRows;
+    const filledRows = chemRows.filter(r => r.chemId);
     if (filledRows.length < 2) { setAiCompatWarning(null); return; }
     if (compatDebounceRef.current) clearTimeout(compatDebounceRef.current);
     compatDebounceRef.current = setTimeout(async () => {
@@ -1407,18 +1419,20 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c ? { name: c.name, epa: c.epa } : null;
+          return c && c.epa?.trim() ? { name: c.name, epa: c.epa } : null;
         }).filter(Boolean);
+        if (products.length < 2) { setAiCompatWarning(null); return; }
         const res = await callAI("compatibility", { products });
         setAiCompatWarning(res);
       } catch { setAiCompatWarning(null); }
       finally { setAiCompatLoading(false); }
     }, 600);
-  }, [form.chemRows, chemicals]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chemIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced crop safety check — fires when fields or chemicals change
+  // Debounced crop safety check — fires when chemicals or fields change
   useEffect(() => {
-    const filledRows = form.chemRows.filter(r => r.chemId && (r.ratePerAcre || r.galPerTank));
+    const chemRows = form.chemRows;
+    const filledRows = chemRows.filter(r => r.chemId);
     const fieldsWithTraits = form.selectedFields.map(sf => {
       const f = fieldLibrary.find(x => x.id === sf.id);
       return f ? { name: f.name, crop: f.crop || form.crop || "", traits: f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []) } : null;
@@ -1435,11 +1449,12 @@ export default function App() {
       } catch { setAiCropSafety(null); }
       finally { setAiCropSafetyLoading(false); }
     }, 800);
-  }, [form.chemRows, form.selectedFields, fieldLibrary, chemicals, form.crop]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chemIdKey, fieldKey, form.crop]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced adjuvant recommendation — fires when 1+ chemicals have rates entered
+  // Debounced adjuvant recommendation — fires only when the set of chemicals changes
   useEffect(() => {
-    const filledRows = form.chemRows.filter(r => r.chemId && (r.ratePerAcre || r.galPerTank));
+    const chemRows = form.chemRows;
+    const filledRows = chemRows.filter(r => r.chemId);
     if (!filledRows.length) { setAiAdjuvants(null); return; }
     if (adjuvantDebounceRef.current) clearTimeout(adjuvantDebounceRef.current);
     adjuvantDebounceRef.current = setTimeout(async () => {
@@ -1455,7 +1470,7 @@ export default function App() {
       } catch { setAiAdjuvants(null); }
       finally { setAiAdjuvantsLoading(false); }
     }, 700);
-  }, [form.chemRows, chemicals]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chemIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTicket = () => {
     if (!form.selectedFields.length) return alert("Please select at least one field.");
@@ -2350,7 +2365,7 @@ export default function App() {
                           fontFamily:"inherit", background:"#f0f6ff", color:"#1a3a6a",
                           whiteSpace:"nowrap"
                         }}
-                        title={`${c.epa} · REI ${c.rei}`}
+                        title={c.name}
                       >+ {c.name}</button>
                     ))}
                   </div>
@@ -2406,7 +2421,7 @@ export default function App() {
                           onMouseLeave={e => e.currentTarget.style.background="transparent"}
                         >
                           <span style={{ fontWeight:600 }}>{c.name}</span>
-                          <span style={{ fontSize:11, color:"#888" }}>{c.epa} · REI {c.rei}</span>
+                          <span style={{ fontSize:11, color:"#888" }}>{c.formType}</span>
                         </div>
                       ))}
                     </div>
@@ -2421,7 +2436,7 @@ export default function App() {
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 11 : 13, minWidth: isMobile ? 540 : "auto" }}>
                     <thead>
                       <tr>
-                        {["Chemical","Mode","Input","","Total/Tank","","REI","EPA #",""].map((h,i) => (
+                        {["Chemical","Mode","Input","","Total/Tank","",""].map((h,i) => (
                           <th key={i} style={{...th, fontSize: isMobile ? 9 : 11, padding:"5px 4px"}}>{h}</th>
                         ))}
                       </tr>
@@ -2476,15 +2491,92 @@ export default function App() {
               )}
               {!aiAdjuvantsLoading && aiAdjuvants?.adjuvants?.length > 0 && (
                 <div style={{ background:"#f0f9f0", border:"1.5px solid #2a8a10", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
-                  <div style={{ fontWeight:700, color:"#1a5c08", fontSize:12, marginBottom:4 }}>
+                  <div style={{ fontWeight:700, color:"#1a5c08", fontSize:12, marginBottom:8 }}>
                     Adjuvant / Surfactant Recommendations
                     <span style={{ fontWeight:400, fontSize:10, marginLeft:6 }}>(AI-based — verify against product labels)</span>
                   </div>
-                  {aiAdjuvants.adjuvants.map((a, i) => (
-                    <div key={i} style={{ fontSize:12, color:"#1a5c08", marginTop:2 }}>
-                      🧪 <strong>{a.name}</strong>{a.rate ? ` @ ${a.rate}` : ""} — {a.reason}
-                    </div>
-                  ))}
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {aiAdjuvants.adjuvants.map((a, i) => {
+                      // Find best library match: any word in the AI name matches any word in chem name
+                      const aiWords = a.name.toLowerCase().replace(/[()]/g,"").split(/\s+/);
+                      const libChem = chemicals.find(c => {
+                        const chemWords = c.name.toLowerCase().split(/\s+/);
+                        return aiWords.some(w => w.length > 2 && chemWords.some(cw => cw.includes(w) || w.includes(cw)));
+                      });
+                      const alreadyAdded = libChem && form.chemRows.some(r => r.chemId === libChem.id);
+                      const canAdd = !!libChem && !alreadyAdded;
+
+                      // Find last used rate for this chemical from ticket history (tickets sorted newest-first)
+                      const lastUsedRate = libChem ? (() => {
+                        for (const tk of tickets) {
+                          const rows = tk.chem_rows || tk.chemRows || [];
+                          const row = rows.find(r => r.chemId === libChem.id && r.ratePerAcre);
+                          if (row) return row.ratePerAcre;
+                        }
+                        return "";
+                      })() : "";
+
+                      const handleAdd = () => {
+                        if (!canAdd) return;
+                        setForm(f => ({ ...f, chemRows: [...f.chemRows, {
+                          id: crypto.randomUUID(),
+                          chemId: libChem.id,
+                          ratePerAcre: lastUsedRate,
+                          inputMode: "rate",
+                          galPerTank: "",
+                        }]}));
+                        setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior:"smooth" }), 50);
+                      };
+
+                      return (
+                        <div key={i}>
+                          <div style={{ display:"flex", alignItems:"center", gap:0, flexWrap:"wrap" }}>
+                            {/* Name chip */}
+                            <button
+                              onClick={handleAdd}
+                              disabled={!canAdd}
+                              title={
+                                alreadyAdded ? "Already added" :
+                                !libChem ? `"${a.name}" not found in your chemical library — add it to Chems first` :
+                                `Click to add ${libChem.name}${lastUsedRate ? ` @ ${lastUsedRate} ${libChem.unit}/ac` : ""}`
+                              }
+                              style={{
+                                padding:"4px 10px", borderRadius: lastUsedRate ? "5px 0 0 5px" : "5px",
+                                border:"1.5px solid", cursor: canAdd ? "pointer" : "default",
+                                fontSize:12, fontWeight:700, fontFamily:"inherit",
+                                borderColor: alreadyAdded ? "#c8dbb0" : (libChem ? "#2a8a10" : "#c8dbb0"),
+                                background: alreadyAdded ? "#e6f5d0" : (libChem ? "#2a8a10" : "#f0f0f0"),
+                                color: alreadyAdded ? "#888" : (libChem ? "#fff" : "#aaa"),
+                                whiteSpace:"nowrap",
+                              }}
+                            >
+                              {alreadyAdded ? "✓ " : (libChem ? "+ " : "")}{libChem ? libChem.name : a.name}
+                            </button>
+                            {/* Last used rate chip */}
+                            {lastUsedRate && (
+                              <button
+                                onClick={handleAdd}
+                                disabled={!canAdd}
+                                title={canAdd ? `Last used rate: ${lastUsedRate} ${libChem.unit}/ac` : ""}
+                                style={{
+                                  padding:"4px 9px", borderRadius:"0 5px 5px 0",
+                                  border:"1.5px solid #c8dbb0", borderLeft:"none",
+                                  cursor: canAdd ? "pointer" : "default",
+                                  fontSize:11, fontWeight:400, fontFamily:"inherit",
+                                  background:"#f5f5f5", color:"#999",
+                                  whiteSpace:"nowrap",
+                                }}
+                              >{lastUsedRate} {libChem.unit}/ac</button>
+                            )}
+                          </div>
+                          <div style={{ fontSize:10, color:"#888", marginTop:2, marginLeft:2 }}>
+                            {a.summary || a.reason}
+                            {!libChem && <span style={{ color:"#c05000", marginLeft:4 }}>— not in library</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
