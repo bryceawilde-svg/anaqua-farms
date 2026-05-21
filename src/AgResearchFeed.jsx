@@ -123,6 +123,9 @@ export default function AgResearchFeed() {
       });
       if (fnErr) throw fnErr;
       const parsed = JSON.parse(data.result);
+      if (!Array.isArray(parsed)) {
+        throw new Error(parsed?.error || "Unexpected response from server");
+      }
       const topicLabel = TOPICS.find(t => t.id === topicId)?.label || topicId;
       setArticles(parsed);
       setLastSearched({ crop, topic: topicLabel });
@@ -232,7 +235,7 @@ export default function AgResearchFeed() {
           {lastSearched.crop} · {lastSearched.topic}
         </div>
       )}
-      {articles.map((article, i) => (
+      {Array.isArray(articles) && articles.map((article, i) => (
         <ArticleCard key={i} article={article} index={i} isDaily={isDailyLoad} />
       ))}
       {loading && (
