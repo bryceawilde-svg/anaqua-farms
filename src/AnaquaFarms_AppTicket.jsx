@@ -961,7 +961,7 @@ function ChemTag({ chem, onRemove }) {
   );
 }
 
-function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChange, onRemove }) {
+function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChange, onRemove, isMobile }) {
   const selected    = chemicals.find(c => c.id === chem.chemId);
   const baseUnit    = selected?.unit || "oz";          // library unit
   const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
@@ -1022,6 +1022,107 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   const containerLabelPartial = hasLibraryContainer
     ? fmtContainerCount(partialRaw, selected)
     : (jug2_5 && isOzUnit && partialRaw > 0 ? fmtJugCount(partialRaw) : null);
+
+  // ── Mobile card layout ────────────────────────────────────────────────────────
+  if (isMobile) {
+    const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
+    const galtankLabel = isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/t" : "oz/t") : "gal/t";
+    return (
+      <tr>
+        <td colSpan={7} style={{ padding:"6px 0", borderBottom:"1px solid #e8f5e0" }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            {/* Row 1: chemical select + remove */}
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <select value={chem.chemId || ""} onChange={e => onChange("chemId", parseInt(e.target.value))}
+                style={{ ...sel, flex:1, fontSize:13, minWidth:0 }}>
+                <option value="">— select —</option>
+                {chemicals.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:20, padding:"0 2px", lineHeight:1 }}>×</button>
+            </div>
+            {/* Row 2: mode toggle + input + total */}
+            <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap" }}>
+              <div style={{ display:"flex", gap:2, flexShrink:0 }}>
+                <button onClick={() => onChange("inputMode","rate")}
+                  style={{ padding:"2px 6px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
+                    borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
+                    background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
+                    color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>r/ac</button>
+                <button onClick={() => onChange("inputMode","galtank")}
+                  style={{ padding:"2px 6px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
+                    borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
+                    background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
+                    color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>{galtankLabel}</button>
+              </div>
+              {inputMode === "rate" ? (
+                <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
+                  <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
+                    style={{...inp, width:60}} placeholder="0" type="number" min="0" step="0.1"/>
+                  <span style={{ fontSize:10, color:"#555", whiteSpace:"nowrap" }}>{baseUnit}/ac</span>
+                </div>
+              ) : (
+                <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
+                  <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
+                    style={{...inp, width:60}} placeholder="0" type="number" min="0" step="0.01"/>
+                  <span style={{ fontSize:10, color:"#555", whiteSpace:"nowrap" }}>{galtankLabel}</span>
+                </div>
+              )}
+              {/* Total/tank pushed to right */}
+              <div style={{ marginLeft:"auto", textAlign:"right", flexShrink:0 }}>
+                {lessThanOneTank ? (
+                  <>
+                    <div style={{ fontSize:8, color:"#e07020", fontWeight:700, textTransform:"uppercase" }}>This Load</div>
+                    <div style={{ fontWeight:700, color:"#e07020", fontSize:16, lineHeight:1.1 }}>{partialDisplay || tankDisplay}</div>
+                    {(containerLabelPartial || containerLabel) && <div style={{ fontSize:9, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial || containerLabel}</div>}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize:8, color:"#888", fontWeight:700, textTransform:"uppercase" }}>Full Tank</div>
+                    <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:16, lineHeight:1.1 }}>{tankDisplay}</div>
+                    {dryOzSubline && <div style={{ fontSize:9, color:"#888" }}>{dryOzSubline}</div>}
+                    {containerLabel && <div style={{ fontSize:9, color:"#7a3a9a", fontWeight:700 }}>{containerLabel}</div>}
+                    {partialDisplay && <div style={{ fontWeight:700, color:"#e07020", fontSize:13, marginTop:2 }}>↳ {partialDisplay}</div>}
+                    {containerLabelPartial && <div style={{ fontSize:9, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial}</div>}
+                  </>
+                )}
+              </div>
+            </div>
+            {/* Row 3: options (¼ gal, jug) */}
+            {isOzUnit && (
+              <div style={{ display:"flex", gap:6 }}>
+                <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
+                  padding:"2px 7px", borderRadius:5, userSelect:"none",
+                  border:`1.5px solid ${roundQtr ? "#1a6a8a" : "#c8dbb0"}`,
+                  background: roundQtr ? "#e8f4ff" : "#f9fdf5" }}>
+                  <input type="checkbox" checked={roundQtr} onChange={e => onChange("roundQtrGal", e.target.checked)}
+                    style={{ accentColor:"#1a6a8a", width:12, height:12, margin:0, cursor:"pointer" }}/>
+                  <span style={{ fontSize:10, fontWeight:700, color: roundQtr ? "#0e3a5c" : "#777" }}>¼ gal</span>
+                </label>
+                {!selected?.containerSize && (
+                  <label style={{ display:"inline-flex", alignItems:"center", gap:4, cursor:"pointer",
+                    padding:"2px 7px", borderRadius:5, userSelect:"none",
+                    border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
+                    background: jug2_5 ? "#f5eeff" : "#f9fdf5" }}>
+                    <input type="checkbox" checked={jug2_5} onChange={e => onChange("jug2_5gal", e.target.checked)}
+                      style={{ accentColor:"#7a3a9a", width:12, height:12, margin:0, cursor:"pointer" }}/>
+                    <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777" }}>2.5 gal jugs</span>
+                  </label>
+                )}
+              </div>
+            )}
+            {roundQtr && isOzUnit && roundedEffectiveRate && (
+              <div style={{ fontSize:10, color:"#1a6a8a", fontWeight:700 }}>
+                ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac (rounded)
+              </div>
+            )}
+            {inputMode === "galtank" && effectiveRate && (
+              <div style={{ fontSize:10, color:"#6aaa30" }}>= {parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</div>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr>
@@ -1419,7 +1520,7 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c && c.epa?.trim() ? { name: c.name, epa: c.epa } : null;
+          return c && c.epa?.trim() ? { name: c.name } : null;
         }).filter(Boolean);
         if (products.length < 2) { setAiCompatWarning(null); return; }
         const res = await callAI("compatibility", { products });
@@ -1462,7 +1563,7 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c && c.epa?.trim() ? { name: c.name, epa: c.epa } : null;
+          return c && c.epa?.trim() ? { name: c.name } : null;
         }).filter(Boolean);
         if (!products.length) { setAiAdjuvants(null); return; }
         const res = await callAI("suggest-adjuvants", { products });
@@ -2431,16 +2532,17 @@ export default function App() {
               </div>
 
               {form.chemRows.length > 0 && (
-                <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-                  {isMobile && <div style={{ fontSize:10, color:"#888", marginBottom:3, textAlign:"right" }}>← swipe to scroll →</div>}
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 11 : 13, minWidth: isMobile ? 540 : "auto" }}>
-                    <thead>
-                      <tr>
-                        {["Chemical","Mode","Input","","Total/Tank","",""].map((h,i) => (
-                          <th key={i} style={{...th, fontSize: isMobile ? 9 : 11, padding:"5px 4px"}}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
+                <div style={isMobile ? {} : { overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize: isMobile ? 13 : 13, minWidth: isMobile ? 0 : "auto" }}>
+                    {!isMobile && (
+                      <thead>
+                        <tr>
+                          {["Chemical","Mode","Input","","Total/Tank","",""].map((h,i) => (
+                            <th key={i} style={{...th, fontSize:11, padding:"5px 4px"}}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                    )}
                     <tbody>
                       {form.chemRows.map(row => (
                         <ChemicalRow
@@ -2448,6 +2550,7 @@ export default function App() {
                           tankSize={form.tankSize} galPerAcre={form.galPerAcre} totalAcres={totalAcres}
                           onChange={(k,v) => updateChemRow(row.id,k,v)}
                           onRemove={() => removeChemRow(row.id)}
+                          isMobile={isMobile}
                         />
                       ))}
                     </tbody>
@@ -2455,9 +2558,6 @@ export default function App() {
                 </div>
               )}
               {/* Compatibility warning */}
-              {aiCompatLoading && (
-                <div style={{ fontSize:12, color:"#888", marginTop:6 }}>Checking compatibility…</div>
-              )}
               {!aiCompatLoading && aiCompatWarning?.warnings?.length > 0 && (
                 <div style={{ background:"#fff8e0", border:"1.5px solid #e0a020", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
                   <div style={{ fontWeight:700, color:"#7a5000", fontSize:12, marginBottom:4 }}>
@@ -2468,9 +2568,6 @@ export default function App() {
                     <div key={i} style={{ fontSize:12, color:"#7a5000", marginTop:2 }}>⚠ {w}</div>
                   ))}
                 </div>
-              )}
-              {aiCropSafetyLoading && (
-                <div style={{ fontSize:12, color:"#888", marginTop:6 }}>Checking crop compatibility…</div>
               )}
               {!aiCropSafetyLoading && aiCropSafety?.violations?.length > 0 && (
                 <div style={{ background:"#fff0f0", border:"1.5px solid #c0392b", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
@@ -2486,9 +2583,6 @@ export default function App() {
                 </div>
               )}
               {/* Adjuvant recommendations */}
-              {aiAdjuvantsLoading && (
-                <div style={{ fontSize:12, color:"#888", marginTop:6 }}>Checking adjuvant requirements…</div>
-              )}
               {!aiAdjuvantsLoading && aiAdjuvants?.adjuvants?.length > 0 && (
                 <div style={{ background:"#f0f9f0", border:"1.5px solid #2a8a10", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
                   <div style={{ fontWeight:700, color:"#1a5c08", fontSize:12, marginBottom:8 }}>
@@ -2571,7 +2665,6 @@ export default function App() {
                           </div>
                           <div style={{ fontSize:10, color:"#888", marginTop:2, marginLeft:2 }}>
                             {a.summary || a.reason}
-                            {!libChem && <span style={{ color:"#c05000", marginLeft:4 }}>— not in library</span>}
                           </div>
                         </div>
                       );

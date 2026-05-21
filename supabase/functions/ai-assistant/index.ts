@@ -47,14 +47,15 @@ Deno.serve(async (req) => {
 
     case "compatibility": {
       const { products } = payload as {
-        products: { name: string; epa: string }[];
+        products: { name: string }[];
       };
       systemPrompt =
         'You are an agrochemical tank mix compatibility expert. ' +
         'Using your training knowledge of product labels, university extension research, and known chemical interactions, ' +
         'assess whether the listed products can be safely mixed in the same tank. ' +
+        'Identify each product\'s active ingredient(s) by product name. ' +
         'Return ONLY valid JSON with no extra text or markdown: ' +
-        '{"compatible":<boolean>,"warnings":["<one sentence per issue>"]}. ' +
+        '{"compatible":<boolean>,"warnings":["<one sentence per issue — reference product name and active ingredient, never EPA numbers>"]}. ' +
         'Keep each warning concise (one sentence). Return an empty warnings array if there are no known issues.';
       userMessage = `Check tank mix compatibility of these products: ${JSON.stringify(products)}`;
       break;
@@ -99,7 +100,7 @@ Deno.serve(async (req) => {
 
     case "suggest-adjuvants": {
       const { products } = payload as {
-        products: { name: string; epa: string }[];
+        products: { name: string }[];
       };
       systemPrompt =
         'You are a pesticide label expert. Given a list of pesticide products in a tank mix, ' +
@@ -133,11 +134,11 @@ Deno.serve(async (req) => {
         '"2,4-D" = Enlist/2,4-D tolerant; "dicamba" = Xtend/dicamba tolerant. ' +
         'A field with NO traits listed is conventional — flag glyphosate, glufosinate, 2,4-D, and dicamba products on it. ' +
         'Sorghum and Grain are never GMO — flag those same active ingredients regardless of traits listed.\n\n' +
-        '3. EPA NUMBER LOOKUP — use EPA registration numbers to confirm active ingredient when the product name is ambiguous ' +
-        '(e.g. EPA 264-829 = Reckon 280 SL = glufosinate-ammonium). ' +
-        'Do not rely on product names alone.\n\n' +
+        '3. EPA NUMBER LOOKUP — use the EPA registration number to confirm the active ingredient when the product name is ambiguous ' +
+        '(e.g. EPA 264-829 = Reckon 280 SL = glufosinate-ammonium). Do not rely on product names alone.\n\n' +
         'Return ONLY a raw JSON object, no markdown, no code fences: ' +
-        '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one concise sentence stating the specific label or tolerance issue>"}]}. ' +
+        '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one concise sentence — state the product name, its active ingredient, and the specific issue>"}]}. ' +
+        'IMPORTANT: Never mention EPA registration numbers anywhere in your response text. ' +
         'Return an empty violations array if there are no issues.';
       userMessage =
         `Fields: ${JSON.stringify(fields)}\n` +
