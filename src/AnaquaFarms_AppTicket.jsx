@@ -1384,7 +1384,7 @@ export default function App() {
         supabase.from("tickets").select("*").order("created_at", { ascending: false }),
         supabase.from("crop_seasons").select("*"),
       ]);
-      setFieldLibrary(f.data?.length ? f.data.map(x => ({ ...x, traits: x.traits || [] })) : DEFAULT_FIELDS);
+      setFieldLibrary((f.data || []).map(x => ({ ...x, traits: x.traits || [] })));
       if (cs.data?.length) {
         const seasons = {};
         cs.data.forEach(r => { seasons[r.crop_name] = r.season; });
