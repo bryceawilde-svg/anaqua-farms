@@ -1172,6 +1172,17 @@ function normalizeTicket(tk) {
 // ── Main App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const isMobile        = useIsMobile();
+
+  // ── Auth state
+  const [session,      setSession]      = useState(null);
+  const [authLoading,  setAuthLoading]  = useState(true);
+  const [authView,     setAuthView]     = useState("login");
+  const [authEmail,    setAuthEmail]    = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError,    setAuthError]    = useState("");
+  const [authWorking,  setAuthWorking]  = useState(false);
+  const [userPlan,     setUserPlan]     = useState("basic");
+
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
   const [equipment,     setEquipment]     = useState([]);
@@ -1260,6 +1271,42 @@ export default function App() {
     if (error) throw new Error(error.message);
     return JSON.parse(data.result);
   }
+
+  // ── Auth effects & handlers
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session) { setUserPlan("basic"); }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    supabase.from("profiles").select("plan").eq("id", session.user.id).single()
+      .then(({ data }) => { if (data) setUserPlan(data.plan); });
+  }, [session]);
+
+  async function handleSignIn() {
+    setAuthWorking(true); setAuthError("");
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    if (error) setAuthError(error.message);
+    setAuthWorking(false);
+  }
+
+  async function handleSignUp() {
+    setAuthWorking(true); setAuthError("");
+    const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    if (error) setAuthError(error.message);
+    else setAuthError("Check your email for a confirmation link.");
+    setAuthWorking(false);
+  }
+
+  const isPro = userPlan === "pro";
 
   async function submitSectorChat() {
     const question = chatInput.trim();
@@ -1384,7 +1431,7 @@ export default function App() {
 
   const updateCropSeason = async (cropName, season) => {
     setCropSeasons(s => ({ ...s, [cropName]: season }));
-    await supabase.from("crop_seasons").upsert({ crop_name: cropName, season });
+    await supabase.from("crop_seasons").upsert({ crop_name: cropName, season, user_id: session.user.id });
   };
 
   const addChemRow    = (chemId) => {
@@ -1445,6 +1492,7 @@ export default function App() {
 
   // Debounced compatibility check — fires only when the set of chemicals changes
   useEffect(() => {
+    if (!isPro) { setAiCompatWarning(null); return; }
     const chemRows = form.chemRows;
     const filledRows = chemRows.filter(r => r.chemId);
     if (filledRows.length < 2) { setAiCompatWarning(null); return; }
@@ -1466,6 +1514,7 @@ export default function App() {
 
   // Debounced crop safety check — fires when chemicals or fields change
   useEffect(() => {
+    if (!isPro) { setAiCropSafety(null); return; }
     const chemRows = form.chemRows;
     const filledRows = chemRows.filter(r => r.chemId);
     const fieldsWithTraits = form.selectedFields.map(sf => {
@@ -1490,6 +1539,7 @@ export default function App() {
 
   // Debounced adjuvant recommendation — fires only when the set of chemicals changes
   useEffect(() => {
+    if (!isPro) { setAiAdjuvants(null); return; }
     const chemRows = form.chemRows;
     const filledRows = chemRows.filter(r => r.chemId);
     if (!filledRows.length) { setAiAdjuvants(null); return; }
@@ -1597,14 +1647,14 @@ export default function App() {
       const finalTicket = { ...newTicket, ticketNumber: existingNum };
       setTickets(prev => prev.map(x => x.id === editingId ? finalTicket : x));
       const { error } = await supabase.from("tickets")
-        .update({ ...dbRow(finalTicket), ticket_number: existingNum })
+        .update({ ...dbRow(finalTicket), ticket_number: existingNum, user_id: session.user.id })
         .eq("id", editingId);
       if (error) { showToast("Failed to save ticket: " + error.message); return null; }
       assignedTicketNumber = existingNum;
     } else {
       // Let the DB sequence assign ticket_number — omit it from the insert payload
       const { data, error } = await supabase.from("tickets")
-        .insert({ ...dbRow(newTicket) })
+        .insert({ ...dbRow(newTicket), user_id: session.user.id })
         .select("id, ticket_number")
         .single();
       if (error) { showToast("Failed to save ticket: " + error.message); return null; }
@@ -1646,7 +1696,7 @@ export default function App() {
         imported++;
       });
       setFieldLibrary(fl => [...fl, ...added]);
-      supabase.from("fields").upsert(added).then(({ error }) => {
+      supabase.from("fields").upsert(added.map(a => ({ ...a, user_id: session.user.id }))).then(({ error }) => {
         if (error) showToast("Failed to import fields: " + error.message);
       });
       setFieldUpMsg(`✓ Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
@@ -1662,7 +1712,7 @@ export default function App() {
     const autoTraits = NON_GMO_CROPS.includes(newField.crop) ? ["non-gmo"] : (newField.traits || []);
     const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"", traits: autoTraits };
     setFieldLibrary(fl => [...fl, newFieldRec]);
-    supabase.from("fields").upsert(newFieldRec).then(({ error }) => {
+    supabase.from("fields").upsert({ ...newFieldRec, user_id: session.user.id }).then(({ error }) => {
       if (error) showToast("Failed to save field: " + error.message);
     });
     setNewField({ name:"", acres:"", crop:"", traits:[] });
@@ -1677,7 +1727,7 @@ export default function App() {
     if (!editFieldDraft.name || !editFieldDraft.acres) return alert("Field name and acres are required.");
     const updated = { ...editFieldDraft, acres: parseFloat(editFieldDraft.acres) };
     setFieldLibrary(fl => fl.map(f => f.id === updated.id ? updated : f));
-    supabase.from("fields").upsert(updated).then(({ error }) => {
+    supabase.from("fields").upsert({ ...updated, user_id: session.user.id }).then(({ error }) => {
       if (error) showToast("Failed to update field: " + error.message);
       else showToast("Field saved.", "success");
     });
@@ -1758,7 +1808,7 @@ export default function App() {
         imported++;
       });
       setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, container_size: a.containerSize ?? null }))).then(({ error }) => {
+      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, container_size: a.containerSize ?? null, user_id: session.user.id }))).then(({ error }) => {
         if (error) showToast("Failed to import chemicals: " + error.message);
       });
       setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
@@ -1776,7 +1826,7 @@ export default function App() {
     const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
     const { formType: ft, containerSize: cs, ...chemRest } = newChemRec;
-    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null }).then(({ error }) => {
+    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, user_id: session.user.id }).then(({ error }) => {
       if (error) showToast("Failed to save chemical: " + error.message);
     });
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
@@ -1795,7 +1845,7 @@ export default function App() {
     };
     setChemicals(c => c.map(x => x.id === updated.id ? updated : x));
     const { formType, containerSize, ...rest } = updated;
-    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null }).then(({ error }) => {
+    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, user_id: session.user.id }).then(({ error }) => {
       if (error) showToast("Failed to update chemical: " + error.message);
       else showToast("Chemical saved.", "success");
     });
@@ -1809,6 +1859,56 @@ export default function App() {
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────────
+  if (authLoading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"Georgia,serif", color:"#2a5c0f", fontSize:16 }}>
+      Loading…
+    </div>
+  );
+
+  if (!session) return (
+    <div style={{ minHeight:"100vh", background:"#f0f7e8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Georgia','Times New Roman',serif" }}>
+      <div style={{ background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:10, padding:"32px 32px 28px", width:340, boxShadow:"0 4px 24px rgba(42,92,15,0.13)" }}>
+        <div style={{ textAlign:"center", marginBottom:20 }}>
+          <div style={{ fontSize:28 }}>🌱</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>Anaqua Farms</div>
+          <div style={{ fontSize:12, color:"#888", marginTop:3 }}>Application Management</div>
+        </div>
+        <div style={{ display:"flex", gap:0, marginBottom:18, borderRadius:6, overflow:"hidden", border:"1.5px solid #c8dbb0" }}>
+          {["login","signup"].map(v => (
+            <button key={v} onClick={() => { setAuthView(v); setAuthError(""); }}
+              style={{ flex:1, padding:"8px 0", border:"none", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"inherit",
+                background: authView===v ? "#2a5c0f" : "#f9fdf5",
+                color: authView===v ? "#fff" : "#2a5c0f" }}>
+              {v === "login" ? "Sign In" : "Sign Up"}
+            </button>
+          ))}
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <input type="email" placeholder="Email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)}
+            style={{ border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", fontSize:14, fontFamily:"inherit", outline:"none" }} />
+          <input type="password" placeholder="Password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)}
+            onKeyDown={e => e.key==="Enter" && (authView==="login" ? handleSignIn() : handleSignUp())}
+            style={{ border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", fontSize:14, fontFamily:"inherit", outline:"none" }} />
+          {authError && (
+            <div style={{ fontSize:12, color: authError.includes("Check your email") ? "#2a5c0f" : "#c0392b", lineHeight:1.5 }}>
+              {authError}
+            </div>
+          )}
+          <button onClick={authView==="login" ? handleSignIn : handleSignUp}
+            disabled={authWorking || !authEmail || !authPassword}
+            style={{ background: authWorking || !authEmail || !authPassword ? "#aaa" : "#2a5c0f",
+              color:"#fff", border:"none", borderRadius:6, padding:"11px 0", fontWeight:700, fontSize:14,
+              cursor: authWorking || !authEmail || !authPassword ? "default" : "pointer", fontFamily:"inherit" }}>
+            {authWorking ? "…" : authView==="login" ? "Sign In" : "Create Account"}
+          </button>
+        </div>
+        <div style={{ fontSize:10, color:"#aaa", textAlign:"center", marginTop:14, lineHeight:1.6 }}>
+          Your records are isolated from other users.
+        </div>
+      </div>
+    </div>
+  );
+
   if (dbLoading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
       <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
@@ -1841,22 +1941,35 @@ export default function App() {
             <div style={{ color:"#fff", fontSize:isMobile?16:22, fontWeight:700, lineHeight:1.2 }}>Application Ticket System</div>
             {!isMobile && <div style={{ color:"#c8e8a0", fontSize:12, marginTop:2 }}>(956) 465-6430 · (956) 535-0482</div>}
           </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            {!isMobile && <span style={{ color:"#a8d878", fontSize:11 }}>{isPro ? "⭐ Pro" : "Basic"}</span>}
+            <button onClick={() => supabase.auth.signOut()} style={{
+              background:"none", border:"1.5px solid #a8d878", borderRadius:5,
+              color:"#a8d878", fontSize:11, padding:"4px 10px", cursor:"pointer", fontWeight:600, fontFamily:"inherit"
+            }}>Sign Out</button>
+          </div>
         </div>
         {/* Tab nav: scrollable row on mobile */}
         <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
-          {[["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"]].map(([v,l]) => (
-            <button key={v} onClick={() => setView(v)} style={{
-              padding: isMobile ? "8px 12px" : "8px 16px",
-              border:"none", cursor:"pointer",
-              fontSize: isMobile ? 12 : 13,
-              fontWeight:700,
-              borderRadius:"6px 6px 0 0", fontFamily:"inherit",
-              background: view===v ? "#f0f7e8" : "rgba(255,255,255,0.12)",
-              color: view===v ? "#2a5c0f" : "#d8f0b8",
-              borderBottom: view===v ? "3px solid #4aaa1a" : "3px solid transparent",
-              whiteSpace:"nowrap", flexShrink:0,
-            }}>{l}</button>
-          ))}
+          {[["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"]].map(([v,l]) => {
+            const locked = v === "research" && !isPro;
+            return (
+              <button key={v} onClick={() => !locked && setView(v)}
+                title={locked ? "Pro plan required" : undefined}
+                style={{
+                  padding: isMobile ? "8px 12px" : "8px 16px",
+                  border:"none", cursor: locked ? "not-allowed" : "pointer",
+                  fontSize: isMobile ? 12 : 13,
+                  fontWeight:700,
+                  borderRadius:"6px 6px 0 0", fontFamily:"inherit",
+                  background: view===v ? "#f0f7e8" : "rgba(255,255,255,0.12)",
+                  color: locked ? "rgba(216,240,184,0.4)" : (view===v ? "#2a5c0f" : "#d8f0b8"),
+                  borderBottom: view===v ? "3px solid #4aaa1a" : "3px solid transparent",
+                  whiteSpace:"nowrap", flexShrink:0,
+                  opacity: locked ? 0.5 : 1,
+                }}>{l}{locked ? " 🔒" : ""}</button>
+            );
+          })}
         </div>
       </div>
 
@@ -2014,7 +2127,7 @@ export default function App() {
                     );
                   })}
                 </div>
-                {(form.targetPest||[]).length > 0 && (
+                {(form.targetPest||[]).length > 0 && isPro && (
                   <div style={{ marginTop:8 }}>
                     <button
                       disabled={aiSuggestLoading}
@@ -3170,7 +3283,7 @@ export default function App() {
                   const nextId = equipment.length ? Math.max(...equipment.map(e=>e.id))+1 : 1;
                   const newEquipRec = { id: nextId, name, acresPerHour: aph };
                   setEquipment(eq => [...eq, newEquipRec]);
-                  supabase.from("equipment").upsert({ id: newEquipRec.id, name: newEquipRec.name, acres_per_hour: aph }).then(({ error }) => {
+                  supabase.from("equipment").upsert({ id: newEquipRec.id, name: newEquipRec.name, acres_per_hour: aph, user_id: session.user.id }).then(({ error }) => {
                     if (error) showToast("Failed to save equipment: " + error.message);
                   });
                   nameEl.value = "";
@@ -3224,7 +3337,7 @@ export default function App() {
                   const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
                   const newLicRec = { id: nextId, name, license: "" };
                   setLicensed(ops => [...ops, newLicRec]);
-                  supabase.from("licensed_applicators").upsert(newLicRec).then(({ error }) => {
+                  supabase.from("licensed_applicators").upsert({ ...newLicRec, user_id: session.user.id }).then(({ error }) => {
                     if (error) showToast("Failed to save applicator: " + error.message);
                   });
                   document.getElementById("newLicName").value = "";
@@ -3275,7 +3388,7 @@ export default function App() {
                   const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
                   const newNonLicRec = { id: nextId, name };
                   setNonLicensed(ops => [...ops, newNonLicRec]);
-                  supabase.from("non_licensed_applicators").upsert(newNonLicRec).then(({ error }) => {
+                  supabase.from("non_licensed_applicators").upsert({ ...newNonLicRec, user_id: session.user.id }).then(({ error }) => {
                     if (error) showToast("Failed to save applicator: " + error.message);
                   });
                   document.getElementById("newNonLicName").value = "";
@@ -3343,15 +3456,23 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                 <div style={sectionTitle}>Add Chemical Manually</div>
-                <button
-                  onClick={() => scanLabelRef.current.click()}
-                  disabled={scanLabelLoading}
-                  style={{ background:"#1a6fa8", color:"#fff", border:"none", borderRadius:6,
-                    padding:"7px 14px", cursor: scanLabelLoading ? "default" : "pointer",
-                    fontSize:13, fontWeight:700, opacity: scanLabelLoading ? 0.7 : 1 }}
-                >
-                  {scanLabelLoading ? "⏳ Scanning…" : "📷 Scan Label"}
-                </button>
+                {isPro ? (
+                  <button
+                    onClick={() => scanLabelRef.current.click()}
+                    disabled={scanLabelLoading}
+                    style={{ background:"#1a6fa8", color:"#fff", border:"none", borderRadius:6,
+                      padding:"7px 14px", cursor: scanLabelLoading ? "default" : "pointer",
+                      fontSize:13, fontWeight:700, opacity: scanLabelLoading ? 0.7 : 1 }}
+                  >
+                    {scanLabelLoading ? "⏳ Scanning…" : "📷 Scan Label"}
+                  </button>
+                ) : (
+                  <button disabled title="Pro feature"
+                    style={{ background:"#aaa", color:"#fff", border:"none", borderRadius:6,
+                      padding:"7px 14px", cursor:"not-allowed", fontSize:13, fontWeight:700, opacity:0.5 }}>
+                    📷 Scan Label 🔒
+                  </button>
+                )}
                 <input ref={scanLabelRef} type="file" accept="image/*" capture="environment" onChange={scanLabel} style={{ display:"none" }}/>
               </div>
               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
@@ -3507,10 +3628,10 @@ export default function App() {
 
       </div>
 
-      {/* ── Floating Sector Chat ─────────────────────────────────────── */}
+      {/* ── Floating Sector Chat (Pro only) ──────────────────────────── */}
 
       {/* Floating bubble — hidden when chat is open */}
-      {!chatOpen && (
+      {isPro && !chatOpen && (
         <button
           onClick={() => setChatOpen(true)}
           title="Application Sector Advisor"
@@ -3534,7 +3655,7 @@ export default function App() {
         >💬</button>
       )}
 
-      {chatOpen && (
+      {isPro && chatOpen && (
         <div style={{
           position: "fixed",
           bottom: isMobile ? 0 : 96,
