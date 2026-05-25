@@ -1235,9 +1235,6 @@ export default function App() {
   const [aiCompatLoading,  setAiCompatLoading]  = useState(false);
   const [aiSuggestions,    setAiSuggestions]    = useState([]);
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
-  const [aiChatQuery,      setAiChatQuery]      = useState("");
-  const [aiChatAnswer,     setAiChatAnswer]     = useState("");
-  const [aiChatLoading,    setAiChatLoading]    = useState(false);
   const compatDebounceRef      = useRef(null);
   const cropSafetyDebounceRef  = useRef(null);
   const adjuvantDebounceRef    = useRef(null);
@@ -1245,6 +1242,11 @@ export default function App() {
   const [aiCropSafetyLoading, setAiCropSafetyLoading] = useState(false);
   const [aiAdjuvants,         setAiAdjuvants]         = useState(null);
   const [aiAdjuvantsLoading,  setAiAdjuvantsLoading]  = useState(false);
+  const [chatOpen,     setChatOpen]     = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput,    setChatInput]    = useState("");
+  const [chatLoading,  setChatLoading]  = useState(false);
+  const chatBottomRef = useRef(null);
 
   const showToast = (message, type = "error") => {
     setToast({ message, type });
@@ -1259,28 +1261,68 @@ export default function App() {
     return JSON.parse(data.result);
   }
 
-  async function submitChat() {
-    setAiChatLoading(true);
-    setAiChatAnswer("");
+  async function submitSectorChat() {
+    const question = chatInput.trim();
+    if (!question || chatLoading) return;
+    setChatMessages(prev => [...prev, { role: "user", content: question }]);
+    setChatInput("");
+    setChatLoading(true);
     try {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 90);
-      const recentTickets = tickets
-        .filter(t => !t.date || t.date >= cutoff.toISOString().slice(0, 10))
-        .map(t => ({
-          date: t.date, crop: t.crop, targetPest: t.targetPest,
-          totalAcres: t.totalAcres,
-          fields: (t.selectedFields || []).map(f => f.name),
-          chemicals: (t.chemicals || []).map(c => ({ name: c.name, ratePerAcre: c.ratePerAcre, unit: c.unit })),
-        }));
-      const res = await callAI("chat-tickets", { question: aiChatQuery, ticketData: recentTickets });
-      setAiChatAnswer(res.answer);
+      // Slim ticket summaries to keep payload manageable
+      const ticketData = tickets.map(t => ({
+        num:        t.ticketNumber,
+        date:       t.date,
+        crop:       t.crop,
+        fields:     (t.selectedFields || []).map(f => f.name).join(", "),
+        acres:      t.totalAcres,
+        chemicals:  (t.chemicals || []).map(c =>
+                      `${c.name}${c.ratePerAcre ? ` @ ${c.ratePerAcre}${c.unit || ""}/ac` : ""}`).join("; "),
+        pest:       Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest || ""),
+        applicator: t.licensedApplicant,
+        equipment:  t.equipmentType,
+        start:      t.timeStart,
+        end:        t.timeEnd,
+      }));
+      const fieldData = fieldLibrary.map(f => ({ name: f.name, crop: f.crop, acres: f.acres }));
+      const chemData  = chemicals.map(c => ({ name: c.name, epa: c.epa, rei: c.rei, formType: c.formType }));
+      // Pass last 10 messages as history for multi-turn context
+      const history = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+      const { data, error } = await supabase.functions.invoke("ai-assistant", {
+        body: { action: "advisor", question, history, tickets: ticketData, fields: fieldData, chemicals: chemData },
+      });
+      if (error) throw new Error(error.message);
+      const parsed = JSON.parse(data.result);
+      setChatMessages(prev => [...prev, { role: "assistant", content: parsed.answer ?? "No response received." }]);
     } catch (e) {
-      setAiChatAnswer("Could not get an answer: " + e.message);
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Error: " + e.message }]);
     } finally {
-      setAiChatLoading(false);
+      setChatLoading(false);
     }
   }
+
+  function renderReportMarkdown(text) {
+    return text.split("\n").map((line, i) => {
+      if (line.startsWith("## "))
+        return <div key={i} style={{ fontSize:13, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:"1.5px solid #c8dbb0", paddingBottom:3, marginTop:12, marginBottom:4 }}>{line.slice(3)}</div>;
+      if (line.startsWith("### "))
+        return <div key={i} style={{ fontSize:12, fontWeight:700, color:"#3a6b1a", marginTop:8, marginBottom:2 }}>{line.slice(4)}</div>;
+      if (line.startsWith("---"))
+        return <hr key={i} style={{ border:"none", borderTop:"1px solid #c8dbb0", margin:"8px 0" }} />;
+      if (line.startsWith("* ") || line.startsWith("- "))
+        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, position:"relative", marginBottom:2 }}><span style={{ position:"absolute", left:2 }}>•</span>{line.slice(2)}</div>;
+      if (/^\d+\.\s/.test(line))
+        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, marginBottom:2 }}>{line}</div>;
+      if (line.trim() === "")
+        return <div key={i} style={{ height:4 }} />;
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return <div key={i} style={{ fontSize:12, color:"#333", lineHeight:1.6, marginBottom:1 }}>{parts.map((p,j) => p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2,-2)}</strong> : p)}</div>;
+    });
+  }
+
+  useEffect(() => {
+    if (chatOpen && chatBottomRef.current)
+      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, chatOpen]);
 
   // ── Load all data from Supabase on mount + Realtime subscription
   useEffect(() => {
@@ -2692,38 +2734,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* AI Chat over saved tickets */}
-            <div style={{ background:"#f0f6ff", border:"1.5px solid #b0c8e8", borderRadius:8, padding:"12px 14px", marginBottom:14 }}>
-              <div style={{ fontWeight:700, color:"#1a3a6a", fontSize:13, marginBottom:6 }}>Ask about your records…</div>
-              <div style={{ display:"flex", gap:8 }}>
-                <input
-                  value={aiChatQuery}
-                  onChange={e => setAiChatQuery(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !aiChatLoading && aiChatQuery.trim() && submitChat()}
-                  placeholder='e.g. "How much Roundup have I used this season?"'
-                  style={{...inp, flex:1, fontSize:14}}
-                />
-                <button
-                  disabled={!aiChatQuery.trim() || aiChatLoading}
-                  onClick={submitChat}
-                  style={{
-                    background: !aiChatQuery.trim() || aiChatLoading ? "#aaa" : "#1a3a6a",
-                    color:"#fff", border:"none", borderRadius:6,
-                    padding:"10px 16px", cursor: !aiChatQuery.trim() || aiChatLoading ? "default" : "pointer",
-                    fontWeight:700, fontSize:13, whiteSpace:"nowrap",
-                  }}
-                >{aiChatLoading ? "…" : "Ask"}</button>
-              </div>
-              {aiChatAnswer && (
-                <div style={{
-                  marginTop:10, fontSize:13, color:"#222", lineHeight:1.6,
-                  background:"#fff", border:"1px solid #c8d8f0", borderRadius:5, padding:"8px 12px"
-                }}>
-                  {aiChatAnswer}
-                </div>
-              )}
-            </div>
-
             {tickets.length === 0 ? (
               <div style={{ textAlign:"center", padding:60, color:"#999", fontSize:14 }}>
                 No tickets yet. Create one using the New Ticket tab.
@@ -3496,6 +3506,154 @@ export default function App() {
         )}
 
       </div>
+
+      {/* ── Floating Sector Chat ─────────────────────────────────────── */}
+
+      <button
+        onClick={() => setChatOpen(o => !o)}
+        title="Application Sector Advisor"
+        style={{
+          position: "fixed",
+          bottom: isMobile ? 16 : 28,
+          right: isMobile ? 16 : 28,
+          zIndex: 1000,
+          width: isMobile ? 52 : 58,
+          height: isMobile ? 52 : 58,
+          borderRadius: "50%",
+          background: chatOpen
+            ? "linear-gradient(135deg,#1e4a08,#2a6610)"
+            : "linear-gradient(135deg,#2a5c0f,#4aaa1a)",
+          color: "#fff",
+          border: "none",
+          cursor: "pointer",
+          fontSize: isMobile ? 22 : 26,
+          boxShadow: "0 4px 18px rgba(42,92,15,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "background 0.2s",
+        }}
+        aria-label={chatOpen ? "Close advisor chat" : "Open advisor chat"}
+      >
+        {chatOpen ? "×" : "💬"}
+      </button>
+
+      {chatOpen && (
+        <div style={{
+          position: "fixed",
+          bottom: isMobile ? 0 : 96,
+          right: isMobile ? 0 : 28,
+          width: isMobile ? "100vw" : 380,
+          height: isMobile ? "70vh" : 520,
+          zIndex: 999,
+          background: "#fff",
+          borderRadius: isMobile ? "16px 16px 0 0" : 10,
+          boxShadow: "0 8px 40px rgba(0,0,0,0.22)",
+          border: "1.5px solid #c8dbb0",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          fontFamily: "'Georgia','Times New Roman',serif",
+        }}>
+          <div style={{
+            background: "linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)",
+            padding: "12px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexShrink: 0,
+          }}>
+            <div>
+              <div style={{ color: "#a8d878", fontSize: 9, letterSpacing: "0.15em", fontWeight: 700, textTransform: "uppercase" }}>
+                AI ADVISOR
+              </div>
+              <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>
+                Application Sector Advisor
+              </div>
+            </div>
+            <button
+              onClick={() => setChatOpen(false)}
+              style={{ background: "none", border: "none", color: "#a8d878", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 0 }}
+              aria-label="Close"
+            >×</button>
+          </div>
+
+          <div style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "12px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}>
+            {chatMessages.length === 0 && (
+              <div style={{ color: "#888", fontSize: 12, textAlign: "center", marginTop: 24, lineHeight: 1.7 }}>
+                Ask about your records — fields sprayed, chemicals used, dates, rates, applicators, and more.
+              </div>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} style={{ alignSelf: msg.role === "user" ? "flex-end" : "flex-start", maxWidth: "90%" }}>
+                {msg.role === "user" ? (
+                  <div style={{
+                    background: "#2a5c0f", color: "#fff",
+                    borderRadius: "12px 12px 2px 12px",
+                    padding: "8px 12px", fontSize: 13, lineHeight: 1.5,
+                  }}>
+                    {msg.content}
+                  </div>
+                ) : (
+                  <div style={{
+                    background: "#f4fbee",
+                    border: "1.5px solid #c8dbb0",
+                    borderRadius: "2px 12px 12px 12px",
+                    padding: "10px 12px",
+                  }}>
+                    {renderReportMarkdown(msg.content)}
+                  </div>
+                )}
+              </div>
+            ))}
+            {chatLoading && (
+              <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 12, fontStyle: "italic" }}>
+                Preparing report…
+              </div>
+            )}
+            <div ref={chatBottomRef} />
+          </div>
+
+          <div style={{
+            borderTop: "1.5px solid #c8dbb0",
+            padding: "10px 10px",
+            display: "flex",
+            gap: 8,
+            flexShrink: 0,
+            background: "#f9fdf5",
+          }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && submitSectorChat()}
+              placeholder="e.g. When was Old Place sprayed? What did I put on the corn?"
+              disabled={chatLoading}
+              style={{ ...inp, flex: 1, fontSize: 13, padding: "8px 10px" }}
+            />
+            <button
+              onClick={submitSectorChat}
+              disabled={!chatInput.trim() || chatLoading}
+              style={{
+                background: !chatInput.trim() || chatLoading ? "#aaa" : "#2a5c0f",
+                color: "#fff", border: "none", borderRadius: 6,
+                padding: "8px 14px",
+                cursor: !chatInput.trim() || chatLoading ? "default" : "pointer",
+                fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", flexShrink: 0,
+              }}
+            >
+              {chatLoading ? "…" : "Send"}
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

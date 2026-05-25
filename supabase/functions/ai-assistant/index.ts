@@ -153,6 +153,52 @@ Deno.serve(async (req) => {
       break;
     }
 
+    case "advisor": {
+      const { question, history, tickets: tkts, fields: flds, chemicals: chems } = payload as {
+        question: string;
+        history: { role: string; content: string }[];
+        tickets: unknown[];
+        fields: unknown[];
+        chemicals: unknown[];
+      };
+      const messages = [
+        ...(history || []).map((m: { role: string; content: string }) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+        {
+          role: "user" as const,
+          content:
+            `Farm records snapshot:\n` +
+            `FIELDS: ${JSON.stringify(flds)}\n` +
+            `CHEMICALS LIBRARY: ${JSON.stringify(chems)}\n` +
+            `APPLICATION TICKETS: ${JSON.stringify(tkts)}\n\n` +
+            `Question: ${question}`,
+        },
+      ];
+      const advisorResp = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        system:
+          'You are a farm records advisor with full access to this operation\'s application tickets, field library, and chemical library. ' +
+          'Answer questions by looking up the actual records provided — field names, dates sprayed, chemicals used, rates, applicators, crops, and acres. ' +
+          'Be specific: quote field names, ticket numbers, dates, product names, and rates directly from the data. ' +
+          'If a field or ticket matching the question exists in the data, always report the details. ' +
+          'Use plain, direct language suitable for a farmer. No bullet lists of clarifying questions — just answer from the data. ' +
+          'If the records genuinely do not contain the answer, say so in one sentence. ' +
+          'Format your response in clean markdown (bold key values, use bullet lists for multiple items).',
+        messages,
+      });
+      const answerText = advisorResp.content
+        .filter((b: { type: string }) => b.type === "text")
+        .map((b: { type: string; text?: string }) => b.text ?? "")
+        .join("");
+      return new Response(
+        JSON.stringify({ result: JSON.stringify({ answer: answerText }) }),
+        { headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
     case "scan-label": {
       const { imageBase64, mediaType, crops } = payload as { imageBase64: string; mediaType: string; crops?: string[] };
       const cropContext = crops && crops.length > 0
@@ -233,6 +279,50 @@ Deno.serve(async (req) => {
         `Web search query: "${query}"\n` +
         `Return exactly 2 results as a JSON array.`;
       break;
+    }
+
+    case "sector-chat": {
+      const { question, history } = payload as {
+        question: string;
+        history: { role: "user" | "assistant"; content: string }[];
+      };
+      const sectorSystem =
+        'You are a senior agricultural application sector advisor specializing in South Texas and Rio Grande Valley crop production (cotton, corn, grain sorghum). ' +
+        'Always respond with a formal, structured report using these exact markdown sections:\n\n' +
+        '## Summary\n' +
+        'One to three sentences with the direct answer.\n\n' +
+        '### Key Insights\n' +
+        'Bullet points with the most actionable findings.\n\n' +
+        '### Supporting Detail\n' +
+        'Elaboration, data, regional context, or caveats.\n\n' +
+        '### Recommendations\n' +
+        'Numbered list of concrete next steps for the operator.\n\n' +
+        '---\n' +
+        '*Report prepared by Application Sector Advisor*\n\n' +
+        'Use precise agronomic language. Cite extension sources where relevant. Never use a conversational tone.';
+
+      const sectorMessages = [
+        ...(history || []),
+        { role: "user" as const, content: question as string },
+      ];
+
+      const sectorResp = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        system: sectorSystem,
+        messages: sectorMessages,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+      } as Parameters<typeof client.messages.create>[0]);
+
+      const answerText = sectorResp.content
+        .filter((b: { type: string }) => b.type === "text")
+        .map((b: { type: string; text?: string }) => b.text ?? "")
+        .join("\n");
+
+      return new Response(
+        JSON.stringify({ answer: answerText }),
+        { headers: { ...CORS, "Content-Type": "application/json" } },
+      );
     }
 
     default:
