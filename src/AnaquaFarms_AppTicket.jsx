@@ -1183,6 +1183,16 @@ export default function App() {
   const [authWorking,  setAuthWorking]  = useState(false);
   const [userPlan,     setUserPlan]     = useState("basic");
 
+  // ── Org state
+  const [currentOrg,    setCurrentOrg]    = useState(null);
+  const [userRole,      setUserRole]      = useState(null);
+  const [orgMembers,    setOrgMembers]    = useState([]);
+  const [showOrgCreate, setShowOrgCreate] = useState(false);
+  const [newOrgName,    setNewOrgName]    = useState("");
+  const [orgWorking,    setOrgWorking]    = useState(false);
+  const [inviteEmail,   setInviteEmail]   = useState("");
+  const [inviteRole,    setInviteRole]    = useState("member");
+
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
   const [equipment,     setEquipment]     = useState([]);
@@ -1280,7 +1290,7 @@ export default function App() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (!session) { setUserPlan("basic"); }
+      if (!session) { setUserPlan("basic"); setCurrentOrg(null); setUserRole(null); setOrgMembers([]); setShowOrgCreate(false); }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -1290,6 +1300,36 @@ export default function App() {
     supabase.from("profiles").select("plan").eq("id", session.user.id).single()
       .then(({ data }) => { if (data) setUserPlan(data.plan); });
   }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    // Claim pending invites first, then load org membership
+    supabase.rpc("claim_pending_invites").then(() => {
+      supabase.from("org_memberships")
+        .select("org_id, role, organizations(id, name)")
+        .eq("user_id", session.user.id)
+        .eq("status", "active")
+        .limit(1)
+        .single()
+        .then(({ data }) => {
+          if (data?.organizations) {
+            setCurrentOrg(data.organizations);
+            setUserRole(data.role);
+          } else {
+            setShowOrgCreate(true);
+          }
+        });
+    });
+  }, [session]);
+
+  useEffect(() => {
+    if (!currentOrg) return;
+    supabase.from("org_memberships")
+      .select("id, role, status, invited_email, user_id")
+      .eq("org_id", currentOrg.id)
+      .order("created_at")
+      .then(({ data }) => { if (data) setOrgMembers(data); });
+  }, [currentOrg]);
 
   async function handleSignIn() {
     setAuthWorking(true); setAuthError("");
@@ -1306,7 +1346,8 @@ export default function App() {
     setAuthWorking(false);
   }
 
-  const isPro = userPlan === "pro";
+  const isPro    = userPlan === "pro";
+  const isOwner  = userRole === "owner";
 
   async function submitSectorChat() {
     const question = chatInput.trim();
@@ -1373,7 +1414,7 @@ export default function App() {
 
   // ── Load all data from Supabase on session change + Realtime subscription
   useEffect(() => {
-    if (!session) return;
+    if (!session || !currentOrg) return;
 
     async function loadAll() {
       setDbLoading(true);
@@ -1415,7 +1456,7 @@ export default function App() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [session?.user?.id]);
+  }, [currentOrg?.id]);
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
@@ -1433,7 +1474,7 @@ export default function App() {
 
   const updateCropSeason = async (cropName, season) => {
     setCropSeasons(s => ({ ...s, [cropName]: season }));
-    await supabase.from("crop_seasons").upsert({ crop_name: cropName, season, user_id: session.user.id });
+    await supabase.from("crop_seasons").upsert({ crop_name: cropName, season, user_id: session.user.id, org_id: currentOrg?.id });
   };
 
   const addChemRow    = (chemId) => {
@@ -1649,14 +1690,14 @@ export default function App() {
       const finalTicket = { ...newTicket, ticketNumber: existingNum };
       setTickets(prev => prev.map(x => x.id === editingId ? finalTicket : x));
       const { error } = await supabase.from("tickets")
-        .update({ ...dbRow(finalTicket), ticket_number: existingNum, user_id: session.user.id })
+        .update({ ...dbRow(finalTicket), ticket_number: existingNum, user_id: session.user.id, org_id: currentOrg?.id })
         .eq("id", editingId);
       if (error) { showToast("Failed to save ticket: " + error.message); return null; }
       assignedTicketNumber = existingNum;
     } else {
       // Let the DB sequence assign ticket_number — omit it from the insert payload
       const { data, error } = await supabase.from("tickets")
-        .insert({ ...dbRow(newTicket), user_id: session.user.id })
+        .insert({ ...dbRow(newTicket), user_id: session.user.id, org_id: currentOrg?.id })
         .select("id, ticket_number")
         .single();
       if (error) { showToast("Failed to save ticket: " + error.message); return null; }
@@ -1698,7 +1739,7 @@ export default function App() {
         imported++;
       });
       setFieldLibrary(fl => [...fl, ...added]);
-      supabase.from("fields").upsert(added.map(a => ({ ...a, user_id: session.user.id }))).then(({ error }) => {
+      supabase.from("fields").upsert(added.map(a => ({ ...a, user_id: session.user.id, org_id: currentOrg?.id }))).then(({ error }) => {
         if (error) showToast("Failed to import fields: " + error.message);
       });
       setFieldUpMsg(`✓ Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
@@ -1714,7 +1755,7 @@ export default function App() {
     const autoTraits = NON_GMO_CROPS.includes(newField.crop) ? ["non-gmo"] : (newField.traits || []);
     const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"", traits: autoTraits };
     setFieldLibrary(fl => [...fl, newFieldRec]);
-    supabase.from("fields").upsert({ ...newFieldRec, user_id: session.user.id }).then(({ error }) => {
+    supabase.from("fields").upsert({ ...newFieldRec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to save field: " + error.message);
     });
     setNewField({ name:"", acres:"", crop:"", traits:[] });
@@ -1729,7 +1770,7 @@ export default function App() {
     if (!editFieldDraft.name || !editFieldDraft.acres) return alert("Field name and acres are required.");
     const updated = { ...editFieldDraft, acres: parseFloat(editFieldDraft.acres) };
     setFieldLibrary(fl => fl.map(f => f.id === updated.id ? updated : f));
-    supabase.from("fields").upsert({ ...updated, user_id: session.user.id }).then(({ error }) => {
+    supabase.from("fields").upsert({ ...updated, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to update field: " + error.message);
       else showToast("Field saved.", "success");
     });
@@ -1810,7 +1851,7 @@ export default function App() {
         imported++;
       });
       setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, container_size: a.containerSize ?? null, user_id: session.user.id }))).then(({ error }) => {
+      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, container_size: a.containerSize ?? null, user_id: session.user.id, org_id: currentOrg?.id }))).then(({ error }) => {
         if (error) showToast("Failed to import chemicals: " + error.message);
       });
       setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
@@ -1828,7 +1869,7 @@ export default function App() {
     const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
     const { formType: ft, containerSize: cs, ...chemRest } = newChemRec;
-    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, user_id: session.user.id }).then(({ error }) => {
+    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to save chemical: " + error.message);
     });
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
@@ -1847,7 +1888,7 @@ export default function App() {
     };
     setChemicals(c => c.map(x => x.id === updated.id ? updated : x));
     const { formType, containerSize, ...rest } = updated;
-    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, user_id: session.user.id }).then(({ error }) => {
+    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to update chemical: " + error.message);
       else showToast("Chemical saved.", "success");
     });
@@ -1911,6 +1952,60 @@ export default function App() {
     </div>
   );
 
+  if (showOrgCreate && !currentOrg) return (
+    <div style={{ minHeight:"100vh", background:"#f0f7e8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Georgia','Times New Roman',serif" }}>
+      <div style={{ background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:10, padding:"32px 32px 28px", width:360, boxShadow:"0 4px 24px rgba(42,92,15,0.13)" }}>
+        <div style={{ textAlign:"center", marginBottom:20 }}>
+          <div style={{ fontSize:28 }}>🌾</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>Create Your Organization</div>
+          <div style={{ fontSize:12, color:"#888", marginTop:4, lineHeight:1.5 }}>
+            Name your farm or business. Team members you invite will share the same data.
+          </div>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <input
+            type="text"
+            placeholder="e.g. Anaqua Farms"
+            value={newOrgName}
+            onChange={e => setNewOrgName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !orgWorking && newOrgName.trim() && (async () => {
+              setOrgWorking(true);
+              const { data: orgId, error } = await supabase.rpc("create_organization", { org_name: newOrgName.trim() });
+              if (error) { alert(error.message); setOrgWorking(false); return; }
+              setCurrentOrg({ id: orgId, name: newOrgName.trim() });
+              setUserRole("owner");
+              setShowOrgCreate(false);
+              setOrgWorking(false);
+            })()}
+            style={{ border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", fontSize:14, fontFamily:"inherit", outline:"none" }}
+          />
+          <button
+            onClick={async () => {
+              if (!newOrgName.trim() || orgWorking) return;
+              setOrgWorking(true);
+              const { data: orgId, error } = await supabase.rpc("create_organization", { org_name: newOrgName.trim() });
+              if (error) { alert(error.message); setOrgWorking(false); return; }
+              setCurrentOrg({ id: orgId, name: newOrgName.trim() });
+              setUserRole("owner");
+              setShowOrgCreate(false);
+              setOrgWorking(false);
+            }}
+            disabled={orgWorking || !newOrgName.trim()}
+            style={{
+              background: orgWorking || !newOrgName.trim() ? "#aaa" : "#2a5c0f",
+              color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
+              fontWeight:700, fontSize:14, cursor: orgWorking || !newOrgName.trim() ? "default" : "pointer", fontFamily:"inherit"
+            }}>
+            {orgWorking ? "Creating…" : "Create Organization"}
+          </button>
+          <button onClick={() => supabase.auth.signOut()} style={{ background:"none", border:"none", color:"#999", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (dbLoading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
       <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
@@ -1944,6 +2039,7 @@ export default function App() {
             {!isMobile && <div style={{ color:"#c8e8a0", fontSize:12, marginTop:2 }}>(956) 465-6430 · (956) 535-0482</div>}
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            {!isMobile && currentOrg && <span style={{ color:"#a8d878", fontSize:11 }}>{currentOrg.name}</span>}
             {!isMobile && <span style={{ color:"#a8d878", fontSize:11 }}>{isPro ? "⭐ Pro" : "Basic"}</span>}
             <button onClick={() => supabase.auth.signOut()} style={{
               background:"none", border:"1.5px solid #a8d878", borderRadius:5,
@@ -1953,7 +2049,7 @@ export default function App() {
         </div>
         {/* Tab nav: scrollable row on mobile */}
         <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
-          {[["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"]].map(([v,l]) => {
+          {[["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"],["team","👥 Team"]].map(([v,l]) => {
             const locked = v === "research" && !isPro;
             return (
               <button key={v} onClick={() => !locked && setView(v)}
@@ -3267,7 +3363,7 @@ export default function App() {
             {/* Equipment */}
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Equipment Library</div>
-              <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
+              {isOwner && <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
                   <label style={labelStyle}>Equipment Name</label>
                   <input id="newEquipName" style={inp} placeholder="e.g. 4440 Sprayer"/>
@@ -3285,7 +3381,7 @@ export default function App() {
                   const nextId = equipment.length ? Math.max(...equipment.map(e=>e.id))+1 : 1;
                   const newEquipRec = { id: nextId, name, acresPerHour: aph };
                   setEquipment(eq => [...eq, newEquipRec]);
-                  supabase.from("equipment").upsert({ id: newEquipRec.id, name: newEquipRec.name, acres_per_hour: aph, user_id: session.user.id }).then(({ error }) => {
+                  supabase.from("equipment").upsert({ id: newEquipRec.id, name: newEquipRec.name, acres_per_hour: aph, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
                     if (error) showToast("Failed to save equipment: " + error.message);
                   });
                   nameEl.value = "";
@@ -3294,7 +3390,7 @@ export default function App() {
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
-              </div>
+              </div>}
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Equipment Name</th>
@@ -3307,14 +3403,14 @@ export default function App() {
                       <td style={{ ...td, fontWeight:600 }}>{eq.name}</td>
                       <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{eq.acresPerHour || 75}</td>
                       <td style={td}>
-                        <button onClick={() => {
+                        {isOwner && <button onClick={() => {
                           setEquipment(e=>e.filter(x=>x.id!==eq.id));
                           supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => {
                             if (error) showToast("Failed to delete equipment: " + error.message);
                           });
                         }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}>×</button>
+                        }}>×</button>}
                       </td>
                     </tr>
                   ))}
@@ -3328,7 +3424,7 @@ export default function App() {
             {/* Licensed Applicators */}
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Licensed Applicators</div>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
+              {isOwner && <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
                   <label style={labelStyle}>Name</label>
                   <input id="newLicName" style={inp} placeholder="Full name"/>
@@ -3339,7 +3435,7 @@ export default function App() {
                   const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
                   const newLicRec = { id: nextId, name, license: "" };
                   setLicensed(ops => [...ops, newLicRec]);
-                  supabase.from("licensed_applicators").upsert({ ...newLicRec, user_id: session.user.id }).then(({ error }) => {
+                  supabase.from("licensed_applicators").upsert({ ...newLicRec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
                     if (error) showToast("Failed to save applicator: " + error.message);
                   });
                   document.getElementById("newLicName").value = "";
@@ -3347,7 +3443,7 @@ export default function App() {
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
-              </div>
+              </div>}
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
@@ -3358,14 +3454,14 @@ export default function App() {
                     <tr key={op.id}>
                       <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
                       <td style={td}>
-                        <button onClick={() => {
+                        {isOwner && <button onClick={() => {
                           setLicensed(ops=>ops.filter(x=>x.id!==op.id));
                           supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => {
                             if (error) showToast("Failed to delete applicator: " + error.message);
                           });
                         }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}>×</button>
+                        }}>×</button>}
                       </td>
                     </tr>
                   ))}
@@ -3379,7 +3475,7 @@ export default function App() {
             {/* Non-Licensed Applicators */}
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Non-Licensed Applicators <span style={{ fontWeight:400, fontSize:10, color:"#888", textTransform:"none", letterSpacing:0 }}>working under license</span></div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
+              {isOwner && <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
                   <label style={labelStyle}>Name</label>
                   <input id="newNonLicName" style={inp} placeholder="Full name"/>
@@ -3390,7 +3486,7 @@ export default function App() {
                   const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
                   const newNonLicRec = { id: nextId, name };
                   setNonLicensed(ops => [...ops, newNonLicRec]);
-                  supabase.from("non_licensed_applicators").upsert({ ...newNonLicRec, user_id: session.user.id }).then(({ error }) => {
+                  supabase.from("non_licensed_applicators").upsert({ ...newNonLicRec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
                     if (error) showToast("Failed to save applicator: " + error.message);
                   });
                   document.getElementById("newNonLicName").value = "";
@@ -3398,7 +3494,7 @@ export default function App() {
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
-              </div>
+              </div>}
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
@@ -3409,14 +3505,14 @@ export default function App() {
                     <tr key={p.id}>
                       <td style={{ ...td, fontWeight:600 }}>{p.name}</td>
                       <td style={td}>
-                        <button onClick={() => {
+                        {isOwner && <button onClick={() => {
                           setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
                           supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
                             if (error) showToast("Failed to delete applicator: " + error.message);
                           });
                         }} style={{
                           background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}>×</button>
+                        }}>×</button>}
                       </td>
                     </tr>
                   ))}
@@ -3615,8 +3711,8 @@ export default function App() {
                           <td style={td}>{c.unit}{unitBadge}</td>
                           <td style={td}>{containerCell}</td>
                           <td style={{ ...td, whiteSpace:"nowrap" }}>
-                            <button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
-                            <button onClick={() => deleteChem(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                            {isOwner && <><button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
+                            <button onClick={() => deleteChem(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button></>}
                           </td>
                         </tr>
                       );
@@ -3625,6 +3721,160 @@ export default function App() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ══ TEAM MANAGER ══════════════════════════════════════════════════════ */}
+        {view === "team" && (
+          <div>
+            {/* Org name header */}
+            <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+              <div>
+                <div style={{ ...sectionTitle, marginBottom:2 }}>👥 {currentOrg?.name}</div>
+                <div style={{ fontSize:11, color:"#888" }}>
+                  {session?.user?.email} · {userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : "Viewer"}
+                </div>
+              </div>
+              {isOwner && (() => {
+                const [editing, setEditing] = React.useState(false);
+                const [draft,   setDraft]   = React.useState(currentOrg?.name || "");
+                return editing ? (
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <input value={draft} onChange={e=>setDraft(e.target.value)}
+                      style={{ ...inp, fontSize:12, padding:"4px 8px", width:160 }} />
+                    <button onClick={async () => {
+                      if (!draft.trim()) return;
+                      const { error } = await supabase.from("organizations").update({ name: draft.trim() }).eq("id", currentOrg.id);
+                      if (error) showToast(error.message);
+                      else { setCurrentOrg(o => ({ ...o, name: draft.trim() })); setEditing(false); }
+                    }} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
+                    <button onClick={() => setEditing(false)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setDraft(currentOrg?.name || ""); setEditing(true); }}
+                    style={{ background:"none", border:"1.5px solid #c8dbb0", borderRadius:5, color:"#2a5c0f", fontSize:12, padding:"4px 10px", cursor:"pointer", fontWeight:600 }}>
+                    Rename
+                  </button>
+                );
+              })()}
+            </div>
+
+            {/* Members list */}
+            <div style={{ ...card, padding: isMobile ? "10px 10px" : "14px 16px", marginBottom:10 }}>
+              <div style={sectionTitle}>Members</div>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                <thead>
+                  <tr style={{ background:"#f0f7e8" }}>
+                    {["Email","Role","Status", isOwner ? "Remove" : ""].filter(Boolean).map(h => (
+                      <th key={h} style={{ padding:"6px 8px", textAlign:"left", fontWeight:700, color:"#2a5c0f", borderBottom:"1.5px solid #c8dbb0" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {orgMembers.map(m => (
+                    <tr key={m.id} style={{ borderBottom:"1px solid #e8f0dc" }}>
+                      <td style={{ padding:"6px 8px", color: m.status === "pending" ? "#aaa" : "#333" }}>
+                        {m.invited_email || "—"}
+                      </td>
+                      <td style={{ padding:"6px 8px" }}>
+                        {isOwner && m.user_id !== session.user.id ? (
+                          <select value={m.role} onChange={async e => {
+                            const newRole = e.target.value;
+                            const { error } = await supabase.from("org_memberships").update({ role: newRole }).eq("id", m.id);
+                            if (error) showToast(error.message);
+                            else setOrgMembers(prev => prev.map(x => x.id === m.id ? { ...x, role: newRole } : x));
+                          }} style={{ border:"1px solid #c8dbb0", borderRadius:4, fontSize:11, padding:"2px 4px", fontFamily:"inherit" }}>
+                            <option value="owner">Owner</option>
+                            <option value="member">Member</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                        ) : (
+                          <span style={{ fontWeight: m.user_id === session.user.id ? 700 : 400 }}>{m.role}</span>
+                        )}
+                      </td>
+                      <td style={{ padding:"6px 8px" }}>
+                        <span style={{
+                          background: m.status === "active" ? "#e8f5dc" : "#fff3cc",
+                          color: m.status === "active" ? "#2a5c0f" : "#7a5000",
+                          borderRadius:4, padding:"2px 6px", fontSize:10, fontWeight:700
+                        }}>{m.status}</span>
+                      </td>
+                      {isOwner && (
+                        <td style={{ padding:"6px 8px" }}>
+                          {m.user_id !== session.user.id ? (
+                            <button onClick={async () => {
+                              if (!confirm(`Remove ${m.invited_email || "this member"}?`)) return;
+                              const { error } = await supabase.from("org_memberships").delete().eq("id", m.id);
+                              if (error) showToast(error.message);
+                              else setOrgMembers(prev => prev.filter(x => x.id !== m.id));
+                            }} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                          ) : <span style={{ color:"#ccc", fontSize:12 }}>you</span>}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Invite form — owner only */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px" }}>
+                <div style={sectionTitle}>Invite Someone</div>
+                <div style={{ fontSize:11, color:"#666", marginBottom:10, lineHeight:1.5 }}>
+                  Enter their email below, then send them the app link. When they sign up, they will automatically join <strong>{currentOrg?.name}</strong> and see all shared data.
+                </div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
+                  <div>
+                    <div style={{ fontSize:11, color:"#666", marginBottom:3 }}>Email</div>
+                    <input
+                      type="email"
+                      placeholder="coworker@email.com"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      style={{ ...inp, width: isMobile ? "100%" : 200 }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, color:"#666", marginBottom:3 }}>Role</div>
+                    <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
+                      style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"7px 8px", fontSize:13, fontFamily:"inherit", background:"#fff" }}>
+                      <option value="member">Member — can create tickets, read settings</option>
+                      <option value="viewer">Viewer — read-only</option>
+                      <option value="owner">Owner — full access</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const email = inviteEmail.trim().toLowerCase();
+                      if (!email) return;
+                      const { error } = await supabase.from("org_memberships").insert({
+                        org_id: currentOrg.id,
+                        invited_email: email,
+                        role: inviteRole,
+                        status: "pending",
+                        user_id: null,
+                      });
+                      if (error) showToast(error.message);
+                      else {
+                        showToast(`Invite saved for ${email}`, "success");
+                        setInviteEmail("");
+                        setOrgMembers(prev => [...prev, { id: Date.now(), org_id: currentOrg.id, invited_email: email, role: inviteRole, status: "pending", user_id: null }]);
+                      }
+                    }}
+                    disabled={!inviteEmail.trim()}
+                    style={{ background: inviteEmail.trim() ? "#2a5c0f" : "#aaa", color:"#fff", border:"none", borderRadius:5, padding:"8px 16px", cursor: inviteEmail.trim() ? "pointer" : "default", fontWeight:700, fontSize:13, fontFamily:"inherit" }}>
+                    Send Invite
+                  </button>
+                </div>
+                <div style={{ marginTop:12, background:"#f0f7e8", borderRadius:6, padding:"10px 12px", fontSize:11, color:"#444" }}>
+                  <strong>App link to share:</strong>{" "}
+                  <a href="https://fancy-heliotrope-5cae85.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color:"#2a5c0f" }}>
+                    fancy-heliotrope-5cae85.netlify.app
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
