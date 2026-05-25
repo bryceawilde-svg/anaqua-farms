@@ -3509,34 +3509,30 @@ export default function App() {
 
       {/* ── Floating Sector Chat ─────────────────────────────────────── */}
 
-      <button
-        onClick={() => setChatOpen(o => !o)}
-        title="Application Sector Advisor"
-        style={{
-          position: "fixed",
-          bottom: isMobile ? 16 : 28,
-          right: isMobile ? 16 : 28,
-          zIndex: 1000,
-          width: isMobile ? 52 : 58,
-          height: isMobile ? 52 : 58,
-          borderRadius: "50%",
-          background: chatOpen
-            ? "linear-gradient(135deg,#1e4a08,#2a6610)"
-            : "linear-gradient(135deg,#2a5c0f,#4aaa1a)",
-          color: "#fff",
-          border: "none",
-          cursor: "pointer",
-          fontSize: isMobile ? 22 : 26,
-          boxShadow: "0 4px 18px rgba(42,92,15,0.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "background 0.2s",
-        }}
-        aria-label={chatOpen ? "Close advisor chat" : "Open advisor chat"}
-      >
-        {chatOpen ? "×" : "💬"}
-      </button>
+      {/* Floating bubble — hidden when chat is open */}
+      {!chatOpen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          title="Application Sector Advisor"
+          style={{
+            position: "fixed",
+            bottom: isMobile ? 16 : 28,
+            right: isMobile ? 16 : 28,
+            zIndex: 1000,
+            width: isMobile ? 52 : 58,
+            height: isMobile ? 52 : 58,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg,#2a5c0f,#4aaa1a)",
+            color: "#fff",
+            border: "none",
+            cursor: "pointer",
+            fontSize: isMobile ? 22 : 26,
+            boxShadow: "0 4px 18px rgba(42,92,15,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          aria-label="Open advisor chat"
+        >💬</button>
+      )}
 
       {chatOpen && (
         <div style={{
@@ -3544,8 +3540,8 @@ export default function App() {
           bottom: isMobile ? 0 : 96,
           right: isMobile ? 0 : 28,
           width: isMobile ? "100vw" : 380,
-          height: isMobile ? "85vh" : 520,
-          zIndex: 999,
+          height: isMobile ? "90vh" : 520,
+          zIndex: 1000,
           background: "#fff",
           borderRadius: isMobile ? "16px 16px 0 0" : 10,
           boxShadow: "0 8px 40px rgba(0,0,0,0.22)",
@@ -3555,6 +3551,7 @@ export default function App() {
           overflow: "hidden",
           fontFamily: "'Georgia','Times New Roman',serif",
         }}>
+          {/* Header */}
           <div style={{
             background: "linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)",
             padding: "12px 14px",
@@ -3564,31 +3561,25 @@ export default function App() {
             flexShrink: 0,
           }}>
             <div>
-              <div style={{ color: "#a8d878", fontSize: 9, letterSpacing: "0.15em", fontWeight: 700, textTransform: "uppercase" }}>
-                AI ADVISOR
-              </div>
-              <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>
-                Application Sector Advisor
-              </div>
+              <div style={{ color: "#a8d878", fontSize: 9, letterSpacing: "0.15em", fontWeight: 700, textTransform: "uppercase" }}>AI ADVISOR</div>
+              <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>Application Sector Advisor</div>
             </div>
             <button
               onClick={() => setChatOpen(false)}
-              style={{ background: "none", border: "none", color: "#a8d878", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 0 }}
+              style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", fontSize: 18,
+                cursor: "pointer", lineHeight: 1, padding: "4px 9px", borderRadius: 6, fontWeight: 700 }}
               aria-label="Close"
-            >×</button>
+            >✕</button>
           </div>
 
+          {/* Messages */}
           <div style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: "12px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
+            flex: 1, overflowY: "auto", padding: "14px 12px",
+            display: "flex", flexDirection: "column", gap: 10,
           }}>
             {chatMessages.length === 0 && (
-              <div style={{ color: "#888", fontSize: 12, textAlign: "center", marginTop: 24, lineHeight: 1.7 }}>
-                Ask about your records — fields sprayed, chemicals used, dates, rates, applicators, and more.
+              <div style={{ color: "#888", fontSize: 13, textAlign: "center", marginTop: 32, lineHeight: 1.8, padding: "0 16px" }}>
+                Ask about your records — fields sprayed, chemicals used, dates, rates, and more.
               </div>
             )}
             {chatMessages.map((msg, i) => (
@@ -3596,60 +3587,67 @@ export default function App() {
                 {msg.role === "user" ? (
                   <div style={{
                     background: "#2a5c0f", color: "#fff",
-                    borderRadius: "12px 12px 2px 12px",
-                    padding: "8px 12px", fontSize: 13, lineHeight: 1.5,
-                  }}>
-                    {msg.content}
-                  </div>
+                    borderRadius: "16px 16px 2px 16px",
+                    padding: "9px 14px", fontSize: 14, lineHeight: 1.5,
+                  }}>{msg.content}</div>
                 ) : (
                   <div style={{
-                    background: "#f4fbee",
-                    border: "1.5px solid #c8dbb0",
-                    borderRadius: "2px 12px 12px 12px",
-                    padding: "10px 12px",
-                  }}>
-                    {renderReportMarkdown(msg.content)}
-                  </div>
+                    background: "#f4fbee", border: "1.5px solid #c8dbb0",
+                    borderRadius: "2px 16px 16px 16px", padding: "10px 12px",
+                  }}>{renderReportMarkdown(msg.content)}</div>
                 )}
               </div>
             ))}
             {chatLoading && (
-              <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 12, fontStyle: "italic" }}>
-                Preparing report…
+              <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 13, fontStyle: "italic", padding: "4px 8px" }}>
+                Thinking…
               </div>
             )}
             <div ref={chatBottomRef} />
           </div>
 
+          {/* Input row — send button inside the pill */}
           <div style={{
             borderTop: "1.5px solid #c8dbb0",
-            padding: "10px 10px",
-            display: "flex",
-            gap: 8,
+            padding: isMobile ? "10px 12px 18px" : "10px 12px",
             flexShrink: 0,
             background: "#f9fdf5",
           }}>
-            <input
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !e.shiftKey && submitSectorChat()}
-              placeholder={isMobile ? "Ask about your records…" : "e.g. When was Old Place sprayed? What did I put on the corn?"}
-              disabled={chatLoading}
-              style={{ ...inp, flex: 1, fontSize: 16, padding: "8px 10px" }}
-            />
-            <button
-              onClick={submitSectorChat}
-              disabled={!chatInput.trim() || chatLoading}
-              style={{
-                background: !chatInput.trim() || chatLoading ? "#aaa" : "#2a5c0f",
-                color: "#fff", border: "none", borderRadius: 6,
-                padding: "8px 14px",
-                cursor: !chatInput.trim() || chatLoading ? "default" : "pointer",
-                fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", flexShrink: 0,
-              }}
-            >
-              {chatLoading ? "…" : "Send"}
-            </button>
+            <div style={{
+              display: "flex", alignItems: "center",
+              background: "#fff", border: "2px solid #2a5c0f",
+              borderRadius: 14, overflow: "hidden",
+              boxShadow: "0 1px 6px rgba(42,92,15,0.10)",
+            }}>
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && !e.shiftKey && submitSectorChat()}
+                placeholder="Ask anything about your farm…"
+                disabled={chatLoading}
+                style={{
+                  flex: 1, border: "none", outline: "none",
+                  fontSize: 16, padding: "12px 14px",
+                  background: "transparent", fontFamily: "inherit",
+                }}
+              />
+              <button
+                onClick={submitSectorChat}
+                disabled={!chatInput.trim() || chatLoading}
+                style={{
+                  background: !chatInput.trim() || chatLoading ? "#aaa" : "#2a5c0f",
+                  color: "#fff", border: "none",
+                  borderRadius: 10, margin: 5,
+                  width: 44, height: 44, flexShrink: 0,
+                  cursor: !chatInput.trim() || chatLoading ? "default" : "pointer",
+                  fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "background 0.15s",
+                }}
+              >➤</button>
+            </div>
+            <div style={{ fontSize: 10, color: "#aaa", textAlign: "center", marginTop: 5 }}>
+              AI can make mistakes. Verify important information.
+            </div>
           </div>
         </div>
       )}
