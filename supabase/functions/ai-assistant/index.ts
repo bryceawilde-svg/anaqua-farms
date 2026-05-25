@@ -153,6 +153,55 @@ Deno.serve(async (req) => {
       break;
     }
 
+    case "scan-label": {
+      const { imageBase64, mediaType, crops } = payload as { imageBase64: string; mediaType: string; crops?: string[] };
+      const cropContext = crops && crops.length > 0
+        ? `The farm grows these crops: ${crops.join(", ")}. `
+        : "";
+      const scanSystemPrompt =
+        'You are a pesticide label reader and agrochemical expert. ' +
+        'Extract fields from the label image, then use your training knowledge of the product to determine the REI. ' +
+        'Return ONLY valid JSON with no extra text or markdown: ' +
+        '{"name":"<retail product name>","epa":"<EPA Reg No or NA>","rei":"<REI with units e.g. 12 hours>","unit":"<oz|dry oz|lb>","formType":"<L|E|S|WDG|WP|D|A>","containerSize":"<number or blank>"}. ' +
+        'REI rule: DO NOT try to read REI from the image — front labels almost never show it. ' +
+        'Instead, identify the product by name and EPA number, then state the standard REI from your training knowledge. ' +
+        cropContext +
+        'If the REI differs by crop, use the longest REI applicable to the crops listed above. ' +
+        'If the product is unknown and REI cannot be determined, use NA. ' +
+        'Formulation mapping — use these codes: ' +
+        'Flowable/Suspension Concentrate/SC → L; ' +
+        'Emulsifiable Concentrate/EC → E; ' +
+        'Soluble Liquid/SL/Soluble Concentrate → S; ' +
+        'Water Dispersible Granule/WDG/DF/Dry Flowable → WDG; ' +
+        'Wettable Powder/WP → WP; ' +
+        'Adjuvant/Surfactant/Spreader-Sticker → A. ' +
+        'Unit: use oz for liquid products, dry oz for dry-ounce-measured products, lb for pound-measured products. ' +
+        'containerSize: the size of one container (numeric, in gal for liquid or lb for dry/lb), blank if not shown. ' +
+        'For all other fields not visible on the label use NA for text fields or blank for containerSize.';
+      const visionResp = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
+        system: scanSystemPrompt,
+        messages: [{
+          role: "user",
+          content: [{
+            type: "image",
+            source: { type: "base64", media_type: mediaType as "image/jpeg"|"image/png"|"image/webp"|"image/gif", data: imageBase64 },
+          }, { type: "text", text: "Extract the pesticide label fields." }],
+        }],
+      });
+      let raw = visionResp.content
+        .filter((b: { type: string }) => b.type === "text")
+        .map((b: { type: string; text?: string }) => b.text ?? "")
+        .join("");
+      raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      const m = raw.match(/\{[\s\S]*\}/);
+      return new Response(
+        JSON.stringify({ result: m ? m[0] : raw }),
+        { headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
     case "research": {
       const { crop, topicId } = payload as { crop: string; topicId: string };
       const TOPIC_QUERIES: Record<string,string> = {

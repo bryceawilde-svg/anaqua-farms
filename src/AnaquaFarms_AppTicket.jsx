@@ -1134,6 +1134,41 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   );
 }
 
+function normalizeTicket(tk) {
+  return {
+    ...tk,
+    ticketNumber:             tk.ticket_number              || tk.ticketNumber,
+    selectedFields:           tk.selected_fields            || tk.selectedFields            || [],
+    chemRows:                 tk.chem_rows                  || tk.chemRows                  || [],
+    fieldSchedule:            tk.field_schedule             || tk.fieldSchedule             || [],
+    chemicals:                tk.chemicals                  || [],
+    timeStart:                tk.time_start                 || tk.timeStart                 || "",
+    timeEnd:                  tk.time_end                   || tk.timeEnd                   || "",
+    galPerAcre:               tk.gal_per_acre               || tk.galPerAcre                || "",
+    tankSize:                 tk.tank_size                  || tk.tankSize                  || "",
+    windSpeed:                tk.wind_speed                 || tk.windSpeed                 || "",
+    windDir:                  tk.wind_dir                   || tk.windDir                   || "",
+    airTemp:                  tk.air_temp                   || tk.airTemp                   || "",
+    primeBoom:                tk.prime_boom                 ?? tk.primeBoom                 ?? false,
+    flushCleanout:            tk.flush_cleanout             ?? tk.flushCleanout             ?? false,
+    equipmentType:            tk.equipment_type             || tk.equipmentType             || "",
+    acresPerHour:             tk.acres_per_hour             || tk.acresPerHour              || 75,
+    licensedApplicant:        tk.licensed_applicant         || tk.licensedApplicant         || "",
+    licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense  || "",
+    nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant      || "",
+    totalAcres:               tk.total_acres                || tk.totalAcres                || "0",
+    fullLoads:                tk.full_loads                 || tk.fullLoads                 || "—",
+    partialAcres:             tk.partial_acres              || tk.partialAcres              || null,
+    acreLoads:                tk.acre_loads                 || tk.acreLoads                 || "—",
+    targetPest: (() => {
+      const raw = tk.target_pest ?? tk.targetPest;
+      if (Array.isArray(raw)) return raw;
+      if (!raw) return [];
+      try { return JSON.parse(raw); } catch { return typeof raw === "string" ? raw.split(", ").filter(Boolean) : []; }
+    })(),
+  };
+}
+
 // ── Main App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const isMobile        = useIsMobile();
@@ -1180,7 +1215,8 @@ export default function App() {
     chemRows: [],
   });
   const [form,        setForm]        = useState(blank());
-  const [fieldSearch, setFieldSearch] = useState("");
+  const [fieldSearch,     setFieldSearch]     = useState("");
+  const [fieldCropFilter, setFieldCropFilter] = useState("");
   const [showDrop,    setShowDrop]    = useState(false);
   const [chemSearch,  setChemSearch]  = useState({});   // keyed by chemRow.id
   const [showChemDrop,setShowChemDrop]= useState({});   // keyed by chemRow.id
@@ -1246,7 +1282,7 @@ export default function App() {
     }
   }
 
-  // ── Load all data from Supabase on mount
+  // ── Load all data from Supabase on mount + Realtime subscription
   useEffect(() => {
     async function loadAll() {
       setDbLoading(true);
@@ -1269,42 +1305,25 @@ export default function App() {
       setEquipment(e.data?.length ? e.data.map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })) : DEFAULT_EQUIPMENT);
       setLicensed(la.data || []);
       setNonLicensed(nla.data || []);
-      setTickets((t.data || []).map(tk => ({
-        ...tk,
-        id:                       tk.id,
-        ticketNumber:             tk.ticket_number   || tk.ticketNumber,
-        selectedFields:           tk.selected_fields || tk.selectedFields || [],
-        chemRows:                 tk.chem_rows       || tk.chemRows       || [],
-        fieldSchedule:            tk.field_schedule  || tk.fieldSchedule  || [],
-        chemicals:                tk.chemicals       || [],
-        timeStart:                tk.time_start      || tk.timeStart      || "",
-        timeEnd:                  tk.time_end        || tk.timeEnd        || "",
-        galPerAcre:               tk.gal_per_acre    || tk.galPerAcre     || "",
-        tankSize:                 tk.tank_size       || tk.tankSize       || "",
-        windSpeed:                tk.wind_speed      || tk.windSpeed      || "",
-        windDir:                  tk.wind_dir        || tk.windDir        || "",
-        airTemp:                  tk.air_temp        || tk.airTemp        || "",
-        primeBoom:                tk.prime_boom      ?? tk.primeBoom      ?? false,
-        flushCleanout:            tk.flush_cleanout  ?? tk.flushCleanout  ?? false,
-        equipmentType:            tk.equipment_type  || tk.equipmentType  || "",
-        acresPerHour:             tk.acres_per_hour  || tk.acresPerHour   || 75,
-        licensedApplicant:        tk.licensed_applicant         || tk.licensedApplicant        || "",
-        licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense || "",
-        nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant     || "",
-        totalAcres:               tk.total_acres     || tk.totalAcres     || "0",
-        fullLoads:                tk.full_loads      || tk.fullLoads      || "—",
-        partialAcres:             tk.partial_acres   || tk.partialAcres   || null,
-        acreLoads:                tk.acre_loads      || tk.acreLoads      || "—",
-        targetPest: (() => {
-          const raw = tk.target_pest ?? tk.targetPest;
-          if (Array.isArray(raw)) return raw;
-          if (!raw) return [];
-          try { return JSON.parse(raw); } catch { return typeof raw === "string" ? raw.split(", ").filter(Boolean) : []; }
-        })(),
-      })));
+      setTickets((t.data || []).map(normalizeTicket));
       setDbLoading(false);
     }
     loadAll();
+
+    const channel = supabase
+      .channel("tickets-sync")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "tickets" }, ({ new: row }) => {
+        setTickets(prev => prev.find(t => t.id === row.id) ? prev : [normalizeTicket(row), ...prev]);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tickets" }, ({ new: row }) => {
+        setTickets(prev => prev.map(t => t.id === row.id ? normalizeTicket(row) : t));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "tickets" }, ({ old: row }) => {
+        setTickets(prev => prev.filter(t => t.id !== row.id));
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // Total acres auto-computed from selected fields
@@ -1448,7 +1467,7 @@ export default function App() {
     }, 700);
   }, [chemIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveTicket = () => {
+  const saveTicket = async () => {
     if (!form.selectedFields.length) return alert("Please select at least one field.");
     if (!form.crop)                  return alert("Please select a crop.");
     const hasChems = form.chemRows.some(r => r.chemId);
@@ -1498,48 +1517,61 @@ export default function App() {
       licensedApplicantLicense: form.licensedApplicantLicense,
       nonLicensedApplicant: form.nonLicensedApplicant,
     };
-    const nextNum = editingId
-      ? (tickets.find(x=>x.id===editingId)?.ticketNumber || 0)
-      : (tickets.length ? Math.max(...tickets.map(x=>x.ticketNumber||0)) + 1 : 1);
-    const finalTicket = { ...newTicket, ticketNumber: nextNum };
-    setTickets(t => editingId
-      ? t.map(x => x.id === editingId ? finalTicket : x)
-      : [finalTicket, ...t]
-    );
-    supabase.from("tickets").upsert({
-      id:                         finalTicket.id,
-      ticket_number:              finalTicket.ticketNumber,
-      date:                       finalTicket.date,
-      time_start:                 finalTicket.timeStart,
-      time_end:                   finalTicket.timeEnd,
-      crop:                       finalTicket.crop,
-      target_pest:                JSON.stringify(finalTicket.targetPest),
-      wind_speed:                 finalTicket.windSpeed,
-      wind_dir:                   finalTicket.windDir,
-      air_temp:                   finalTicket.airTemp,
-      tank_size:                  finalTicket.tankSize,
-      pressure:                   finalTicket.pressure,
-      gal_per_acre:               finalTicket.galPerAcre,
-      prime_boom:                 finalTicket.primeBoom,
-      flush_cleanout:             finalTicket.flushCleanout,
-      equipment_type:             finalTicket.equipmentType,
-      acres_per_hour:             finalTicket.acresPerHour,
-      licensed_applicant:         finalTicket.licensedApplicant,
-      licensed_applicant_license: finalTicket.licensedApplicantLicense,
-      non_licensed_applicant:     finalTicket.nonLicensedApplicant,
-      notes:                      finalTicket.notes,
-      total_acres:                String(finalTicket.totalAcres),
-      full_loads:                 String(finalTicket.fullLoads),
-      partial_loads:              finalTicket.partialLoads,
-      partial_acres:              finalTicket.partialAcres ? String(finalTicket.partialAcres) : null,
-      acre_loads:                 String(finalTicket.acreLoads),
-      selected_fields:            finalTicket.selectedFields,
-      chemicals:                  finalTicket.chemicals,
-      chem_rows:                  finalTicket.chemRows,
-      field_schedule:             finalTicket.fieldSchedule,
-    }).then(({ error }) => {
-      if (error) showToast("Failed to save ticket: " + error.message);
+    const dbRow = (t) => ({
+      id:                         t.id,
+      date:                       t.date,
+      time_start:                 t.timeStart,
+      time_end:                   t.timeEnd,
+      crop:                       t.crop,
+      target_pest:                JSON.stringify(t.targetPest),
+      wind_speed:                 t.windSpeed,
+      wind_dir:                   t.windDir,
+      air_temp:                   t.airTemp,
+      tank_size:                  t.tankSize,
+      pressure:                   t.pressure,
+      gal_per_acre:               t.galPerAcre,
+      prime_boom:                 t.primeBoom,
+      flush_cleanout:             t.flushCleanout,
+      equipment_type:             t.equipmentType,
+      acres_per_hour:             t.acresPerHour,
+      licensed_applicant:         t.licensedApplicant,
+      licensed_applicant_license: t.licensedApplicantLicense,
+      non_licensed_applicant:     t.nonLicensedApplicant,
+      notes:                      t.notes,
+      total_acres:                String(t.totalAcres),
+      full_loads:                 String(t.fullLoads),
+      partial_loads:              t.partialLoads,
+      partial_acres:              t.partialAcres ? String(t.partialAcres) : null,
+      acre_loads:                 String(t.acreLoads),
+      selected_fields:            t.selectedFields,
+      chemicals:                  t.chemicals,
+      chem_rows:                  t.chemRows,
+      field_schedule:             t.fieldSchedule,
     });
+
+    let assignedTicketNumber;
+    if (editingId) {
+      const existingNum = tickets.find(x => x.id === editingId)?.ticketNumber || 0;
+      const finalTicket = { ...newTicket, ticketNumber: existingNum };
+      setTickets(prev => prev.map(x => x.id === editingId ? finalTicket : x));
+      const { error } = await supabase.from("tickets")
+        .update({ ...dbRow(finalTicket), ticket_number: existingNum })
+        .eq("id", editingId);
+      if (error) { showToast("Failed to save ticket: " + error.message); return null; }
+      assignedTicketNumber = existingNum;
+    } else {
+      // Let the DB sequence assign ticket_number — omit it from the insert payload
+      const { data, error } = await supabase.from("tickets")
+        .insert({ ...dbRow(newTicket) })
+        .select("id, ticket_number")
+        .single();
+      if (error) { showToast("Failed to save ticket: " + error.message); return null; }
+      assignedTicketNumber = data.ticket_number;
+      const finalTicket = { ...newTicket, ticketNumber: assignedTicketNumber };
+      // Realtime INSERT will also fire; guard in the subscription prevents duplication
+      setTickets(prev => [finalTicket, ...prev]);
+    }
+
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -1547,6 +1579,7 @@ export default function App() {
     setShowAcresInput(false);
     setEditingId(null);
     setView("log");
+    return assignedTicketNumber;
   };
 
   // ── Field Manager
@@ -1610,11 +1643,63 @@ export default function App() {
   };
 
   // ── Chemical Manager
-  const chemFileRef  = useRef();
-  const [chemUpMsg,     setChemUpMsg]     = useState("");
-  const [newChem,       setNewChem]       = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
-  const [editingChemId, setEditingChemId] = useState(null);
-  const [editChemDraft, setEditChemDraft] = useState({});
+  const chemFileRef     = useRef();
+  const scanLabelRef    = useRef();
+  const [chemUpMsg,       setChemUpMsg]       = useState("");
+  const [newChem,         setNewChem]         = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
+  const [scanLabelLoading, setScanLabelLoading] = useState(false);
+  const [chemDupWarning,  setChemDupWarning]  = useState("");
+  const [editingChemId,   setEditingChemId]   = useState(null);
+  const [editChemDraft,   setEditChemDraft]   = useState({});
+
+  const findChemDup = (name, epa) => {
+    const n = name?.trim().toLowerCase();
+    const e = epa?.trim().toLowerCase();
+    return chemicals.find(c =>
+      (n && c.name?.trim().toLowerCase() === n) ||
+      (e && e !== "na" && c.epa?.trim().toLowerCase() === e)
+    ) || null;
+  };
+
+  const scanLabel = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    e.target.value = "";
+    setScanLabelLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const dataUrl = ev.target.result;
+        const comma = dataUrl.indexOf(",");
+        const imageBase64 = dataUrl.slice(comma + 1);
+        const mediaType = dataUrl.slice(5, comma).split(";")[0];
+        const crops = [...new Set(fieldLibrary.map(f => f.crop).filter(Boolean))];
+        const { data, error } = await supabase.functions.invoke("ai-assistant", {
+          body: { action: "scan-label", imageBase64, mediaType, crops },
+        });
+        if (error) throw new Error(error.message);
+        const parsed = JSON.parse(data.result);
+        const filledName = parsed.name || "";
+        const filledEpa  = parsed.epa  || "";
+        setNewChem(c => ({
+          ...c,
+          name:          filledName          || c.name,
+          epa:           filledEpa           || c.epa,
+          rei:           parsed.rei           || c.rei,
+          unit:          ["oz","dry oz","lb"].includes(parsed.unit) ? parsed.unit : c.unit,
+          formType:      ["L","E","S","WDG","WP","D","A"].includes(parsed.formType) ? parsed.formType : c.formType,
+          containerSize: parsed.containerSize || c.containerSize,
+        }));
+        const dup = findChemDup(filledName, filledEpa);
+        if (dup) setChemDupWarning(`Already in library: "${dup.name}" (EPA ${dup.epa})`);
+        else setChemDupWarning("");
+      } catch (err) {
+        showToast("Label scan failed: " + err.message);
+      } finally {
+        setScanLabelLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleChemCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -1643,6 +1728,9 @@ export default function App() {
 
   const addManualChem = () => {
     if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
+    const dup = findChemDup(newChem.name, newChem.epa);
+    if (dup) { setChemDupWarning(`Already in library: "${dup.name}" (EPA ${dup.epa})`); return; }
+    setChemDupWarning("");
     const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
     const { formType: ft, containerSize: cs, ...chemRest } = newChemRec;
@@ -2545,13 +2633,10 @@ export default function App() {
                   cursor:"pointer", fontSize:15, fontWeight:700,
                   boxShadow:"0 2px 8px rgba(30,90,8,0.2)", flex:1
                 }}>{editingId ? "✏ Update Ticket" : "💾 Save Ticket"}</button>
-                <button onClick={() => {
+                <button onClick={async () => {
                   const sched = buildFieldSchedule(form.selectedFields, form.timeStart);
-                  const nextNum = editingId
-                    ? (tickets.find(x=>x.id===editingId)?.ticketNumber || 0)
-                    : (tickets.length ? Math.max(...tickets.map(x=>x.ticketNumber||0)) + 1 : 1);
-                  printTicket({ ...form, ticketNumber: nextNum }, chemicals, totalAcres, sched);
-                  saveTicket();
+                  const ticketNumber = await saveTicket();
+                  if (ticketNumber != null) printTicket({ ...form, ticketNumber }, chemicals, totalAcres, sched);
                 }} style={{
                   background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)",
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 22px",
@@ -2955,13 +3040,28 @@ export default function App() {
               <div style={sectionTitle}>
                 Field Library — {fieldLibrary.length} fields · {fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0).toFixed(1)} total acres
               </div>
+              {(() => {
+                const cropOptions = [...new Set(fieldLibrary.map(f => f.crop).filter(Boolean))].sort();
+                if (cropOptions.length < 2) return null;
+                return (
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+                    {["All", ...cropOptions].map(c => (
+                      <button key={c} onClick={() => setFieldCropFilter(c === "All" ? "" : c)} style={{
+                        background: (c === "All" ? !fieldCropFilter : fieldCropFilter === c) ? "#2a5c0f" : "#f0f0f0",
+                        color:      (c === "All" ? !fieldCropFilter : fieldCropFilter === c) ? "#fff" : "#333",
+                        border:"none", borderRadius:5, padding:"4px 12px", cursor:"pointer", fontSize:12, fontWeight:700
+                      }}>{c}</button>
+                    ))}
+                  </div>
+                );
+              })()}
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
                     <tr>{["Field Name","Crop","Acres","Traits",""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
                   </thead>
                   <tbody>
-                    {fieldLibrary.map(f => {
+                    {fieldLibrary.filter(f => !fieldCropFilter || f.crop === fieldCropFilter).map(f => {
                       const isEditing = editingFieldId === f.id;
                       if (isEditing) {
                         const editCrop = editFieldDraft.crop || "";
@@ -3231,12 +3331,24 @@ export default function App() {
             </div>
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Add Chemical Manually</div>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                <div style={sectionTitle}>Add Chemical Manually</div>
+                <button
+                  onClick={() => scanLabelRef.current.click()}
+                  disabled={scanLabelLoading}
+                  style={{ background:"#1a6fa8", color:"#fff", border:"none", borderRadius:6,
+                    padding:"7px 14px", cursor: scanLabelLoading ? "default" : "pointer",
+                    fontSize:13, fontWeight:700, opacity: scanLabelLoading ? 0.7 : 1 }}
+                >
+                  {scanLabelLoading ? "⏳ Scanning…" : "📷 Scan Label"}
+                </button>
+                <input ref={scanLabelRef} type="file" accept="image/*" capture="environment" onChange={scanLabel} style={{ display:"none" }}/>
+              </div>
               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
                 {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelStyle}>{lbl}</label>
-                    <input type={type} value={newChem[k]} onChange={e => setNewChem(c=>({...c,[k]:e.target.value}))} style={inp} placeholder={lbl}/>
+                    <input type={type} value={newChem[k]} onChange={e => { setNewChem(c=>({...c,[k]:e.target.value})); if (k==="name"||k==="epa") setChemDupWarning(""); }} style={inp} placeholder={lbl}/>
                   </div>
                 ))}
                 <div>
@@ -3274,9 +3386,15 @@ export default function App() {
                   />
                 </div>
               </div>
-              <button onClick={addManualChem} style={{
-                marginTop:12, background:"#2a5c0f", color:"#fff", border:"none",
-                borderRadius:6, padding:"8px 20px", cursor:"pointer", fontSize:13, fontWeight:700
+              {chemDupWarning && (
+                <div style={{ marginTop:10, padding:"7px 12px", background:"#fff3cd", border:"1px solid #e0a800",
+                  borderRadius:6, color:"#856404", fontSize:13, fontWeight:600 }}>
+                  ⚠️ Duplicate — {chemDupWarning}
+                </div>
+              )}
+              <button onClick={addManualChem} disabled={!!chemDupWarning} style={{
+                marginTop:12, background: chemDupWarning ? "#999" : "#2a5c0f", color:"#fff", border:"none",
+                borderRadius:6, padding:"8px 20px", cursor: chemDupWarning ? "default" : "pointer", fontSize:13, fontWeight:700
               }}>+ Add Chemical</button>
             </div>
 
