@@ -1190,8 +1190,10 @@ export default function App() {
   const [showOrgCreate, setShowOrgCreate] = useState(false);
   const [newOrgName,    setNewOrgName]    = useState("");
   const [orgWorking,    setOrgWorking]    = useState(false);
-  const [inviteEmail,   setInviteEmail]   = useState("");
-  const [inviteRole,    setInviteRole]    = useState("member");
+  const [inviteEmail,      setInviteEmail]      = useState("");
+  const [inviteRole,       setInviteRole]       = useState("member");
+  const [editingOrgName,   setEditingOrgName]   = useState(false);
+  const [orgNameDraft,     setOrgNameDraft]     = useState("");
 
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
@@ -3735,28 +3737,24 @@ export default function App() {
                   {session?.user?.email} · {userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : "Viewer"}
                 </div>
               </div>
-              {isOwner && (() => {
-                const [editing, setEditing] = React.useState(false);
-                const [draft,   setDraft]   = React.useState(currentOrg?.name || "");
-                return editing ? (
-                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                    <input value={draft} onChange={e=>setDraft(e.target.value)}
-                      style={{ ...inp, fontSize:12, padding:"4px 8px", width:160 }} />
-                    <button onClick={async () => {
-                      if (!draft.trim()) return;
-                      const { error } = await supabase.from("organizations").update({ name: draft.trim() }).eq("id", currentOrg.id);
-                      if (error) showToast(error.message);
-                      else { setCurrentOrg(o => ({ ...o, name: draft.trim() })); setEditing(false); }
-                    }} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
-                    <button onClick={() => setEditing(false)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
-                  </div>
-                ) : (
-                  <button onClick={() => { setDraft(currentOrg?.name || ""); setEditing(true); }}
-                    style={{ background:"none", border:"1.5px solid #c8dbb0", borderRadius:5, color:"#2a5c0f", fontSize:12, padding:"4px 10px", cursor:"pointer", fontWeight:600 }}>
-                    Rename
-                  </button>
-                );
-              })()}
+              {isOwner && (editingOrgName ? (
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  <input value={orgNameDraft} onChange={e => setOrgNameDraft(e.target.value)}
+                    style={{ ...inp, fontSize:12, padding:"4px 8px", width:160 }} />
+                  <button onClick={async () => {
+                    if (!orgNameDraft.trim()) return;
+                    const { error } = await supabase.from("organizations").update({ name: orgNameDraft.trim() }).eq("id", currentOrg.id);
+                    if (error) showToast(error.message);
+                    else { setCurrentOrg(o => ({ ...o, name: orgNameDraft.trim() })); setEditingOrgName(false); }
+                  }} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
+                  <button onClick={() => setEditingOrgName(false)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => { setOrgNameDraft(currentOrg?.name || ""); setEditingOrgName(true); }}
+                  style={{ background:"none", border:"1.5px solid #c8dbb0", borderRadius:5, color:"#2a5c0f", fontSize:12, padding:"4px 10px", cursor:"pointer", fontWeight:600 }}>
+                  Rename
+                </button>
+              ))}
             </div>
 
             {/* Members list */}
