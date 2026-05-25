@@ -1371,8 +1371,10 @@ export default function App() {
       chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, chatOpen]);
 
-  // ── Load all data from Supabase on mount + Realtime subscription
+  // ── Load all data from Supabase on session change + Realtime subscription
   useEffect(() => {
+    if (!session) return;
+
     async function loadAll() {
       setDbLoading(true);
       const [f, c, e, la, nla, t, cs] = await Promise.all([
@@ -1390,8 +1392,8 @@ export default function App() {
         cs.data.forEach(r => { seasons[r.crop_name] = r.season; });
         setCropSeasons(seasons);
       }
-      setChemicals(c.data?.length ? c.data.map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })) : DEFAULT_CHEMICALS);
-      setEquipment(e.data?.length ? e.data.map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })) : DEFAULT_EQUIPMENT);
+      setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })));
+      setEquipment((e.data || []).map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })));
       setLicensed(la.data || []);
       setNonLicensed(nla.data || []);
       setTickets((t.data || []).map(normalizeTicket));
@@ -1400,7 +1402,7 @@ export default function App() {
     loadAll();
 
     const channel = supabase
-      .channel("tickets-sync")
+      .channel(`tickets-sync-${session.user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "tickets" }, ({ new: row }) => {
         setTickets(prev => prev.find(t => t.id === row.id) ? prev : [normalizeTicket(row), ...prev]);
       })
@@ -1413,7 +1415,7 @@ export default function App() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [session?.user?.id]);
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
