@@ -3544,7 +3544,7 @@ export default function App() {
           bottom: isMobile ? 0 : 96,
           right: isMobile ? 0 : 28,
           width: isMobile ? "100vw" : 380,
-          height: isMobile ? "70vh" : 520,
+          height: isMobile ? "85vh" : 520,
           zIndex: 999,
           background: "#fff",
           borderRadius: isMobile ? "16px 16px 0 0" : 10,
@@ -3633,9 +3633,9 @@ export default function App() {
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && submitSectorChat()}
-              placeholder="e.g. When was Old Place sprayed? What did I put on the corn?"
+              placeholder={isMobile ? "Ask about your records…" : "e.g. When was Old Place sprayed? What did I put on the corn?"}
               disabled={chatLoading}
-              style={{ ...inp, flex: 1, fontSize: 13, padding: "8px 10px" }}
+              style={{ ...inp, flex: 1, fontSize: 16, padding: "8px 10px" }}
             />
             <button
               onClick={submitSectorChat}
