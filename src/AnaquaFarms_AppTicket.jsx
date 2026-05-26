@@ -273,7 +273,7 @@ function resolveChemRow(r, chem, acreLoadsRaw, form, totalAcres) {
   return { effRate, isOzUnit, isDryOzUnit, roundQtr, calc };
 }
 
-function printTicket(form, chemicals, totalAcres, fieldSchedule) {
+function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   const { acreLoads, fullLoads, acreLoadsRaw, partialAcres } = calcTotals({ ...form, totalAcres });
   const hasPartial      = parseFloat(partialAcres) > 0.01;
   // Less acres than one full tank — only show the "this load" amount, no full-tank recipe
@@ -529,7 +529,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 <html>
 <head>
 <meta charset="UTF-8"/>
-<title>Anaqua Farms – Application Ticket</title>
+<title>${orgName || "BoomLog"} – Application Ticket</title>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:Arial,sans-serif; font-size:9.5px; color:#111; background:#fff; }
@@ -640,8 +640,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
 
   <div class="header">
     <div>
-      <div class="farm">ANAQUA FARMS</div>
-      <div class="farm-sub">(956) 465-6430 &middot; (956) 535-0482</div>
+      <div class="farm">${orgName || ""}</div>
     </div>
     <div>
       <div class="ticket-title">Application Ticket${form.ticketNumber ? ` #${String(form.ticketNumber).padStart(3,'0')}` : ''}</div>
@@ -705,7 +704,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   </div>
 
   <div class="footer">
-    <span>Anaqua Farms &mdash; Application Ticket</span>
+    <span>${orgName || "BoomLog"} &mdash; Application Ticket</span>
     <span>Printed ${new Date().toLocaleString()}</span>
   </div>
 </div>
@@ -719,7 +718,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   if (!w) URL.revokeObjectURL(url);
 }
 
-function downloadCSV(tickets) {
+function downloadCSV(tickets, orgName) {
   if (!tickets.length) return;
   const header = [
     "Date","Time Start","Time End","Location/Field","Acres","Crop/Site","Target Pest",
@@ -753,12 +752,12 @@ function downloadCSV(tickets) {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href = url;
-  a.download = `AnaquaFarms_TDA_Records_${Date.now()}.csv`;
+  a.download = `${(orgName || "BoomLog").replace(/\s+/g,"_")}_TDA_Records_${Date.now()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-function downloadTDAReport(tickets) {
+function downloadTDAReport(tickets, orgName) {
   if (!tickets.length) return;
   const rows = tickets.flatMap(t => {
     const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
@@ -791,7 +790,7 @@ function downloadTDAReport(tickets) {
 <html>
 <head>
 <meta charset="UTF-8"/>
-<title>Anaqua Farms – TDA Pesticide Application Records</title>
+<title>${orgName || "BoomLog"} – TDA Pesticide Application Records</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; }
@@ -817,8 +816,7 @@ function downloadTDAReport(tickets) {
 <div class="page">
   <div class="header">
     <div>
-      <div class="farm-name">ANAQUA FARMS</div>
-      <div class="farm-sub">(956) 465-6430 · (956) 535-0482</div>
+      <div class="farm-name">${orgName || ""}</div>
     </div>
     <div>
       <div class="report-title">TDA Pesticide Application Records</div>
@@ -854,7 +852,7 @@ function downloadTDAReport(tickets) {
     <tbody>${rows}</tbody>
   </table>
   <div class="footer">
-    <span>Anaqua Farms · TDA Pesticide Application Records</span>
+    <span>${orgName || "BoomLog"} · TDA Pesticide Application Records</span>
     <span>Printed: ${new Date().toLocaleString()}</span>
   </div>
 </div>
@@ -865,7 +863,7 @@ function downloadTDAReport(tickets) {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href = url;
-  a.download = `AnaquaFarms_TDA_Report_${new Date().toISOString().slice(0,10)}.html`;
+  a.download = `${(orgName || "Farm").replace(/\s+/g,"_")}_TDA_Report_${new Date().toISOString().slice(0,10)}.html`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -1941,7 +1939,7 @@ export default function App() {
       <div style={{ background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:10, padding:"32px 32px 28px", width:340, boxShadow:"0 4px 24px rgba(42,92,15,0.13)" }}>
         <div style={{ textAlign:"center", marginBottom:20 }}>
           <div style={{ fontSize:28 }}>🌱</div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>Anaqua Farms</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>BoomLog</div>
           <div style={{ fontSize:12, color:"#888", marginTop:3 }}>Application Management</div>
         </div>
         <div style={{ display:"flex", gap:0, marginBottom:18, borderRadius:6, overflow:"hidden", border:"1.5px solid #c8dbb0" }}>
@@ -2037,8 +2035,8 @@ export default function App() {
   if (dbLoading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
       <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
-      <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>Anaqua Farms</div>
-      <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading data…</div>
+      <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>BoomLog</div>
+      <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading…</div>
     </div>
   );
   return (
@@ -2062,12 +2060,9 @@ export default function App() {
       <div style={{ background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)", padding: isMobile ? "12px 14px 0" : "18px 28px 0", boxShadow:"0 3px 16px rgba(0,0,0,0.18)" }}>
         <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:6 }}>
           <div>
-            <div style={{ color:"#a8d878", fontSize:isMobile?9:11, letterSpacing:"0.15em", fontWeight:700, textTransform:"uppercase" }}>ANAQUA FARMS</div>
-            <div style={{ color:"#fff", fontSize:isMobile?16:22, fontWeight:700, lineHeight:1.2 }}>Application Ticket System</div>
-            {!isMobile && <div style={{ color:"#c8e8a0", fontSize:12, marginTop:2 }}>(956) 465-6430 · (956) 535-0482</div>}
+            <div style={{ color:"#fff", fontSize:isMobile?16:22, fontWeight:700, lineHeight:1.2 }}>BoomLog</div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {!isMobile && currentOrg && <span style={{ color:"#a8d878", fontSize:11 }}>{currentOrg.name}</span>}
             {!isMobile && <span style={{ color:"#a8d878", fontSize:11 }}>{isPro ? "⭐ Pro" : "Basic"}</span>}
             <button onClick={() => supabase.auth.signOut()} style={{
               background:"none", border:"1.5px solid #a8d878", borderRadius:5,
@@ -2980,7 +2975,7 @@ export default function App() {
                 <button onClick={async () => {
                   const sched = buildFieldSchedule(form.selectedFields, form.timeStart);
                   const ticketNumber = await saveTicket();
-                  if (ticketNumber != null) printTicket({ ...form, ticketNumber }, chemicals, totalAcres, sched);
+                  if (ticketNumber != null) printTicket({ ...form, ticketNumber }, chemicals, totalAcres, sched, currentOrg?.name);
                 }} style={{
                   background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)",
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 22px",
@@ -3005,7 +3000,7 @@ export default function App() {
                 {tickets.length} Ticket{tickets.length!==1?"s":""} saved
               </div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                <button onClick={() => downloadCSV(tickets)} disabled={!tickets.length} style={{
+                <button onClick={() => downloadCSV(tickets, currentOrg?.name)} disabled={!tickets.length} style={{
                   background: tickets.length ? "#2a5c0f" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding: isMobile ? "10px 14px" : "8px 16px",
                   cursor: tickets.length ? "pointer" : "default", fontSize:13, fontWeight:700
@@ -3025,7 +3020,7 @@ export default function App() {
                       return true;
                     });
                     if (!filtered.length) return alert("No tickets in selected date range.");
-                    downloadTDAReport(filtered);
+                    downloadTDAReport(filtered, currentOrg?.name);
                   }} disabled={!tickets.length} style={{
                     background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
                     color:"#fff", border:"none", borderRadius:6,
@@ -3195,7 +3190,8 @@ export default function App() {
                             t,
                             chemicals,
                             parseFloat(t.totalAcres) || 0,
-                            t.fieldSchedule || buildFieldSchedule(t.selectedFields || [], t.timeStart)
+                            t.fieldSchedule || buildFieldSchedule(t.selectedFields || [], t.timeStart),
+                            currentOrg?.name
                           );
                         }} style={{
                           background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)", color:"#fff", border:"none", borderRadius:5,
