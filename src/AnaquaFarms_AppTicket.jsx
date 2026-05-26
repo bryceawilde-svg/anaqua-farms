@@ -725,7 +725,7 @@ function downloadCSV(tickets, orgName) {
     "Wind Speed (mph)","Wind Direction","Air Temp (F)",
     "Tank Size (gal)","Pressure (PSI)","Gal/Acre","Acre Loads","Full Loads","Partial Load (ac)",
     "Equipment","Licensed Applicator","Non-Licensed Applicator",
-    "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Full Tank Amount","Partial Tank Amount","Notes"
+    "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
   ].join(",");
 
   const rows = tickets.flatMap(t => {
@@ -741,8 +741,7 @@ function downloadCSV(tickets, orgName) {
         `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, `"${t.nonLicensedApplicant||""}"`,
         `"${c.name||""}"`, c.epa||"", c.rei||"",
         c.ratePerAcre||"", c.unit||"",
-        `"${c.totalPerTankFmt || c.totalPerTank || ""}"`,
-        `"${c.partialPerTankFmt || "—"}"`,
+        (() => { const r = parseFloat(c.ratePerAcre), a = parseFloat(fs.acres); return (!isNaN(r) && r > 0 && !isNaN(a) && a > 0) ? `${(r * a).toFixed(2)} ${c.unit||""}`.trim() : ""; })(),
         `"${t.notes||""}"`
       ].join(","))
     );
@@ -763,26 +762,33 @@ function downloadTDAReport(tickets, orgName) {
     const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
     const chems    = t.chemicals.length ? t.chemicals : [{ name:"—", epa:"—", rei:"—", ratePerAcre:"—", unit:"—", totalPerTank:"—" }];
     return schedule.flatMap(fs =>
-      chems.map(c => `
+      chems.map(c => {
+        const rateNum  = parseFloat(c.ratePerAcre);
+        const acresNum = parseFloat(fs.acres);
+        const totalAmt = (!isNaN(rateNum) && rateNum > 0 && !isNaN(acresNum) && acresNum > 0)
+          ? `${(rateNum * acresNum).toFixed(2)} ${c.unit || ""}`.trim()
+          : "—";
+        const pest = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest || "—");
+        return `
       <tr>
         <td>${t.date}</td>
         <td class="nowrap">${fmtTime(fs.timeStart)}<br/><span class="sub">to ${fmtTime(fs.timeEnd)}</span></td>
-        <td><strong>${fs.name}</strong><br/><span class="sub">${parseFloat(fs.acres).toFixed(2)} ac</span></td>
+        <td><strong>${fs.name}</strong></td>
         <td>${parseFloat(fs.acres).toFixed(2)} ac</td>
         <td>${t.crop}</td>
-        <td>${t.targetPest||"—"}</td>
+        <td>${pest}</td>
         <td>${c.name||"—"}</td>
         <td>${c.epa||"—"}</td>
         <td>${c.ratePerAcre||"—"} ${c.unit||""}/ac</td>
-        <td><strong>${c.totalPerTankFmt || c.totalPerTank || "—"}</strong></td>
-        <td style="color:#c05000">${c.partialPerTankFmt || "—"}</td>
+        <td><strong>${totalAmt}</strong></td>
         <td class="nowrap">${t.windSpeed||"—"} mph ${t.windDir||""}</td>
         <td>${t.airTemp||"—"}°F</td>
         <td>${t.equipmentType||"—"}</td>
         <td>${t.licensedApplicant||"—"}<br/><span class="sub">${t.licensedApplicantLicense||""}</span></td>
         <td>${t.nonLicensedApplicant||"—"}</td>
         <td>${t.notes||"—"}</td>
-      </tr>`)
+      </tr>`;
+      })
     );
   }).join("");
 
@@ -839,8 +845,7 @@ function downloadTDAReport(tickets, orgName) {
         <th>Product Name</th>
         <th>EPA Reg #</th>
         <th>Rate/Acre</th>
-        <th>Full Tank</th>
-        <th>Partial Load</th>
+        <th>Total Applied</th>
         <th>Wind</th>
         <th>Air Temp</th>
         <th>Equipment</th>
