@@ -1402,6 +1402,9 @@ export default function App() {
   }
 
   function renderReportMarkdown(text) {
+    const inlineBold = (str, keyPrefix) => str.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+      p.startsWith("**") && p.endsWith("**") ? <strong key={`${keyPrefix}-${j}`}>{p.slice(2,-2)}</strong> : p
+    );
     return text.split("\n").map((line, i) => {
       if (line.startsWith("## "))
         return <div key={i} style={{ fontSize:13, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:"1.5px solid #c8dbb0", paddingBottom:3, marginTop:12, marginBottom:4 }}>{line.slice(3)}</div>;
@@ -1410,13 +1413,12 @@ export default function App() {
       if (line.startsWith("---"))
         return <hr key={i} style={{ border:"none", borderTop:"1px solid #c8dbb0", margin:"8px 0" }} />;
       if (line.startsWith("* ") || line.startsWith("- "))
-        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, position:"relative", marginBottom:2 }}><span style={{ position:"absolute", left:2 }}>•</span>{line.slice(2)}</div>;
+        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, position:"relative", marginBottom:2 }}><span style={{ position:"absolute", left:2 }}>•</span>{inlineBold(line.slice(2), i)}</div>;
       if (/^\d+\.\s/.test(line))
-        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, marginBottom:2 }}>{line}</div>;
+        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, marginBottom:2 }}>{inlineBold(line, i)}</div>;
       if (line.trim() === "")
         return <div key={i} style={{ height:4 }} />;
-      const parts = line.split(/(\*\*[^*]+\*\*)/g);
-      return <div key={i} style={{ fontSize:12, color:"#333", lineHeight:1.6, marginBottom:1 }}>{parts.map((p,j) => p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2,-2)}</strong> : p)}</div>;
+      return <div key={i} style={{ fontSize:12, color:"#333", lineHeight:1.6, marginBottom:1 }}>{inlineBold(line, i)}</div>;
     });
   }
 

@@ -188,12 +188,14 @@ Deno.serve(async (req) => {
         max_tokens: 1024,
         system:
           'You are a farm records advisor with full access to this operation\'s application tickets, field library, and chemical library. ' +
-          'Answer questions by looking up the actual records provided — field names, dates sprayed, chemicals used, rates, applicators, crops, and acres. ' +
-          'Be specific: quote field names, ticket numbers, dates, product names, and rates directly from the data. ' +
-          'If a field or ticket matching the question exists in the data, always report the details. ' +
-          'Use plain, direct language suitable for a farmer. No bullet lists of clarifying questions — just answer from the data. ' +
-          'If the records genuinely do not contain the answer, say so in one sentence. ' +
-          'Format your response in clean markdown (bold key values, use bullet lists for multiple items).',
+          'Rules you must follow on every response:\n' +
+          '1. Give ONLY the direct answer — no calculation steps, no per-ticket breakdowns, no intermediate math.\n' +
+          '2. Never show or mention EPA registration numbers unless the user explicitly asks for them.\n' +
+          '3. Use plain conversational language — no markdown asterisks, no bullet lists unless listing multiple distinct items the user asked to list.\n' +
+          '4. Keep responses as short as possible. One or two sentences is ideal for simple questions.\n' +
+          '5. For totals or sums, state the final number only (e.g. "You have applied 229 qt of Roundup this season.").\n' +
+          '6. If records do not contain the answer, say so in one sentence.\n' +
+          'Do all math accurately against the provided data before answering.',
         messages,
       });
       const answerText = advisorResp.content
