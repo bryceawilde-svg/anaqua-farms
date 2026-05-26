@@ -2325,6 +2325,8 @@ export default function App() {
                           const res = await callAI("suggest-chems", {
                             crop: form.crop || "unspecified",
                             pest: form.targetPest.join(", "),
+                            month: new Date().toLocaleString("default", { month: "long" }),
+                            equipment: form.equipmentType || "",
                             chemLib: chemicals.map(c => ({ id: c.id, name: c.name, formType: c.formType, epa: c.epa })),
                           });
                           setAiSuggestions(res.suggestions || []);

@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
   }
 
   const { action, ...payload } = body as { action: string; [key: string]: unknown };
-  const model = (action === "compatibility" || action === "research")
+  const model = (action === "compatibility" || action === "research" || action === "suggest-chems")
     ? "claude-haiku-4-5-20251001"
     : "claude-sonnet-4-6";
   let systemPrompt: string;
@@ -65,19 +65,26 @@ Deno.serve(async (req) => {
     }
 
     case "suggest-chems": {
-      const { crop, pest, chemLib } = payload as {
+      const { crop, pest, month, equipment, chemLib } = payload as {
         crop: string;
         pest: string;
+        month: string;
+        equipment: string;
         chemLib: { id: number; name: string; formType: string; epa: string }[];
       };
       systemPrompt =
-        'You suggest pesticides from a provided library for a given crop and target pest. ' +
-        'Only suggest products that appear in the provided library. ' +
-        'Rank by likely efficacy. Return ONLY valid JSON with no extra text or markdown: ' +
-        '{"suggestions":[{"chemId":<id>,"reason":"<one sentence rationale>"}]}. ' +
-        'Return an empty suggestions array if no products in the library are appropriate.';
+        'You are a crop protection specialist for South Texas / Rio Grande Valley production. ' +
+        'Select the best products from the provided library to control the listed pest(s) on the given crop. ' +
+        'Factor in: crop growth stage typical for the given month, equipment type (e.g. ground rig vs. aerial affects rate and coverage), ' +
+        'and whether the product is labeled for that crop and pest combination. ' +
+        'Only suggest products that appear in the provided library. Rank by efficacy and fit. ' +
+        'Return ONLY valid JSON, no markdown: ' +
+        '{"suggestions":[{"chemId":<id>,"reason":"<one tight sentence: product name, why it fits this crop/pest/timing>"}]}. ' +
+        'Return an empty suggestions array if nothing in the library is appropriate.';
       userMessage =
         `Crop: ${crop}\n` +
+        `Month: ${month}\n` +
+        `Equipment: ${equipment || "ground rig"}\n` +
         `Target pest/weed/disease: ${pest}\n` +
         `Chemical library: ${JSON.stringify(chemLib)}`;
       break;
