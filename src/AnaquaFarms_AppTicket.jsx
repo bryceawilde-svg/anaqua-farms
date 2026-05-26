@@ -286,7 +286,11 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
     if (!chem) return null;
     const { effRate, isOzUnit, isDryOzUnit, roundQtr, calc } = resolveChemRow(r, chem, acreLoadsRaw, form, totalAcres);
     const fmtFull = (oz) => roundQtr && isOzUnit ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, chem.unit);
-    const partRaw = r.inputMode === "galtank" ? calc.totalPerTankRaw : calc.partialPerTankRaw;
+    // When lessThanOneTank but floating-point snapping rounds fullLoads up to 1 and collapses
+    // partialAcres to 0, partialPerTankRaw becomes 0 — fall back to totalPerTankRaw for "this load."
+    const partRaw = r.inputMode === "galtank"
+      ? calc.totalPerTankRaw
+      : (calc.partialPerTankRaw > 0 ? calc.partialPerTankRaw : (lessThanOneTank ? calc.totalPerTankRaw : 0));
     const fullFmt = fmtFull(calc.totalPerTankRaw);
     const partFmt = fmtFull(partRaw);
     const fullLbOz = isDryOzUnit ? fmtDryOzAsLbOz(calc.totalPerTankRaw) : null;
@@ -306,12 +310,13 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule) {
   const fieldRows = (form.selectedFields || []).map((f, i) => `
     <tr>
       <td>${i+1}. ${f.name}</td>
-      <td class="num">${f.acres}</td>
+      <td class="num">${parseFloat(f.acres).toFixed(2)}</td>
     </tr>`).join("");
 
-  // Actual tank size for the "this load" case
+  // Actual tank size for the "this load" case.
+  // When partialAcres snapped to 0 (totalAcres ≈ acreLoadsRaw), treat as a full tank fill.
   const thisLoadTankGal = lessThanOneTank
-    ? (parseFloat(totalAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2)
+    ? (!hasPartial ? String(parseFloat(form.tankSize || 0)) : (parseFloat(totalAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2))
     : null;
 
   // Chem rows for when total acres < one full tank — use partial calc (= total acres × rate)
@@ -763,8 +768,8 @@ function downloadTDAReport(tickets) {
       <tr>
         <td>${t.date}</td>
         <td class="nowrap">${fmtTime(fs.timeStart)}<br/><span class="sub">to ${fmtTime(fs.timeEnd)}</span></td>
-        <td><strong>${fs.name}</strong><br/><span class="sub">${fs.acres} ac</span></td>
-        <td>${fs.acres} ac</td>
+        <td><strong>${fs.name}</strong><br/><span class="sub">${parseFloat(fs.acres).toFixed(2)} ac</span></td>
+        <td>${parseFloat(fs.acres).toFixed(2)} ac</td>
         <td>${t.crop}</td>
         <td>${t.targetPest||"—"}</td>
         <td>${c.name||"—"}</td>
@@ -935,7 +940,7 @@ function FieldTag({ field, onRemove, onAcresChange }) {
             color: modified ? "#8a6000" : "#2a5c0f",
             fontWeight: modified ? 700 : 600
           }}
-        >({field.acres} ac{modified ? " ✎" : ""})</span>
+        >({parseFloat(field.acres).toFixed(2)} ac{modified ? " ✎" : ""})</span>
       )}
       <button onClick={onRemove} style={{
         background:"none", border:"none", cursor:"pointer",
@@ -1197,6 +1202,9 @@ export default function App() {
 
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
+  const [pestLibrary,   setPestLibrary]   = useState([]);
+  const [newPestName,   setNewPestName]   = useState("");
+  const [pestInput,     setPestInput]     = useState("");
   const [equipment,     setEquipment]     = useState([]);
   const [licensed,      setLicensed]      = useState([]);
   const [nonLicensed,   setNonLicensed]   = useState([]);
@@ -1420,9 +1428,10 @@ export default function App() {
 
     async function loadAll() {
       setDbLoading(true);
-      const [f, c, e, la, nla, t, cs] = await Promise.all([
+      const [f, c, p, e, la, nla, t, cs] = await Promise.all([
         supabase.from("fields").select("*").order("name"),
         supabase.from("chemicals").select("*").order("name"),
+        supabase.from("pests").select("*").order("name"),
         supabase.from("equipment").select("*").order("name"),
         supabase.from("licensed_applicators").select("*").order("name"),
         supabase.from("non_licensed_applicators").select("*").order("name"),
@@ -1436,6 +1445,7 @@ export default function App() {
         setCropSeasons(seasons);
       }
       setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })));
+      setPestLibrary(p.data || []);
       setEquipment((e.data || []).map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })));
       setLicensed(la.data || []);
       setNonLicensed(nla.data || []);
@@ -1882,6 +1892,22 @@ export default function App() {
       if (error) showToast("Failed to delete chemical: " + error.message);
     });
   };
+
+  const addPest = (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (pestLibrary.find(p => p.name.toLowerCase() === trimmed.toLowerCase())) return;
+    const rec = { id: Date.now(), name: trimmed };
+    setPestLibrary(prev => [...prev, rec].sort((a, b) => a.name.localeCompare(b.name)));
+    supabase.from("pests").insert({ name: trimmed, user_id: session.user.id, org_id: currentOrg?.id })
+      .then(({ error }) => { if (error) showToast("Failed to save pest: " + error.message); });
+  };
+  const deletePest = (id) => {
+    setPestLibrary(prev => prev.filter(p => p.id !== id));
+    supabase.from("pests").delete().eq("id", id).then(({ error }) => {
+      if (error) showToast("Failed to delete pest: " + error.message);
+    });
+  };
   const saveChemEdit = () => {
     if (!editChemDraft.name || !editChemDraft.epa || !editChemDraft.rei) return alert("Name, EPA #, and REI are required.");
     const updated = {
@@ -2205,28 +2231,89 @@ export default function App() {
               {/* Target Pest / Weed / Disease */}
               <div style={{ marginBottom:14 }}>
                 <label style={labelStyle}>Target Pest / Weed / Disease</label>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
-                  {["Grass Weeds","Broadleaf Weeds","Aphids","Spider Mites","Plant bugs","Plant Health"].map(opt => {
-                    const on = (form.targetPest||[]).includes(opt);
-                    return (
-                      <button key={opt} type="button"
-                        onClick={() => {
-                          const cur = form.targetPest || [];
-                          set("targetPest", on ? cur.filter(x=>x!==opt) : [...cur, opt]);
-                          setAiSuggestions([]);
-                        }}
-                        style={{
-                          padding:"6px 12px", border:"1.5px solid", borderRadius:20,
-                          cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"inherit",
-                          borderColor: on ? "#2a5c0f" : "#c8dbb0",
-                          background:  on ? "#2a5c0f" : "#f9fdf5",
-                          color:       on ? "#fff"    : "#555",
-                          transition:"all 0.12s"
-                        }}
-                      >{opt}</button>
-                    );
-                  })}
+                {(() => {
+                  // Last 6 unique pests used across ticket history
+                  const seen = new Set();
+                  const recent = [];
+                  for (const t of tickets) {
+                    for (const p of (Array.isArray(t.targetPest) ? t.targetPest : [])) {
+                      if (!seen.has(p)) { seen.add(p); recent.push(p); }
+                      if (recent.length >= 6) break;
+                    }
+                    if (recent.length >= 6) break;
+                  }
+                  const chips = recent.length ? recent : pestLibrary.slice(0, 6).map(p => p.name);
+                  return chips.length > 0 && (
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+                      {chips.map(opt => {
+                        const on = (form.targetPest||[]).includes(opt);
+                        return (
+                          <button key={opt} type="button"
+                            onClick={() => {
+                              const cur = form.targetPest || [];
+                              set("targetPest", on ? cur.filter(x=>x!==opt) : [...cur, opt]);
+                              setAiSuggestions([]);
+                            }}
+                            style={{
+                              padding:"5px 11px", border:"1.5px solid", borderRadius:20,
+                              cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"inherit",
+                              borderColor: on ? "#2a5c0f" : "#c8dbb0",
+                              background:  on ? "#2a5c0f" : "#f9fdf5",
+                              color:       on ? "#fff"    : "#555",
+                              transition:"all 0.12s"
+                            }}
+                          >{opt}</button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                <div style={{ display:"flex", gap:6, marginTop:6, alignItems:"center" }}>
+                  <input
+                    list="pest-suggestions"
+                    value={pestInput}
+                    onChange={e => setPestInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && pestInput.trim()) {
+                        e.preventDefault();
+                        const name = pestInput.trim();
+                        const cur = form.targetPest || [];
+                        if (!cur.includes(name)) { set("targetPest", [...cur, name]); setAiSuggestions([]); }
+                        addPest(name);
+                        setPestInput("");
+                      }
+                    }}
+                    placeholder="Add pest / weed / disease…"
+                    style={{ ...inp, flex:1, fontSize:12 }}
+                  />
+                  <datalist id="pest-suggestions">
+                    {pestLibrary.filter(p => !(form.targetPest||[]).includes(p.name)).map(p => (
+                      <option key={p.id} value={p.name}/>
+                    ))}
+                  </datalist>
+                  <button type="button"
+                    onClick={() => {
+                      const name = pestInput.trim();
+                      if (!name) return;
+                      const cur = form.targetPest || [];
+                      if (!cur.includes(name)) { set("targetPest", [...cur, name]); setAiSuggestions([]); }
+                      addPest(name);
+                      setPestInput("");
+                    }}
+                    style={{ padding:"6px 14px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}
+                  >+ Add</button>
                 </div>
+                {(form.targetPest||[]).length > 0 && (
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
+                    {(form.targetPest||[]).map(p => (
+                      <span key={p} style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#2a5c0f", color:"#fff", borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700 }}>
+                        {p}
+                        <button type="button" onClick={() => { set("targetPest", (form.targetPest||[]).filter(x=>x!==p)); setAiSuggestions([]); }}
+                          style={{ background:"none", border:"none", color:"rgba(255,255,255,0.7)", cursor:"pointer", fontSize:13, lineHeight:1, padding:0 }}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {(form.targetPest||[]).length > 0 && isPro && (
                   <div style={{ marginTop:8 }}>
                     <button
@@ -2344,7 +2431,7 @@ export default function App() {
                           onMouseLeave={e => e.currentTarget.style.background="transparent"}
                         >
                           <span>{f.name}</span>
-                          <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{f.acres} ac</span>
+                          <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{parseFloat(f.acres).toFixed(2)} ac</span>
                         </div>
                       ))}
                     </div>
@@ -3339,7 +3426,7 @@ export default function App() {
                         <tr key={f.id}>
                           <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
                           <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
-                          <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{f.acres}</td>
+                          <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{parseFloat(f.acres).toFixed(2)}</td>
                           <td style={td}>
                             {fieldTraits.length > 0
                               ? <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{fieldTraits.map(t => <span key={t} style={{ background:"#e8f0ff", color:"#1a3a7a", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{t}</span>)}</div>
@@ -3722,6 +3809,42 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* Pest Library */}
+            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitle}>Pest / Weed / Disease Library ({pestLibrary.length})</div>
+              {isOwner && (
+                <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+                  <input
+                    value={newPestName}
+                    onChange={e => setNewPestName(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { addPest(newPestName); setNewPestName(""); } }}
+                    placeholder="e.g. Grass Weeds, Aphids…"
+                    style={{ ...inp, flex:1 }}
+                  />
+                  <button onClick={() => { addPest(newPestName); setNewPestName(""); }}
+                    style={{ padding:"7px 16px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
+                    + Add
+                  </button>
+                </div>
+              )}
+              {pestLibrary.length === 0
+                ? <p style={{ color:"#aaa", fontSize:13 }}>No pests in library yet.</p>
+                : (
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                    {pestLibrary.map(p => (
+                      <span key={p.id} style={{ display:"inline-flex", alignItems:"center", gap:5, background:"#f9fdf5", border:"1.5px solid #c8dbb0", borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#2a5c0f" }}>
+                        {p.name}
+                        {isOwner && (
+                          <button onClick={() => deletePest(p.id)}
+                            style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:14, lineHeight:1, padding:0 }}>×</button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                )
+              }
             </div>
           </div>
         )}
