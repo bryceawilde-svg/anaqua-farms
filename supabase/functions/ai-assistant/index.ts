@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
   }
 
   const { action, ...payload } = body as { action: string; [key: string]: unknown };
-  const model = (action === "compatibility" || action === "research" || action === "suggest-chems")
+  const model = (action === "compatibility" || action === "research" || action === "suggest-chems" || action === "crop-safety")
     ? "claude-haiku-4-5-20251001"
     : "claude-sonnet-4-6";
   let systemPrompt: string;
@@ -132,28 +132,28 @@ Deno.serve(async (req) => {
         chemicals: { name: string; epa: string }[];
       };
       systemPrompt =
-        'You are a pesticide label compliance expert with comprehensive knowledge of all EPA-registered pesticide products, their labeled crops, use restrictions, and active ingredients. ' +
-        'Given a list of fields (each with a crop type, herbicide tolerance traits, and growing season) and a list of chemicals (product name + EPA reg number), ' +
-        'identify EVERY potential violation by checking three categories:\n\n' +
-        '1. LABEL CROP VIOLATIONS — the crop is not on the product label at all, or the product is known to injure/kill that crop. ' +
-        'Examples: clethodim (Select Max, Volunteer, Arrow) kills corn and grain sorghum; bromoxynil injures corn; ' +
-        'many grass herbicides (sethoxydim, fluazifop, clethodim, etc.) kill grasses including corn and sorghum. ' +
-        'Flag if the crop is not a registered use on that product label.\n\n' +
-        '2. HERBICIDE TOLERANCE VIOLATIONS — the chemical requires a specific crop trait that the field does not have. ' +
-        'Trait definitions: "glyphosate" = RR/glyphosate tolerant; "glufosinate" = LL/Liberty/glufosinate tolerant; ' +
-        '"2,4-D" = Enlist/2,4-D tolerant; "dicamba" = Xtend/dicamba tolerant. ' +
-        'A field with NO traits listed is conventional — flag glyphosate, glufosinate, 2,4-D, and dicamba products on it. ' +
-        'Sorghum and Grain are never GMO — flag those same active ingredients regardless of traits listed.\n\n' +
-        '3. EPA NUMBER LOOKUP — use the EPA registration number to confirm the active ingredient when the product name is ambiguous ' +
-        '(e.g. EPA 264-829 = Reckon 280 SL = glufosinate-ammonium). Do not rely on product names alone.\n\n' +
-        'SEASON RULE — each field has a season: "in_season", "pre_season", or "post_harvest".\n' +
-        'If a field\'s season is "pre_season" or "post_harvest", DO NOT flag chemicals that would injure or kill that crop — ' +
-        'the crop is not actively growing and applying these chemicals to manage volunteer plants is intentional and acceptable. ' +
-        'Only flag violations for fields where season is "in_season".\n\n' +
-        'Return ONLY a raw JSON object, no markdown, no code fences: ' +
-        '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one concise sentence — state the product name, its active ingredient, and the specific issue>"}]}. ' +
-        'IMPORTANT: Never mention EPA registration numbers anywhere in your response text. ' +
-        'Return an empty violations array if there are no issues.';
+        'You are a strict pesticide label compliance checker for South Texas crop production. ' +
+        'Apply these rules MECHANICALLY — do not hedge, do not assume the farmer knows what they are doing, flag every violation.\n\n' +
+        'SKIP pre_season and post_harvest fields entirely. Only check fields where season = "in_season".\n\n' +
+        'RULE 1 — TRAIT VIOLATIONS. Use EPA number and product name to identify the active ingredient, then apply:\n' +
+        '• Glyphosate products (Roundup PowerMAX, Roundup WeatherMAX, Touchdown, Credit, Durango, any "glyphosate" generic): ' +
+        'REQUIRES trait "glyphosate". Flag if "glyphosate" is NOT in the field\'s traits array.\n' +
+        '• Glufosinate products (Liberty 280, Ignite 280, Reckon 280 SL, any "glufosinate" generic): ' +
+        'REQUIRES trait "glufosinate". Flag if "glufosinate" is NOT in the field\'s traits array.\n' +
+        '• 2,4-D products (Enlist One, any Enlist Duo, any "2,4-D" label): ' +
+        'REQUIRES trait "2,4-D". Flag if "2,4-D" is NOT in the field\'s traits array.\n' +
+        '• Dicamba products (XtendiMax, Engenia, Tavium, Fexapan, any "dicamba" label): ' +
+        'REQUIRES trait "dicamba". Flag if "dicamba" is NOT in the field\'s traits array.\n' +
+        'An empty traits array [] means the field is conventional — flag ALL four categories above.\n' +
+        'Grain Sorghum is NEVER GMO — always flag glyphosate, glufosinate, 2,4-D, and dicamba regardless of traits.\n\n' +
+        'RULE 2 — GRASS KILLERS ON GRASS CROPS. These active ingredients KILL corn and grain sorghum:\n' +
+        '• Clethodim (Select Max, Volunteer, Arrow, Select 2 EC)\n' +
+        '• Sethoxydim (Poast Ultra, Poast Plus)\n' +
+        '• Fluazifop (Fusilade DX)\n' +
+        'Flag any of the above on Corn or Grain Sorghum fields.\n\n' +
+        'Return ONLY a raw JSON object, no markdown, no code fences:\n' +
+        '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one sentence: active ingredient + specific rule violated>"}]}\n' +
+        'Never mention EPA numbers in the reason text. Return empty array if no violations.';
       userMessage =
         `Fields: ${JSON.stringify(fields)}\n` +
         `Chemicals to apply: ${JSON.stringify(chems)}`;
