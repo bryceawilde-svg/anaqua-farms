@@ -2284,7 +2284,7 @@ export default function App() {
                       }
                     }}
                     placeholder="Add pest / weed / disease…"
-                    style={{ ...inp, flex:1, fontSize:12 }}
+                    style={{ ...inp, flex:1, fontSize:16 }}
                   />
                   <datalist id="pest-suggestions">
                     {pestLibrary.filter(p => !(form.targetPest||[]).includes(p.name)).map(p => (
