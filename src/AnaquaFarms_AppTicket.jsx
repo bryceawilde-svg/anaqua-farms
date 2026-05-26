@@ -1316,7 +1316,7 @@ export default function App() {
     // Claim pending invites first, then load org membership
     supabase.rpc("claim_pending_invites").then(() => {
       supabase.from("org_memberships")
-        .select("org_id, role, organizations(id, name)")
+        .select("org_id, role, organizations(id, name, plan)")
         .eq("user_id", session.user.id)
         .eq("status", "active")
         .limit(1)
@@ -1356,7 +1356,7 @@ export default function App() {
     setAuthWorking(false);
   }
 
-  const isPro    = userPlan === "pro";
+  const isPro    = userPlan === "pro" || currentOrg?.plan === "pro";
   const isOwner  = userRole === "owner";
 
   async function submitSectorChat() {
@@ -2000,7 +2000,7 @@ export default function App() {
               setOrgWorking(true);
               const { data: orgId, error } = await supabase.rpc("create_organization", { org_name: newOrgName.trim() });
               if (error) { alert(error.message); setOrgWorking(false); return; }
-              setCurrentOrg({ id: orgId, name: newOrgName.trim() });
+              setCurrentOrg({ id: orgId, name: newOrgName.trim(), plan: "basic" });
               setUserRole("owner");
               setShowOrgCreate(false);
               setOrgWorking(false);
@@ -2013,7 +2013,7 @@ export default function App() {
               setOrgWorking(true);
               const { data: orgId, error } = await supabase.rpc("create_organization", { org_name: newOrgName.trim() });
               if (error) { alert(error.message); setOrgWorking(false); return; }
-              setCurrentOrg({ id: orgId, name: newOrgName.trim() });
+              setCurrentOrg({ id: orgId, name: newOrgName.trim(), plan: "basic" });
               setUserRole("owner");
               setShowOrgCreate(false);
               setOrgWorking(false);
@@ -3881,6 +3881,31 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {/* Org plan */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                <div>
+                  <div style={{ ...sectionTitle, marginBottom:2 }}>Organization Plan</div>
+                  <div style={{ fontSize:11, color:"#888" }}>
+                    {currentOrg?.plan === "pro" ? "⭐ Pro — all members have Pro access" : "Basic — upgrade to give all members Pro access"}
+                  </div>
+                </div>
+                <button onClick={async () => {
+                  const newPlan = currentOrg?.plan === "pro" ? "basic" : "pro";
+                  const { error } = await supabase.from("organizations").update({ plan: newPlan }).eq("id", currentOrg.id);
+                  if (error) showToast(error.message);
+                  else { setCurrentOrg(o => ({ ...o, plan: newPlan })); showToast(newPlan === "pro" ? "Upgraded to Pro" : "Downgraded to Basic", "success"); }
+                }} style={{
+                  background: currentOrg?.plan === "pro" ? "#fff3cc" : "#2a5c0f",
+                  color: currentOrg?.plan === "pro" ? "#7a5000" : "#fff",
+                  border: currentOrg?.plan === "pro" ? "1.5px solid #f0c040" : "none",
+                  borderRadius:5, padding:"5px 14px", cursor:"pointer", fontSize:12, fontWeight:700
+                }}>
+                  {currentOrg?.plan === "pro" ? "Downgrade to Basic" : "Upgrade to ⭐ Pro"}
+                </button>
+              </div>
+            )}
 
             {/* Members list */}
             <div style={{ ...card, padding: isMobile ? "10px 10px" : "14px 16px", marginBottom:10 }}>
