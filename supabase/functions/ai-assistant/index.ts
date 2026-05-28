@@ -195,7 +195,15 @@ Deno.serve(async (req) => {
           '4. Keep responses as short as possible. One or two sentences is ideal for simple questions.\n' +
           '5. For totals or sums, state the final number only (e.g. "You have applied 229 qt of Roundup this season.").\n' +
           '6. If records do not contain the answer, say so in one sentence.\n' +
-          'Do all math accurately against the provided data before answering.',
+          'Do all math accurately against the provided data before answering.\n\n' +
+          'CROP SAFETY — these rules are absolute and override any recommendation:\n' +
+          'NEVER recommend clethodim (Select Max, Volunteer, Arrow, Select 2EC), sethoxydim (Poast Ultra, Poast Plus), ' +
+          'or fluazifop (Fusilade DX) on corn or grain sorghum — these products kill corn and grain sorghum.\n' +
+          'NEVER recommend glyphosate on corn or sorghum without confirming the crop has a glyphosate-tolerant trait.\n' +
+          'NEVER recommend glufosinate (Liberty, Ignite) without a glufosinate-tolerant trait.\n' +
+          'NEVER recommend dicamba (XtendiMax, Engenia, Tavium) without a dicamba-tolerant trait.\n' +
+          'NEVER recommend 2,4-D (Enlist One) without a 2,4-D-tolerant trait.\n' +
+          'If the user asks for a recommendation that would violate these rules, refuse that specific product and explain why in one sentence.',
         messages,
       });
       const answerText = advisorResp.content
