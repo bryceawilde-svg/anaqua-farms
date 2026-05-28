@@ -1951,8 +1951,10 @@ export default function App() {
 
   // ── Render ─────────────────────────────────────────────────────────────────────
   if (authLoading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"Georgia,serif", color:"#2a5c0f", fontSize:16 }}>
-      Loading…
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
+      <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
+      <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>BoomLog</div>
+      <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading…</div>
     </div>
   );
 
