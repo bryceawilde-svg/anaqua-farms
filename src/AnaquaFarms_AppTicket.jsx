@@ -1317,23 +1317,34 @@ export default function App() {
 
   useEffect(() => {
     if (!session) return;
-    // Claim pending invites first, then load org membership
-    supabase.rpc("claim_pending_invites").then(() => {
-      supabase.from("org_memberships")
-        .select("org_id, role, organizations(id, name, plan)")
-        .eq("user_id", session.user.id)
-        .eq("status", "active")
-        .limit(1)
-        .single()
-        .then(({ data }) => {
-          if (data?.organizations) {
-            setCurrentOrg(data.organizations);
-            setUserRole(data.role);
+    // Fast path: check for active membership without claiming first (saves one RPC round-trip for existing users)
+    supabase.from("org_memberships")
+      .select("org_id, role, organizations(id, name, plan)")
+      .eq("user_id", session.user.id)
+      .eq("status", "active")
+      .limit(1)
+      .single()
+      .then(async ({ data }) => {
+        if (data?.organizations) {
+          setCurrentOrg(data.organizations);
+          setUserRole(data.role);
+        } else {
+          // No active org — claim pending invites (new user or invite recipient) then re-check
+          await supabase.rpc("claim_pending_invites");
+          const { data: claimed } = await supabase.from("org_memberships")
+            .select("org_id, role, organizations(id, name, plan)")
+            .eq("user_id", session.user.id)
+            .eq("status", "active")
+            .limit(1)
+            .single();
+          if (claimed?.organizations) {
+            setCurrentOrg(claimed.organizations);
+            setUserRole(claimed.role);
           } else {
             setShowOrgCreate(true);
           }
-        });
-    });
+        }
+      });
   }, [session]);
 
   useEffect(() => {
@@ -1430,7 +1441,7 @@ export default function App() {
 
   // ── Load all data from Supabase on session change + Realtime subscription
   useEffect(() => {
-    if (!session || !currentOrg) return;
+    if (!session) return;
 
     async function loadAll() {
       setDbLoading(true);
@@ -1474,7 +1485,7 @@ export default function App() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentOrg?.id]);
+  }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
