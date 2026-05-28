@@ -1262,6 +1262,7 @@ export default function App() {
   const [wxLoading,   setWxLoading]   = useState(false);
   const [wxError,     setWxError]     = useState("");
   const [editingId,   setEditingId]   = useState(null);
+  const [isSaving,    setIsSaving]    = useState(false);
   const [toast,       setToast]       = useState(null);
 
   // ── AI state
@@ -1620,11 +1621,13 @@ export default function App() {
   }, [chemIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTicket = async () => {
-    if (!form.selectedFields.length) return alert("Please select at least one field.");
-    if (!form.crop)                  return alert("Please select a crop.");
+    if (isSaving) return null;
+    setIsSaving(true);
+    if (!form.selectedFields.length) { setIsSaving(false); return alert("Please select at least one field."); }
+    if (!form.crop)                  { setIsSaving(false); return alert("Please select a crop."); }
     const hasChems = form.chemRows.some(r => r.chemId);
-    if (hasChems && !form.tankSize)   return alert("Tank size is required when chemicals are added.");
-    if (hasChems && !form.galPerAcre) return alert("Gal/acre is required when chemicals are added.");
+    if (hasChems && !form.tankSize)   { setIsSaving(false); return alert("Tank size is required when chemicals are added."); }
+    if (hasChems && !form.galPerAcre) { setIsSaving(false); return alert("Gal/acre is required when chemicals are added."); }
     const { acreLoadsRaw } = calcTotals({ ...form, totalAcres });
     const chemDetails = form.chemRows
       .filter(r => r.chemId && (r.ratePerAcre || (r.inputMode === "galtank" && r.galPerTank)))
@@ -1709,7 +1712,7 @@ export default function App() {
       const { error } = await supabase.from("tickets")
         .update({ ...dbRow(finalTicket), ticket_number: existingNum, user_id: session.user.id, org_id: currentOrg?.id })
         .eq("id", editingId);
-      if (error) { showToast("Failed to save ticket: " + error.message); return null; }
+      if (error) { setIsSaving(false); showToast("Failed to save ticket: " + error.message); return null; }
       assignedTicketNumber = existingNum;
     } else {
       // Let the DB sequence assign ticket_number — omit it from the insert payload
@@ -1717,13 +1720,14 @@ export default function App() {
         .insert({ ...dbRow(newTicket), user_id: session.user.id, org_id: currentOrg?.id })
         .select("id, ticket_number")
         .single();
-      if (error) { showToast("Failed to save ticket: " + error.message); return null; }
+      if (error) { setIsSaving(false); showToast("Failed to save ticket: " + error.message); return null; }
       assignedTicketNumber = data.ticket_number;
       const finalTicket = { ...newTicket, ticketNumber: assignedTicketNumber };
       // Realtime INSERT will also fire; guard in the subscription prevents duplication
       setTickets(prev => [finalTicket, ...prev]);
     }
 
+    setIsSaving(false);
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -2973,20 +2977,20 @@ export default function App() {
               )}
 
               <div style={{ display:"flex", gap:isMobile ? 8 : 12, marginTop:16 }}>
-                <button onClick={saveTicket} style={{
-                  background: editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)",
+                <button onClick={saveTicket} disabled={isSaving} style={{
+                  background: isSaving ? "#999" : (editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)"),
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
-                  cursor:"pointer", fontSize:15, fontWeight:700,
+                  cursor: isSaving ? "not-allowed" : "pointer", fontSize:15, fontWeight:700,
                   boxShadow:"0 2px 8px rgba(30,90,8,0.2)", flex:1
-                }}>{editingId ? "✏ Update Ticket" : "💾 Save Ticket"}</button>
+                }}>{isSaving ? "Saving…" : (editingId ? "✏ Update Ticket" : "💾 Save Ticket")}</button>
                 <button onClick={async () => {
                   const sched = buildFieldSchedule(form.selectedFields, form.timeStart);
                   const ticketNumber = await saveTicket();
                   if (ticketNumber != null) printTicket({ ...form, ticketNumber }, chemicals, totalAcres, sched, currentOrg?.name);
-                }} style={{
-                  background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)",
+                }} disabled={isSaving} style={{
+                  background: isSaving ? "#999" : "linear-gradient(135deg,#1a4a8a,#0e2a5c)",
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 22px",
-                  cursor:"pointer", fontSize:15, fontWeight:700,
+                  cursor: isSaving ? "not-allowed" : "pointer", fontSize:15, fontWeight:700,
                   boxShadow:"0 2px 8px rgba(14,42,92,0.25)", whiteSpace:"nowrap"
                 }}>🖨 Save & Print</button>
                 <button onClick={() => { setForm(blank()); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setEditingId(null); }} style={{
