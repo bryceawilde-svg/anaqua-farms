@@ -249,7 +249,7 @@ function buildFieldSchedule(fields, globalStart, acresPerHour = 75) {
     const minutes  = (parseFloat(f.acres) / acresPerHour) * 60;
     const end      = cursor ? addMinutes(cursor, minutes) : "";
     cursor         = end;
-    return { id: f.id, name: f.name, acres: f.acres, timeStart: start, timeEnd: end };
+    return { id: f.id, name: f.name, acres: f.acres, timeStart: start, timeEnd: end, actualTimeStart: "", actualTimeEnd: "" };
   });
 }
 
@@ -772,7 +772,7 @@ function downloadTDAReport(tickets, orgName) {
         return `
       <tr>
         <td>${t.date}</td>
-        <td class="nowrap">${fmtTime(fs.timeStart)}<br/><span class="sub">to ${fmtTime(fs.timeEnd)}</span></td>
+        <td class="nowrap">${fmtTime(fs.actualTimeStart || fs.timeStart)}<br/><span class="sub">to ${fmtTime(fs.actualTimeEnd || fs.timeEnd)}</span></td>
         <td><strong>${fs.name}</strong></td>
         <td>${parseFloat(fs.acres).toFixed(2)} ac</td>
         <td>${t.crop}</td>
@@ -1215,6 +1215,7 @@ export default function App() {
   const [cropSeasons,   setCropSeasons]   = useState({});
   const [view,          setView]          = useState("form");
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
+  const [editingActualTime, setEditingActualTime] = useState(null); // { ticketId, fieldIdx, key }
   const [tdaFrom,       setTdaFrom]       = useState("");
   const [tdaTo,         setTdaTo]         = useState("");
   const [logFieldSearch, setLogFieldSearch] = useState("");
@@ -1747,6 +1748,17 @@ export default function App() {
     setEditingId(null);
     setView("log");
     return assignedTicketNumber;
+  };
+
+  const saveActualTime = async (ticket, fieldIdx, key, value) => {
+    const updatedSchedule = (ticket.fieldSchedule || []).map((fs, i) =>
+      i === fieldIdx ? { ...fs, [key]: value } : fs
+    );
+    setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, fieldSchedule: updatedSchedule } : t));
+    const { error } = await supabase.from("tickets")
+      .update({ field_schedule: updatedSchedule })
+      .eq("id", ticket.id);
+    if (error) console.error("Failed to save actual time:", error);
   };
 
   // ── Field Manager
@@ -3160,7 +3172,7 @@ export default function App() {
                       {/* Field schedule */}
                       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                         <thead>
-                          <tr>{["Field","Acres","Start","End","Duration"].map(h => (
+                          <tr>{["Field","Acres","Start","End","Actual Start","Actual End","Duration"].map(h => (
                             <th key={h} style={{ textAlign: h==="Field"?"left":"right", color:"#4a7a20", fontSize:10, fontWeight:700, paddingBottom:3, borderBottom:"1px solid #c8dbb0" }}>{h}</th>
                           ))}</tr>
                         </thead>
@@ -3168,12 +3180,48 @@ export default function App() {
                           {(t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
                             const mins = Math.round((parseFloat(fs.acres) / (t.acresPerHour || 75)) * 60);
                             const dur  = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+                            const editingStart = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualTimeStart";
+                            const editingEnd   = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualTimeEnd";
                             return (
-                              <tr key={fs.id} style={{ borderBottom:"1px solid #eef5e8" }}>
+                              <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
                                 <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
                                 <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{fs.acres}</td>
                                 <td style={{ padding:"3px 0", textAlign:"right", color:"#2a5c0f", fontWeight:600 }}>{fmtTime(fs.timeStart)}</td>
                                 <td style={{ padding:"3px 0", textAlign:"right", color:"#2a5c0f", fontWeight:600 }}>{fmtTime(fs.timeEnd)}</td>
+                                <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }}
+                                  onClick={() => !editingStart && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualTimeStart" })}>
+                                  {editingStart ? (
+                                    <input type="time" autoFocus defaultValue={fs.actualTimeStart||""}
+                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:90 }}
+                                      onBlur={e => { saveActualTime(t, i, "actualTimeStart", e.target.value); setEditingActualTime(null); }}
+                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualTimeStart", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                                    />
+                                  ) : fs.actualTimeStart ? (
+                                    <span style={{ color:"#1a6b2f", fontWeight:600 }}>
+                                      <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"#2a5c0f", marginRight:3, verticalAlign:"middle" }}/>
+                                      {fmtTime(fs.actualTimeStart)}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color:"#bbb", fontSize:11 }}>— <span style={{ fontSize:9 }}>✎</span></span>
+                                  )}
+                                </td>
+                                <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }}
+                                  onClick={() => !editingEnd && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualTimeEnd" })}>
+                                  {editingEnd ? (
+                                    <input type="time" autoFocus defaultValue={fs.actualTimeEnd||""}
+                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:90 }}
+                                      onBlur={e => { saveActualTime(t, i, "actualTimeEnd", e.target.value); setEditingActualTime(null); }}
+                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualTimeEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                                    />
+                                  ) : fs.actualTimeEnd ? (
+                                    <span style={{ color:"#1a6b2f", fontWeight:600 }}>
+                                      <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"#2a5c0f", marginRight:3, verticalAlign:"middle" }}/>
+                                      {fmtTime(fs.actualTimeEnd)}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color:"#bbb", fontSize:11 }}>— <span style={{ fontSize:9 }}>✎</span></span>
+                                  )}
+                                </td>
                                 <td style={{ padding:"3px 0", textAlign:"right", color:"#888", fontSize:11 }}>{dur}</td>
                               </tr>
                             );
