@@ -3409,13 +3409,12 @@ export default function App() {
 
                   if (fieldId === "__new__" || (!fieldId && forceCreateRemaining)) {
                     if (!fieldId && !forceCreateRemaining) continue;
-                    const { error } = await supabase.rpc("upsert_field_boundary", {
-                      p_id:       null,
-                      p_fmid:     fmid,
-                      p_name:     feat.properties.FLD_NM,
-                      p_geojson:  geojson,
-                      p_org_id:   currentOrg?.id,
-                      p_user_id:  session.user.id,
+                    const { error } = await supabase.rpc("create_field_with_boundary", {
+                      p_fmid:    fmid,
+                      p_name:    feat.properties.FLD_NM,
+                      p_geojson: geojson,
+                      p_org_id:  currentOrg?.id,
+                      p_user_id: session.user.id,
                     });
                     if (error) {
                       setFmImportError(`Error creating "${feat.properties.FLD_NM}": ${error.message}`);
@@ -3426,13 +3425,11 @@ export default function App() {
                   } else if (fieldId) {
                     const existing = fieldLibrary.find(f => f.id === fieldId);
                     if (!existing) continue;
-                    const { error } = await supabase.rpc("upsert_field_boundary", {
-                      p_id:       existing.id,
-                      p_fmid:     fmid,
-                      p_name:     existing.name,
-                      p_geojson:  geojson,
-                      p_org_id:   currentOrg?.id,
-                      p_user_id:  session.user.id,
+                    const { error } = await supabase.rpc("update_field_boundary", {
+                      p_id:      existing.id,
+                      p_fmid:    fmid,
+                      p_geojson: geojson,
+                      p_org_id:  currentOrg?.id,
                     });
                     if (error) {
                       setFmImportError(`Error updating "${existing.name}": ${error.message}`);
