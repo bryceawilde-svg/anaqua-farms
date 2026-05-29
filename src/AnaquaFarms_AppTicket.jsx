@@ -3417,7 +3417,10 @@ export default function App() {
                       p_org_id:   currentOrg?.id,
                       p_user_id:  session.user.id,
                     });
-                    if (error) { console.error("Create error:", error.message); continue; }
+                    if (error) {
+                      setFmImportError(`Error creating "${feat.properties.FLD_NM}": ${error.message}`);
+                      setFmImporting(false); return;
+                    }
                     created++;
                     resultRows.push({ name: feat.properties.FLD_NM, outcome: "Created new field" });
                   } else if (fieldId) {
@@ -3431,7 +3434,10 @@ export default function App() {
                       p_org_id:   currentOrg?.id,
                       p_user_id:  session.user.id,
                     });
-                    if (error) { console.error("Update error:", error.message); continue; }
+                    if (error) {
+                      setFmImportError(`Error updating "${existing.name}": ${error.message}`);
+                      setFmImporting(false); return;
+                    }
                     updated++;
                     resultRows.push({ name: existing.name, outcome: "Boundary added" });
                   }
