@@ -934,7 +934,17 @@ function FieldTag({ field, onRemove, onAcresChange }) {
       border: modified ? "1.5px solid #c8a000" : "1.5px solid transparent",
       padding:"3px 7px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
     }}>
-      <span>{field.name}</span>
+      {field.centroid_lat && field.centroid_lng ? (
+        <a
+          href={`https://maps.google.com/?q=${field.centroid_lat},${field.centroid_lng}&z=15`}
+          target="_blank" rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          style={{ color:"#2a5c0f", textDecoration:"none" }}
+          title="Open in Google Maps"
+        >{field.name} 📍</a>
+      ) : (
+        <span>{field.name}</span>
+      )}
       {editing ? (
         <input
           autoFocus
