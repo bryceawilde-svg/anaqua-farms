@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import AgResearchFeed from "./AgResearchFeed";
+import JSZip from "jszip";
+import * as shapefile from "shapefile";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CROPS_LIST = ["Cotton", "Corn"];
@@ -239,6 +241,22 @@ function fmtTime(t) {
   const ampm = h >= 12 ? "PM" : "AM";
   const h12  = h % 12 || 12;
   return `${h12}:${String(m).padStart(2,"0")} ${ampm}`;
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, (_, i) =>
+    Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0)
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+function fmSimilarity(a, b) {
+  const maxLen = Math.max(a.length, b.length);
+  return maxLen === 0 ? 1 : (maxLen - levenshtein(a.toLowerCase(), b.toLowerCase())) / maxLen;
 }
 
 // Returns array of { id, name, acres, timeStart, timeEnd } in application order
@@ -1767,6 +1785,17 @@ export default function App() {
   const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"", traits:[] });
   const [editingFieldId, setEditingFieldId] = useState(null);
   const [editFieldDraft, setEditFieldDraft] = useState({});
+
+  // ── Shapefile importer state
+  const [fmStage,       setFmStage]       = useState("upload"); // "upload" | "review" | "result"
+  const [fmParsing,     setFmParsing]     = useState(false);
+  const [fmParseError,  setFmParseError]  = useState("");
+  const [fmFeatures,    setFmFeatures]    = useState([]);       // parsed GeoJSON features
+  const [fmMatches,     setFmMatches]     = useState({});       // keyed by FLD_FMID → { status, fieldId, confirmed }
+  const [fmImporting,   setFmImporting]   = useState(false);
+  const [fmImportError, setFmImportError] = useState("");
+  const [fmResult,      setFmResult]      = useState(null);     // { updated, created, rows }
+  const fmFileRef = useRef();
 
   const handleFieldCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -3308,6 +3337,309 @@ export default function App() {
 
         {view === "fieldMgr" && (
           <div>
+            {/* ── FarmMobile Shapefile Importer ─────────────────────────────── */}
+            {(() => {
+              const resetFm = () => {
+                setFmStage("upload"); setFmFeatures([]); setFmMatches({});
+                setFmParseError(""); setFmImportError(""); setFmResult(null);
+              };
+
+              const handleFmZip = async (file) => {
+                if (!file) return;
+                setFmParsing(true); setFmParseError("");
+                try {
+                  const zip = await JSZip.loadAsync(file);
+                  const shpEntry = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith(".shp"));
+                  const dbfEntry = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith(".dbf"));
+                  if (!shpEntry || !dbfEntry) throw new Error("No .shp / .dbf found in zip.");
+                  const [shpBuf, dbfBuf] = await Promise.all([
+                    shpEntry.async("arraybuffer"),
+                    dbfEntry.async("arraybuffer"),
+                  ]);
+                  const features = [];
+                  const source = await shapefile.open(shpBuf, dbfBuf);
+                  let result = await source.read();
+                  while (!result.done) { features.push(result.value); result = await source.read(); }
+
+                  // Build initial match state
+                  const matchState = {};
+                  features.forEach(feat => {
+                    const fmid = feat.properties?.FLD_FMID;
+                    const name = feat.properties?.FLD_NM || "";
+                    if (!fmid) return;
+                    // Tier 1: fmid match
+                    const byFmid = fieldLibrary.find(f => f.fmid && f.fmid === fmid);
+                    if (byFmid) { matchState[fmid] = { status:"auto", fieldId: byFmid.id, confirmed: true }; return; }
+                    // Tier 2: exact name match
+                    const byName = fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
+                    if (byName) { matchState[fmid] = { status:"auto", fieldId: byName.id, confirmed: true }; return; }
+                    // Tier 3: fuzzy
+                    let best = null, bestScore = 0;
+                    fieldLibrary.forEach(f => {
+                      const score = fmSimilarity(name, f.name);
+                      if (score > bestScore) { bestScore = score; best = f; }
+                    });
+                    if (best && bestScore >= 0.8) {
+                      matchState[fmid] = { status:"suggested", fieldId: best.id, confirmed: false };
+                    } else {
+                      matchState[fmid] = { status:"unmatched", fieldId: "__new__", confirmed: false };
+                    }
+                  });
+                  setFmFeatures(features);
+                  setFmMatches(matchState);
+                  setFmStage("review");
+                } catch (err) {
+                  setFmParseError("Parse error: " + err.message);
+                } finally {
+                  setFmParsing(false);
+                  if (fmFileRef.current) fmFileRef.current.value = "";
+                }
+              };
+
+              const runImport = async (forceCreateRemaining) => {
+                setFmImporting(true); setFmImportError("");
+                const resultRows = [];
+                let updated = 0, created = 0;
+                for (const feat of fmFeatures) {
+                  const fmid = feat.properties?.FLD_FMID;
+                  const m = fmMatches[fmid];
+                  if (!m) continue;
+                  const fieldId = m.fieldId;
+                  if (fieldId === "__new__" || (!fieldId && forceCreateRemaining)) {
+                    if (!fieldId && !forceCreateRemaining) continue;
+                    const { error } = await supabase.from("fields").insert({
+                      name: feat.properties.FLD_NM,
+                      fmid,
+                      boundary: feat.geometry,
+                      acres: "",
+                      crop: "",
+                      user_id: session.user.id,
+                      org_id: currentOrg?.id,
+                    });
+                    if (error) {
+                      if (error.message.includes("geometry") || error.message.includes("postgis")) {
+                        setFmImportError("PostGIS extension required — run the SQL migration in Supabase before importing.");
+                        setFmImporting(false); return;
+                      }
+                      console.error("Insert error:", error);
+                      continue;
+                    }
+                    created++;
+                    resultRows.push({ name: feat.properties.FLD_NM, outcome: "Created new field" });
+                  } else if (fieldId) {
+                    const existing = fieldLibrary.find(f => f.id === fieldId);
+                    if (!existing) continue;
+                    const { error } = await supabase.from("fields").upsert({
+                      id: existing.id,
+                      name: existing.name,
+                      acres: existing.acres,
+                      crop: existing.crop,
+                      traits: existing.traits,
+                      fmid,
+                      boundary: feat.geometry,
+                      user_id: session.user.id,
+                      org_id: currentOrg?.id,
+                    });
+                    if (error) {
+                      if (error.message.includes("geometry") || error.message.includes("postgis")) {
+                        setFmImportError("PostGIS extension required — run the SQL migration in Supabase before importing.");
+                        setFmImporting(false); return;
+                      }
+                      console.error("Upsert error:", error);
+                      continue;
+                    }
+                    updated++;
+                    resultRows.push({ name: existing.name, outcome: "Boundary added" });
+                  }
+                }
+                // Refresh field library
+                const { data: refreshed } = await supabase.from("fields").select("*").order("name");
+                if (refreshed) setFieldLibrary(refreshed.map(x => ({ ...x, traits: x.traits || [] })));
+                setFmResult({ updated, created, rows: resultRows });
+                setFmStage("result");
+                setFmImporting(false);
+              };
+
+              const autoCount     = Object.values(fmMatches).filter(m => m.status === "auto").length;
+              const suggestedCount= Object.values(fmMatches).filter(m => m.status === "suggested").length;
+              const unmatchedCount= Object.values(fmMatches).filter(m => m.status === "unmatched").length;
+              const unconfirmed   = Object.values(fmMatches).filter(m => m.status === "suggested" && !m.confirmed).length;
+
+              return (
+                <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+                  <div style={sectionTitle}>Import FarmMobile Boundaries</div>
+
+                  {/* Stage 1: Upload */}
+                  {fmStage === "upload" && (
+                    <div>
+                      <div
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => { e.preventDefault(); handleFmZip(e.dataTransfer.files[0]); }}
+                        style={{ border:"2px dashed #c8dbb0", borderRadius:8, padding:"28px 20px",
+                          textAlign:"center", color:"#888", marginBottom:12, background:"#f9fdf5", cursor:"pointer" }}
+                        onClick={() => fmFileRef.current.click()}
+                      >
+                        {fmParsing ? (
+                          <span style={{ color:"#2a5c0f", fontWeight:600 }}>⏳ Parsing shapefile…</span>
+                        ) : (
+                          <>
+                            <div style={{ fontSize:28, marginBottom:6 }}>🗺</div>
+                            <div style={{ fontSize:13, fontWeight:600 }}>Drop FarmMobile .zip here or click to browse</div>
+                            <div style={{ fontSize:11, marginTop:4 }}>ZIP must contain .shp + .dbf files</div>
+                          </>
+                        )}
+                      </div>
+                      <input ref={fmFileRef} type="file" accept=".zip" style={{ display:"none" }}
+                        onChange={e => handleFmZip(e.target.files[0])} />
+                      {fmParseError && <div style={{ color:"#c0392b", fontSize:12, marginTop:6 }}>{fmParseError}</div>}
+                    </div>
+                  )}
+
+                  {/* Stage 2: Review */}
+                  {fmStage === "review" && (
+                    <div>
+                      <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+                        <strong>{fmFeatures.length}</strong> fields found in FarmMobile ·{" "}
+                        <span style={{ color:"#2a7a1f", fontWeight:700 }}>{autoCount} auto-matched</span> ·{" "}
+                        <span style={{ color:"#a07000", fontWeight:700 }}>{suggestedCount} suggested</span> ·{" "}
+                        <span style={{ color:"#c0392b", fontWeight:700 }}>{unmatchedCount} unmatched</span>
+                      </div>
+                      <div style={{ overflowX:"auto", marginBottom:10 }}>
+                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                          <thead>
+                            <tr>
+                              {["FarmMobile Field","Farm","Crop Year","Status","Anaqua Farms Field"].map(h => (
+                                <th key={h} style={th}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fmFeatures.map((feat, idx) => {
+                              const p    = feat.properties || {};
+                              const fmid = p.FLD_FMID;
+                              const m    = fmMatches[fmid] || {};
+                              const isAuto      = m.status === "auto";
+                              const isSuggested = m.status === "suggested";
+                              const isUnmatched = m.status === "unmatched";
+                              const isNew       = m.fieldId === "__new__";
+
+                              const badgeStyle = isAuto
+                                ? { background:"#d4edda", color:"#155724", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
+                                : isSuggested && !isNew
+                                ? { background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
+                                : isNew
+                                ? { background:"#cce5ff", color:"#004085", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
+                                : { background:"#f8d7da", color:"#721c24", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 };
+
+                              const badgeLabel = isAuto ? "Auto" : isNew ? "New" : isSuggested ? "Suggested" : "Unmatched";
+
+                              return (
+                                <tr key={fmid || idx} style={{ borderBottom:"1px solid #eef5e8" }}>
+                                  <td style={td}>{p.FLD_NM}</td>
+                                  <td style={td}>{p.FARM_NM || "—"}</td>
+                                  <td style={td}>{p.CROP_CYCLE || "—"}</td>
+                                  <td style={td}><span style={badgeStyle}>{badgeLabel}</span></td>
+                                  <td style={td}>
+                                    {isAuto ? (
+                                      <span style={{ color:"#555" }}>{fieldLibrary.find(f=>f.id===m.fieldId)?.name || "—"}</span>
+                                    ) : (
+                                      <select
+                                        value={m.fieldId || ""}
+                                        style={{ ...inp, padding:"3px 6px", fontSize:11 }}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          setFmMatches(prev => ({
+                                            ...prev,
+                                            [fmid]: { ...prev[fmid], fieldId: val, confirmed: true,
+                                              status: val === "__new__" ? "unmatched" : prev[fmid].status }
+                                          }));
+                                        }}
+                                      >
+                                        <option value="">— select field —</option>
+                                        {fieldLibrary.map(f => (
+                                          <option key={f.id} value={f.id}>{f.name}</option>
+                                        ))}
+                                        <option value="__new__">＋ Create as new field</option>
+                                      </select>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {unconfirmed > 0 && (
+                        <div style={{ fontSize:11, color:"#a07000", marginBottom:8 }}>
+                          ⚠ Review {unconfirmed} yellow row{unconfirmed !== 1 ? "s" : ""} before importing
+                        </div>
+                      )}
+                      {fmImportError && <div style={{ color:"#c0392b", fontSize:12, marginBottom:8 }}>{fmImportError}</div>}
+
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                        <button
+                          disabled={fmImporting || unconfirmed > 0}
+                          onClick={() => runImport(false)}
+                          style={{ background: unconfirmed > 0 ? "#ccc" : "#2a5c0f", color:"#fff", border:"none",
+                            borderRadius:6, padding:"8px 16px", cursor: unconfirmed > 0 ? "not-allowed" : "pointer",
+                            fontSize:13, fontWeight:700 }}
+                        >
+                          {fmImporting ? "Importing…" : "Import Matched & Confirmed"}
+                        </button>
+                        <button
+                          disabled={fmImporting}
+                          onClick={() => runImport(true)}
+                          style={{ background:"#1a4a8a", color:"#fff", border:"none",
+                            borderRadius:6, padding:"8px 16px", cursor: fmImporting ? "not-allowed" : "pointer",
+                            fontSize:13, fontWeight:700 }}
+                        >
+                          Import All + Create Remaining
+                        </button>
+                        <button onClick={resetFm}
+                          style={{ background:"none", border:"none", color:"#888", cursor:"pointer", fontSize:12, textDecoration:"underline" }}>
+                          Start Over
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stage 3: Result */}
+                  {fmStage === "result" && fmResult && (
+                    <div>
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ color:"#2a7a1f", fontWeight:700, fontSize:13 }}>✓ {fmResult.updated} boundaries imported to existing fields</div>
+                        <div style={{ color:"#1a4a8a", fontWeight:700, fontSize:13 }}>✓ {fmResult.created} new fields created</div>
+                      </div>
+                      <div style={{ overflowX:"auto", marginBottom:12 }}>
+                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                          <thead>
+                            <tr>
+                              <th style={th}>Field Name</th>
+                              <th style={th}>Outcome</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fmResult.rows.map((r, i) => (
+                              <tr key={i} style={{ borderBottom:"1px solid #eef5e8" }}>
+                                <td style={td}>{r.name}</td>
+                                <td style={{ ...td, color:"#2a7a1f", fontWeight:600 }}>{r.outcome}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button onClick={resetFm}
+                        style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
+                          padding:"8px 20px", cursor:"pointer", fontSize:13, fontWeight:700 }}>
+                        Done
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Upload Field List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10, lineHeight:1.7 }}>
@@ -3438,7 +3770,7 @@ export default function App() {
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
-                    <tr>{["Field Name","Crop","Acres","Traits",""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
+                    <tr>{["Field Name","Crop","Acres","Traits","Boundary",""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
                   </thead>
                   <tbody>
                     {fieldLibrary.filter(f => !fieldCropFilter || f.crop === fieldCropFilter).map(f => {
@@ -3501,6 +3833,11 @@ export default function App() {
                             {fieldTraits.length > 0
                               ? <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{fieldTraits.map(t => <span key={t} style={{ background:"#e8f0ff", color:"#1a3a7a", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{t}</span>)}</div>
                               : <span style={{ color:"#aaa", fontSize:11 }}>none</span>}
+                          </td>
+                          <td style={td}>
+                            {f.boundary
+                              ? <span style={{ background:"#d4edda", color:"#155724", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }}>✓ boundary</span>
+                              : <span style={{ color:"#aaa", fontSize:11 }}>—</span>}
                           </td>
                           <td style={{ ...td, whiteSpace:"nowrap" }}>
                             <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>

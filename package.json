@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.0",
+    "jszip": "^3.10.1",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "shapefile": "^0.6.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
