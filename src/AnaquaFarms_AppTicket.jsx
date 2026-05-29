@@ -3542,7 +3542,8 @@ export default function App() {
                                         value={m.fieldId || ""}
                                         style={{ ...inp, padding:"3px 6px", fontSize:11 }}
                                         onChange={e => {
-                                          const val = e.target.value;
+                                          const raw = e.target.value;
+                                          const val = (raw === "" || raw === "__new__") ? raw : Number(raw);
                                           setFmMatches(prev => ({
                                             ...prev,
                                             [fmid]: { ...prev[fmid], fieldId: val, confirmed: true,
