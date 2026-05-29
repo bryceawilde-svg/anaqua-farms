@@ -3405,49 +3405,33 @@ export default function App() {
                   const m = fmMatches[fmid];
                   if (!m) continue;
                   const fieldId = m.fieldId;
+                  const geojson = JSON.stringify(feat.geometry);
+
                   if (fieldId === "__new__" || (!fieldId && forceCreateRemaining)) {
                     if (!fieldId && !forceCreateRemaining) continue;
-                    const { error } = await supabase.from("fields").insert({
-                      name: feat.properties.FLD_NM,
-                      fmid,
-                      boundary: feat.geometry,
-                      acres: "",
-                      crop: "",
-                      user_id: session.user.id,
-                      org_id: currentOrg?.id,
+                    const { error } = await supabase.rpc("upsert_field_boundary", {
+                      p_id:       null,
+                      p_fmid:     fmid,
+                      p_name:     feat.properties.FLD_NM,
+                      p_geojson:  geojson,
+                      p_org_id:   currentOrg?.id,
+                      p_user_id:  session.user.id,
                     });
-                    if (error) {
-                      if (error.message.includes("geometry") || error.message.includes("postgis")) {
-                        setFmImportError("PostGIS extension required — run the SQL migration in Supabase before importing.");
-                        setFmImporting(false); return;
-                      }
-                      console.error("Insert error:", error);
-                      continue;
-                    }
+                    if (error) { console.error("Create error:", error.message); continue; }
                     created++;
                     resultRows.push({ name: feat.properties.FLD_NM, outcome: "Created new field" });
                   } else if (fieldId) {
                     const existing = fieldLibrary.find(f => f.id === fieldId);
                     if (!existing) continue;
-                    const { error } = await supabase.from("fields").upsert({
-                      id: existing.id,
-                      name: existing.name,
-                      acres: existing.acres,
-                      crop: existing.crop,
-                      traits: existing.traits,
-                      fmid,
-                      boundary: feat.geometry,
-                      user_id: session.user.id,
-                      org_id: currentOrg?.id,
+                    const { error } = await supabase.rpc("upsert_field_boundary", {
+                      p_id:       existing.id,
+                      p_fmid:     fmid,
+                      p_name:     existing.name,
+                      p_geojson:  geojson,
+                      p_org_id:   currentOrg?.id,
+                      p_user_id:  session.user.id,
                     });
-                    if (error) {
-                      if (error.message.includes("geometry") || error.message.includes("postgis")) {
-                        setFmImportError("PostGIS extension required — run the SQL migration in Supabase before importing.");
-                        setFmImporting(false); return;
-                      }
-                      console.error("Upsert error:", error);
-                      continue;
-                    }
+                    if (error) { console.error("Update error:", error.message); continue; }
                     updated++;
                     resultRows.push({ name: existing.name, outcome: "Boundary added" });
                   }
