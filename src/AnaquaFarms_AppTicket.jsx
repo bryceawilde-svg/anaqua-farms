@@ -325,11 +325,19 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   }).filter(Boolean);
 
   // Field list rows — no times
-  const fieldRows = (form.selectedFields || []).map((f, i) => `
+  const fieldRows = (form.selectedFields || []).map((f, i) => {
+    const mapsUrl = f.centroid_lat && f.centroid_lng
+      ? `https://maps.google.com/?q=${f.centroid_lat},${f.centroid_lng}&z=15`
+      : null;
+    const nameCell = mapsUrl
+      ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color:#2a5c0f;text-decoration:none;">${i+1}. ${f.name} 📍</a>`
+      : `${i+1}. ${f.name}`;
+    return `
     <tr>
-      <td>${i+1}. ${f.name}</td>
+      <td>${nameCell}</td>
       <td class="num">${parseFloat(f.acres).toFixed(2)}</td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 
   // Actual tank size for the "this load" case.
   // When partialAcres snapped to 0 (totalAcres ≈ acreLoadsRaw), treat as a full tank fill.
@@ -934,17 +942,7 @@ function FieldTag({ field, onRemove, onAcresChange }) {
       border: modified ? "1.5px solid #c8a000" : "1.5px solid transparent",
       padding:"3px 7px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
     }}>
-      {field.centroid_lat && field.centroid_lng ? (
-        <a
-          href={`https://maps.google.com/?q=${field.centroid_lat},${field.centroid_lng}&z=15`}
-          target="_blank" rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-          style={{ color:"#2a5c0f", textDecoration:"none" }}
-          title="Open in Google Maps"
-        >{field.name} 📍</a>
-      ) : (
-        <span>{field.name}</span>
-      )}
+      <span>{field.name}</span>
       {editing ? (
         <input
           autoFocus
