@@ -1566,17 +1566,17 @@ export default function App() {
     setWxLoading(true);
     setWxError("");
     try {
-      // wttr.in: public weather service, no API key, CORS-friendly
-      const res  = await fetch("https://wttr.in/78569?format=j1", { headers: { "Accept": "application/json" } });
+      // Open-Meteo: free, no API key, CORS-friendly
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${WX_LAT}&longitude=${WX_LON}&current=temperature_2m,wind_speed_10m,wind_direction_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+      const res  = await fetch(url);
       const data = await res.json();
-      const cur  = data.current_condition[0];
-      // windspeedMiles, winddirDegree, temp_F
-      set("windSpeed", cur.windspeedMiles);
-      set("windDir",   degreesToDir(parseInt(cur.winddirDegree)));
-      set("airTemp",   cur.temp_F);
+      const cur  = data.current;
+      set("windSpeed", String(Math.round(cur.wind_speed_10m)));
+      set("windDir",   degreesToDir(Math.round(cur.wind_direction_10m)));
+      set("airTemp",   String(Math.round(cur.temperature_2m)));
       setWxError("");
     } catch (err) {
-      setWxError("Weather unavailable in preview. Works in the downloaded HTML file.");
+      setWxError("Weather unavailable. Check your internet connection and try again.");
     } finally {
       setWxLoading(false);
     }
