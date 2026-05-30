@@ -1524,7 +1524,7 @@ export default function App() {
   const addField    = (field) => {
     if (form.selectedFields.find(f => f.id === field.id)) return;
     set("selectedFields", [...form.selectedFields, field]);
-    setFieldSearch(""); setShowDrop(false);
+    setFieldSearch("");
   };
   const removeField = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
 
