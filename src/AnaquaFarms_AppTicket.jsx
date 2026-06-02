@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import AgResearchFeed from "./AgResearchFeed";
+import FieldMapPicker from "./FieldMapPicker";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
 
@@ -1279,6 +1280,7 @@ export default function App() {
   const [fieldSearch,     setFieldSearch]     = useState("");
   const [fieldCropFilter, setFieldCropFilter] = useState("");
   const [showDrop,    setShowDrop]    = useState(false);
+  const [fieldMapView, setFieldMapView] = useState(false);
   const [chemSearch,  setChemSearch]  = useState({});   // keyed by chemRow.id
   const [showChemDrop,setShowChemDrop]= useState({});   // keyed by chemRow.id
   const [manualTank,     setManualTank]     = useState(false);
@@ -1473,7 +1475,7 @@ export default function App() {
     async function loadAll() {
       setDbLoading(true);
       const [f, c, p, e, la, nla, t, cs] = await Promise.all([
-        supabase.from("fields").select("*").order("name"),
+        supabase.from("fields").select("*, boundary_geojson").order("name"),
         supabase.from("chemicals").select("*").order("name"),
         supabase.from("pests").select("*").order("name"),
         supabase.from("equipment").select("*").order("name"),
@@ -1791,8 +1793,11 @@ export default function App() {
   const fieldFileRef = useRef();
   const [fieldUpMsg,    setFieldUpMsg]    = useState("");
   const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"", traits:[] });
-  const [editingFieldId, setEditingFieldId] = useState(null);
-  const [editFieldDraft, setEditFieldDraft] = useState({});
+  const [editingFieldId,       setEditingFieldId]       = useState(null);
+  const [editFieldDraft,       setEditFieldDraft]       = useState({});
+  const [copyBoundaryTargetId, setCopyBoundaryTargetId] = useState(null);
+  const [boundarySearch,       setBoundarySearch]       = useState("");
+  const [fmFillMissingOnly,    setFmFillMissingOnly]    = useState(false);
 
   // ── Shapefile importer state
   const [fmStage,       setFmStage]       = useState("upload"); // "upload" | "review" | "result"
@@ -1847,6 +1852,39 @@ export default function App() {
       if (error) showToast("Failed to delete field: " + error.message);
     });
   };
+  const copyBoundary = async (sourceId) => {
+    const { error } = await supabase.rpc("copy_field_boundary", {
+      p_source_id: sourceId,
+      p_target_id: copyBoundaryTargetId,
+      p_org_id:    currentOrg?.id,
+    });
+    if (error) { showToast("Failed to copy boundary: " + error.message); return; }
+    const source = fieldLibrary.find(f => f.id === sourceId);
+    setFieldLibrary(fl => fl.map(f =>
+      f.id === copyBoundaryTargetId
+        ? { ...f, boundary: source.boundary || true, boundary_geojson: source.boundary_geojson, centroid_lat: source.centroid_lat, centroid_lng: source.centroid_lng }
+        : f
+    ));
+    setCopyBoundaryTargetId(null);
+    setBoundarySearch("");
+    showToast(`Boundary copied from "${source.name}".`, "success");
+  };
+
+  const clearBoundary = async (fieldId) => {
+    const { error } = await supabase.rpc("clear_field_boundary", {
+      p_field_id: fieldId,
+      p_org_id:   currentOrg?.id,
+    });
+    if (error) { showToast("Failed to clear boundary: " + error.message); return; }
+    setFieldLibrary(fl => fl.map(f =>
+      f.id === fieldId
+        ? { ...f, boundary: null, boundary_geojson: null, centroid_lat: null, centroid_lng: null }
+        : f
+    ));
+    setCopyBoundaryTargetId(null);
+    showToast("Boundary cleared.", "success");
+  };
+
   const saveFieldEdit = () => {
     if (!editFieldDraft.name || !editFieldDraft.acres) return alert("Field name and acres are required.");
     const updated = { ...editFieldDraft, acres: parseFloat(editFieldDraft.acres) };
@@ -2441,25 +2479,39 @@ export default function App() {
 
               {/* Field Picker */}
               <div style={{ marginBottom:14 }}>
-                <label style={labelStyle}>
-                  Fields
-                  {form.crop && (
-                    <span style={{ marginLeft:6, background:"#e6f5d0", color:"#2a5c0f", borderRadius:3, padding:"1px 6px", fontSize:11, fontWeight:700 }}>
-                      {form.crop} only
-                    </span>
-                  )}
-                  {form.selectedFields.length > 0 && (
-                    <span style={{ marginLeft:8, color:"#2a5c0f", fontWeight:400, fontSize:11 }}>
-                      — {form.selectedFields.length} selected · <strong>{totalAcresDisplay} total acres</strong>
-                    </span>
-                  )}
-                </label>
-                <div style={{ position:"relative" }}>
-                  <div style={{
-                    border:"1.5px solid #c8dbb0", borderRadius:5, padding:"5px 8px",
-                    background:"#f9fdf5", display:"flex", flexWrap:"wrap", alignItems:"center", gap:2, minHeight:40,
-                    cursor:"text"
-                  }} onClick={() => setShowDrop(true)}>
+                {/* Label row with toggle */}
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+                  <label style={{ ...labelStyle, marginBottom:0 }}>
+                    Fields
+                    {form.crop && (
+                      <span style={{ marginLeft:6, background:"#e6f5d0", color:"#2a5c0f", borderRadius:3, padding:"1px 6px", fontSize:11, fontWeight:700 }}>
+                        {form.crop} only
+                      </span>
+                    )}
+                    {form.selectedFields.length > 0 && (
+                      <span style={{ marginLeft:8, color:"#2a5c0f", fontWeight:400, fontSize:11 }}>
+                        — {form.selectedFields.length} selected · <strong>{totalAcresDisplay} total acres</strong>
+                      </span>
+                    )}
+                  </label>
+                  <div style={{ display:"flex", gap:2 }}>
+                    {["List","Map"].map(mode => (
+                      <button key={mode}
+                        onClick={() => setFieldMapView(mode === "Map")}
+                        style={{
+                          padding:"3px 10px", fontSize:12, fontWeight:700, cursor:"pointer",
+                          border:"1.5px solid #c8dbb0", borderRadius:4,
+                          background: (fieldMapView ? mode==="Map" : mode==="List") ? "#2a5c0f" : "#f9fdf5",
+                          color:      (fieldMapView ? mode==="Map" : mode==="List") ? "#fff"    : "#4a7a20",
+                        }}
+                      >{mode}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Selected field chips — always visible */}
+                {form.selectedFields.length > 0 && (
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:2, marginBottom:6 }}>
                     {form.selectedFields.map(f => (
                       <FieldTag
                         key={f.id}
@@ -2474,40 +2526,59 @@ export default function App() {
                         }}
                       />
                     ))}
-                    <input
-                      value={fieldSearch}
-                      onChange={e => { setFieldSearch(e.target.value); setShowDrop(true); }}
-                      onFocus={() => setShowDrop(true)}
-                      placeholder={form.selectedFields.length ? "Add more fields…" : "Search or select fields…"}
-                      style={{ border:"none", background:"transparent", outline:"none", fontSize:16, flex:1, minWidth:140, WebkitAppearance:"none" }}
-                    />
                   </div>
-                  {showDrop && (
-                    <>
-                    <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowDrop(false)} />
+                )}
+
+                {fieldMapView ? (
+                  <FieldMapPicker
+                    fields={fieldLibrary}
+                    selectedFields={form.selectedFields}
+                    onAdd={addField}
+                    onRemove={removeField}
+                    cropFilter={form.crop}
+                  />
+                ) : (
+                  <div style={{ position:"relative" }}>
                     <div style={{
-                      position:"absolute", top:"100%", left:0, right:0, zIndex:99,
-                      background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
-                      boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight:200, overflowY:"auto"
-                    }}>
-                      {filteredFields.length === 0 ? (
-                        <div style={{ padding:"10px 12px", fontSize:13, color:"#999" }}>
-                          {fieldSearch ? "No matching fields" : "All fields selected or library empty"}
-                        </div>
-                      ) : filteredFields.map(f => (
-                        <div key={f.id} onClick={() => addField(f)}
-                          style={{ padding:"8px 12px", cursor:"pointer", fontSize:13, borderBottom:"1px solid #eef5e8", display:"flex", justifyContent:"space-between", alignItems:"center" }}
-                          onMouseEnter={e => e.currentTarget.style.background="#f0f7e8"}
-                          onMouseLeave={e => e.currentTarget.style.background="transparent"}
-                        >
-                          <span>{f.name}</span>
-                          <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{parseFloat(f.acres).toFixed(2)} ac</span>
-                        </div>
-                      ))}
+                      border:"1.5px solid #c8dbb0", borderRadius:5, padding:"5px 8px",
+                      background:"#f9fdf5", display:"flex", flexWrap:"wrap", alignItems:"center", gap:2, minHeight:40,
+                      cursor:"text"
+                    }} onClick={() => setShowDrop(true)}>
+                      <input
+                        value={fieldSearch}
+                        onChange={e => { setFieldSearch(e.target.value); setShowDrop(true); }}
+                        onFocus={() => setShowDrop(true)}
+                        placeholder={form.selectedFields.length ? "Add more fields…" : "Search or select fields…"}
+                        style={{ border:"none", background:"transparent", outline:"none", fontSize:16, flex:1, minWidth:140, WebkitAppearance:"none" }}
+                      />
                     </div>
-                    </>
-                  )}
-                </div>
+                    {showDrop && (
+                      <>
+                      <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowDrop(false)} />
+                      <div style={{
+                        position:"absolute", top:"100%", left:0, right:0, zIndex:99,
+                        background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
+                        boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight:200, overflowY:"auto"
+                      }}>
+                        {filteredFields.length === 0 ? (
+                          <div style={{ padding:"10px 12px", fontSize:13, color:"#999" }}>
+                            {fieldSearch ? "No matching fields" : "All fields selected or library empty"}
+                          </div>
+                        ) : filteredFields.map(f => (
+                          <div key={f.id} onClick={() => addField(f)}
+                            style={{ padding:"8px 12px", cursor:"pointer", fontSize:13, borderBottom:"1px solid #eef5e8", display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                            onMouseEnter={e => e.currentTarget.style.background="#f0f7e8"}
+                            onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                          >
+                            <span>{f.name}</span>
+                            <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{parseFloat(f.acres).toFixed(2)} ac</span>
+                          </div>
+                        ))}
+                      </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Live field schedule preview */}
@@ -3433,6 +3504,10 @@ export default function App() {
                   } else if (fieldId) {
                     const existing = fieldLibrary.find(f => f.id === fieldId);
                     if (!existing) continue;
+                    if (fmFillMissingOnly && existing.boundary_geojson) {
+                      resultRows.push({ name: existing.name, outcome: "Skipped — already has boundary" });
+                      continue;
+                    }
                     const { error } = await supabase.rpc("update_field_boundary", {
                       p_id:      existing.id,
                       p_fmid:    fmid,
@@ -3448,7 +3523,7 @@ export default function App() {
                   }
                 }
                 // Refresh field library
-                const { data: refreshed } = await supabase.from("fields").select("*").order("name");
+                const { data: refreshed } = await supabase.from("fields").select("*, boundary_geojson").order("name");
                 if (refreshed) setFieldLibrary(refreshed.map(x => ({ ...x, traits: x.traits || [] })));
                 setFmResult({ updated, created, rows: resultRows });
                 setFmStage("result");
@@ -3503,7 +3578,7 @@ export default function App() {
                         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                           <thead>
                             <tr>
-                              {["FarmMobile Field","Farm","Crop Year","Status","Anaqua Farms Field"].map(h => (
+                              {["FarmMobile Field","Farm","Crop Year","Status","Anaqua Farms Field","Boundary"].map(h => (
                                 <th key={h} style={th}>{h}</th>
                               ))}
                             </tr>
@@ -3528,15 +3603,19 @@ export default function App() {
 
                               const badgeLabel = isAuto ? "Auto" : isNew ? "New" : isSuggested ? "Suggested" : "Unmatched";
 
+                              const matchedField = fieldLibrary.find(f => f.id === m.fieldId);
+                              const hasBoundary  = !!matchedField?.boundary_geojson;
+                              const willSkip     = fmFillMissingOnly && hasBoundary && !isNew && m.fieldId;
+
                               return (
-                                <tr key={fmid || idx} style={{ borderBottom:"1px solid #eef5e8" }}>
+                                <tr key={fmid || idx} style={{ borderBottom:"1px solid #eef5e8", opacity: willSkip ? 0.45 : 1 }}>
                                   <td style={td}>{p.FLD_NM}</td>
                                   <td style={td}>{p.FARM_NM || "—"}</td>
                                   <td style={td}>{p.CROP_CYCLE || "—"}</td>
                                   <td style={td}><span style={badgeStyle}>{badgeLabel}</span></td>
                                   <td style={td}>
                                     {isAuto ? (
-                                      <span style={{ color:"#555" }}>{fieldLibrary.find(f=>f.id===m.fieldId)?.name || "—"}</span>
+                                      <span style={{ color:"#555" }}>{matchedField?.name || "—"}</span>
                                     ) : (
                                       <select
                                         value={m.fieldId || ""}
@@ -3559,6 +3638,14 @@ export default function App() {
                                       </select>
                                     )}
                                   </td>
+                                  <td style={td}>
+                                    {willSkip
+                                      ? <span style={{ fontSize:10, color:"#888", fontStyle:"italic" }}>skip</span>
+                                      : hasBoundary
+                                        ? <span style={{ background:"#fff3cd", color:"#856404", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>replace</span>
+                                        : <span style={{ background:"#d4edda", color:"#155724", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>add</span>
+                                    }
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -3566,6 +3653,27 @@ export default function App() {
                         </table>
                       </div>
 
+                      {(() => {
+                        const skipCount = Object.values(fmMatches).filter(m => {
+                          const f = fieldLibrary.find(x => x.id === m.fieldId);
+                          return fmFillMissingOnly && f?.boundary_geojson && m.fieldId !== "__new__" && m.fieldId;
+                        }).length;
+                        return (
+                          <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:8, flexWrap:"wrap" }}>
+                            <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:12, fontWeight:600, color:"#444" }}>
+                              <input
+                                type="checkbox"
+                                checked={fmFillMissingOnly}
+                                onChange={e => setFmFillMissingOnly(e.target.checked)}
+                              />
+                              Fill missing only — skip fields that already have a boundary
+                            </label>
+                            {fmFillMissingOnly && skipCount > 0 && (
+                              <span style={{ fontSize:11, color:"#888" }}>{skipCount} field{skipCount !== 1 ? "s" : ""} will be skipped</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {unconfirmed > 0 && (
                         <div style={{ fontSize:11, color:"#a07000", marginBottom:8 }}>
                           ⚠ Review {unconfirmed} yellow row{unconfirmed !== 1 ? "s" : ""} before importing
@@ -3820,26 +3928,83 @@ export default function App() {
                         );
                       }
                       const fieldTraits = f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []);
+                      const isCopying   = copyBoundaryTargetId === f.id;
+                      const boundarySourceOptions = fieldLibrary.filter(s =>
+                        s.id !== f.id &&
+                        s.boundary_geojson &&
+                        (!boundarySearch || s.name.toLowerCase().includes(boundarySearch.toLowerCase()))
+                      );
                       return (
-                        <tr key={f.id}>
-                          <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
-                          <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
-                          <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{parseFloat(f.acres).toFixed(2)}</td>
-                          <td style={td}>
-                            {fieldTraits.length > 0
-                              ? <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{fieldTraits.map(t => <span key={t} style={{ background:"#e8f0ff", color:"#1a3a7a", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{t}</span>)}</div>
-                              : <span style={{ color:"#aaa", fontSize:11 }}>none</span>}
-                          </td>
-                          <td style={td}>
-                            {f.boundary
-                              ? <span style={{ background:"#d4edda", color:"#155724", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }}>✓ boundary</span>
-                              : <span style={{ color:"#aaa", fontSize:11 }}>—</span>}
-                          </td>
-                          <td style={{ ...td, whiteSpace:"nowrap" }}>
-                            <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
-                            <button onClick={() => deleteField(f.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
-                          </td>
-                        </tr>
+                        <React.Fragment key={f.id}>
+                          <tr>
+                            <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
+                            <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
+                            <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{parseFloat(f.acres).toFixed(2)}</td>
+                            <td style={td}>
+                              {fieldTraits.length > 0
+                                ? <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{fieldTraits.map(t => <span key={t} style={{ background:"#e8f0ff", color:"#1a3a7a", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{t}</span>)}</div>
+                                : <span style={{ color:"#aaa", fontSize:11 }}>none</span>}
+                            </td>
+                            <td style={td}>
+                              {f.boundary
+                                ? <span style={{ background:"#d4edda", color:"#155724", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }}>✓ boundary</span>
+                                : <span style={{ color:"#aaa", fontSize:11 }}>—</span>}
+                            </td>
+                            <td style={{ ...td, whiteSpace:"nowrap" }}>
+                              <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); setCopyBoundaryTargetId(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:4 }} title="Edit">✏</button>
+                              <button
+                                onClick={() => { setCopyBoundaryTargetId(isCopying ? null : f.id); setBoundarySearch(""); setEditingFieldId(null); }}
+                                title={f.boundary ? "Reassign boundary" : "Copy boundary from another field"}
+                                style={{ background:"none", border:"none", cursor:"pointer", fontSize:13, marginRight:4, color: isCopying ? "#c07000" : "#888" }}
+                              >⇄</button>
+                              <button onClick={() => deleteField(f.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                            </td>
+                          </tr>
+                          {isCopying && (
+                            <tr>
+                              <td colSpan={6} style={{ padding:"10px 14px", background:"#fffbf0", borderTop:"1px solid #f0d080", borderBottom:"1px solid #f0d080" }}>
+                                <div style={{ fontSize:12, fontWeight:700, color:"#7a5000", marginBottom:6 }}>
+                                  Copy boundary to <em>{f.name}</em> from:
+                                </div>
+                                <input
+                                  autoFocus
+                                  value={boundarySearch}
+                                  onChange={e => setBoundarySearch(e.target.value)}
+                                  placeholder="Search fields with boundaries…"
+                                  style={{ ...inp, fontSize:12, padding:"4px 8px", marginBottom:6 }}
+                                />
+                                <div style={{ maxHeight:160, overflowY:"auto", border:"1px solid #e5cc80", borderRadius:4, background:"#fff" }}>
+                                  {boundarySourceOptions.length === 0
+                                    ? <div style={{ padding:"8px 12px", fontSize:12, color:"#aaa" }}>No fields with boundaries found</div>
+                                    : boundarySourceOptions.map(s => (
+                                      <div key={s.id}
+                                        onClick={() => copyBoundary(s.id)}
+                                        style={{ padding:"7px 12px", cursor:"pointer", fontSize:12, borderBottom:"1px solid #f5f0e0", display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                                        onMouseEnter={e => e.currentTarget.style.background="#fffbe8"}
+                                        onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                                      >
+                                        <span style={{ fontWeight:600 }}>{s.name}</span>
+                                        <span style={{ color:"#888", fontSize:11 }}>
+                                          {s.crop && <span style={{ background:"#e6f5d0", color:"#2a5c0f", borderRadius:3, padding:"1px 5px", fontWeight:700, marginRight:6 }}>{s.crop}</span>}
+                                          {parseFloat(s.acres).toFixed(1)} ac
+                                        </span>
+                                      </div>
+                                    ))
+                                  }
+                                </div>
+                                <div style={{ display:"flex", gap:8, marginTop:6, alignItems:"center" }}>
+                                  <button onClick={() => setCopyBoundaryTargetId(null)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"3px 10px", cursor:"pointer", fontSize:11, color:"#666" }}>Cancel</button>
+                                  {f.boundary && (
+                                    <button
+                                      onClick={() => { if (window.confirm(`Clear the boundary for "${f.name}"? This cannot be undone.`)) clearBoundary(f.id); }}
+                                      style={{ background:"none", border:"1px solid #e0a0a0", borderRadius:4, padding:"3px 10px", cursor:"pointer", fontSize:11, color:"#c0392b" }}
+                                    >✕ Clear boundary</button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
