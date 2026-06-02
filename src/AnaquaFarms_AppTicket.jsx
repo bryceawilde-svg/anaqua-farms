@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import AgResearchFeed from "./AgResearchFeed";
 import FieldMapPicker from "./FieldMapPicker";
+import BoundaryAssignMap from "./BoundaryAssignMap";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
 
@@ -1798,6 +1799,8 @@ export default function App() {
   const [copyBoundaryTargetId, setCopyBoundaryTargetId] = useState(null);
   const [boundarySearch,       setBoundarySearch]       = useState("");
   const [fmFillMissingOnly,    setFmFillMissingOnly]    = useState(false);
+  const [fmReviewMode,         setFmReviewMode]         = useState("table"); // "table" | "map"
+  const [fmDropState,          setFmDropState]          = useState(null);    // { fmid, search } — open dropdown
 
   // ── Shapefile importer state
   const [fmStage,       setFmStage]       = useState("upload"); // "upload" | "review" | "result"
@@ -3478,6 +3481,18 @@ export default function App() {
                 }
               };
 
+              const handleMapAssign = (fmid, fieldId) => {
+                setFmMatches(prev => ({
+                  ...prev,
+                  [fmid]: {
+                    ...prev[fmid],
+                    fieldId,
+                    confirmed: !!fieldId,
+                    status: fieldId === "__new__" ? "unmatched" : "suggested",
+                  }
+                }));
+              };
+
               const runImport = async (forceCreateRemaining) => {
                 setFmImporting(true); setFmImportError("");
                 const resultRows = [];
@@ -3571,13 +3586,40 @@ export default function App() {
                   {/* Stage 2: Review */}
                   {fmStage === "review" && (
                     <div>
-                      <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                        <strong>{fmFeatures.length}</strong> fields found in FarmMobile ·{" "}
-                        <span style={{ color:"#2a7a1f", fontWeight:700 }}>{autoCount} auto-matched</span> ·{" "}
-                        <span style={{ color:"#a07000", fontWeight:700 }}>{suggestedCount} suggested</span> ·{" "}
-                        <span style={{ color:"#c0392b", fontWeight:700 }}>{unmatchedCount} unmatched</span>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+                        <div style={{ fontSize:12, color:"#555" }}>
+                          <strong>{fmFeatures.length}</strong> fields found ·{" "}
+                          <span style={{ color:"#2a7a1f", fontWeight:700 }}>{autoCount} auto-matched</span> ·{" "}
+                          <span style={{ color:"#a07000", fontWeight:700 }}>{suggestedCount} suggested</span> ·{" "}
+                          <span style={{ color:"#c0392b", fontWeight:700 }}>{unmatchedCount} unmatched</span>
+                        </div>
+                        <div style={{ display:"flex", gap:2 }}>
+                          {["Table","Map"].map(mode => (
+                            <button key={mode}
+                              onClick={() => setFmReviewMode(mode.toLowerCase())}
+                              style={{
+                                padding:"3px 12px", fontSize:12, fontWeight:700, cursor:"pointer",
+                                border:"1.5px solid #c8dbb0", borderRadius:4,
+                                background: fmReviewMode === mode.toLowerCase() ? "#2a5c0f" : "#f9fdf5",
+                                color:      fmReviewMode === mode.toLowerCase() ? "#fff"    : "#4a7a20",
+                              }}
+                            >{mode}</button>
+                          ))}
+                        </div>
                       </div>
-                      <div style={{ overflowX:"auto", marginBottom:10 }}>
+
+                      {fmReviewMode === "map" && (
+                        <div style={{ marginBottom:10 }}>
+                          <BoundaryAssignMap
+                            features={fmFeatures}
+                            matches={fmMatches}
+                            fieldLibrary={fieldLibrary}
+                            onAssign={handleMapAssign}
+                          />
+                        </div>
+                      )}
+
+                      {fmReviewMode === "table" && <div style={{ overflowX:"auto", marginBottom:10 }}>
                         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                           <thead>
                             <tr>
@@ -3616,30 +3658,67 @@ export default function App() {
                                   <td style={td}>{p.FARM_NM || "—"}</td>
                                   <td style={td}>{p.CROP_CYCLE || "—"}</td>
                                   <td style={td}><span style={badgeStyle}>{badgeLabel}</span></td>
-                                  <td style={td}>
-                                    {isAuto ? (
-                                      <span style={{ color:"#555" }}>{matchedField?.name || "—"}</span>
-                                    ) : (
-                                      <select
-                                        value={m.fieldId || ""}
-                                        style={{ ...inp, padding:"3px 6px", fontSize:11 }}
-                                        onChange={e => {
-                                          const raw = e.target.value;
-                                          const val = (raw === "" || raw === "__new__") ? raw : Number(raw);
-                                          setFmMatches(prev => ({
-                                            ...prev,
-                                            [fmid]: { ...prev[fmid], fieldId: val, confirmed: true,
-                                              status: val === "__new__" ? "unmatched" : prev[fmid].status }
-                                          }));
-                                        }}
-                                      >
-                                        <option value="">— select field —</option>
-                                        {fieldLibrary.map(f => (
-                                          <option key={f.id} value={f.id}>{f.name}</option>
-                                        ))}
-                                        <option value="__new__">＋ Create as new field</option>
-                                      </select>
-                                    )}
+                                  <td style={{ ...td, position:"relative", minWidth:160 }}>
+                                    {(() => {
+                                      const isOpen = fmDropState?.fmid === fmid;
+                                      const displayName = matchedField?.name || (m.fieldId === "__new__" ? "＋ New field" : "");
+                                      const dropResults = fieldLibrary
+                                        .filter(f => !fmDropState?.search || f.name.toLowerCase().includes(fmDropState.search.toLowerCase()))
+                                        .slice(0, 18);
+                                      return (
+                                        <div style={{ position:"relative" }}>
+                                          <input
+                                            value={isOpen ? (fmDropState.search ?? "") : displayName}
+                                            onChange={e => setFmDropState({ fmid, search: e.target.value })}
+                                            onFocus={() => { if (!isOpen) setFmDropState({ fmid, search: "" }); }}
+                                            placeholder="— type to search —"
+                                            style={{ ...inp, padding:"3px 7px", fontSize:11, width:"100%", boxSizing:"border-box",
+                                              background: isAuto && !isOpen ? "#f9fdf9" : "#fff",
+                                              color: displayName ? "#222" : "#aaa" }}
+                                          />
+                                          {isOpen && (
+                                            <>
+                                              <div style={{ position:"fixed", inset:0, zIndex:198 }} onClick={() => setFmDropState(null)} />
+                                              <div style={{
+                                                position:"absolute", top:"100%", left:0, minWidth:220, zIndex:199,
+                                                background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
+                                                boxShadow:"0 4px 16px rgba(0,0,0,0.13)", maxHeight:180, overflowY:"auto"
+                                              }}>
+                                                {dropResults.map(f => (
+                                                  <div key={f.id}
+                                                    onClick={() => {
+                                                      setFmMatches(prev => ({ ...prev, [fmid]: { ...prev[fmid], fieldId: f.id, confirmed: true, status: prev[fmid]?.status === "auto" ? "auto" : "suggested" } }));
+                                                      setFmDropState(null);
+                                                    }}
+                                                    style={{ padding:"6px 10px", cursor:"pointer", fontSize:12, borderBottom:"1px solid #eef5e8",
+                                                      display:"flex", justifyContent:"space-between", alignItems:"center",
+                                                      background: matchedField?.id === f.id ? "#e6f5d0" : "transparent" }}
+                                                    onMouseEnter={e => { if (matchedField?.id !== f.id) e.currentTarget.style.background="#f0f7e8"; }}
+                                                    onMouseLeave={e => { if (matchedField?.id !== f.id) e.currentTarget.style.background="transparent"; }}
+                                                  >
+                                                    <span style={{ fontWeight: matchedField?.id === f.id ? 700 : 400 }}>{f.name}</span>
+                                                    <span style={{ color:"#888", fontSize:11, whiteSpace:"nowrap", marginLeft:8 }}>
+                                                      {f.crop && <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 4px",fontWeight:700,fontSize:10,marginRight:4 }}>{f.crop}</span>}
+                                                      {parseFloat(f.acres||0).toFixed(1)} ac
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                                {dropResults.length === 0 && <div style={{ padding:"8px 10px", fontSize:12, color:"#aaa" }}>No fields found</div>}
+                                                <div
+                                                  onClick={() => {
+                                                    setFmMatches(prev => ({ ...prev, [fmid]: { ...prev[fmid], fieldId:"__new__", confirmed:true, status:"unmatched" } }));
+                                                    setFmDropState(null);
+                                                  }}
+                                                  style={{ padding:"6px 10px", cursor:"pointer", fontSize:12, color:"#1a4a8a", fontWeight:600, borderTop:"1px solid #eee" }}
+                                                  onMouseEnter={e => e.currentTarget.style.background="#f0f5ff"}
+                                                  onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                                                >＋ Create as new field</div>
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                   <td style={td}>
                                     {willSkip
@@ -3654,7 +3733,7 @@ export default function App() {
                             })}
                           </tbody>
                         </table>
-                      </div>
+                      </div>}
 
                       {(() => {
                         const skipCount = Object.values(fmMatches).filter(m => {
