@@ -2515,8 +2515,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Selected field chips — always visible */}
-                {form.selectedFields.length > 0 && (
+                {/* In list mode, chips go above the input; in map mode they go below the map so the map doesn't jump */}
+                {!fieldMapView && form.selectedFields.length > 0 && (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:2, marginBottom:6 }}>
                     {form.selectedFields.map(f => (
                       <FieldTag
@@ -2536,13 +2536,33 @@ export default function App() {
                 )}
 
                 {fieldMapView ? (
-                  <FieldMapPicker
-                    fields={fieldLibrary}
-                    selectedFields={form.selectedFields}
-                    onAdd={addField}
-                    onRemove={removeField}
-                    cropFilter={form.crop}
-                  />
+                  <>
+                    <FieldMapPicker
+                      fields={fieldLibrary}
+                      selectedFields={form.selectedFields}
+                      onAdd={addField}
+                      onRemove={removeField}
+                      cropFilter={form.crop}
+                    />
+                    {form.selectedFields.length > 0 && (
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:2, marginTop:6 }}>
+                        {form.selectedFields.map(f => (
+                          <FieldTag
+                            key={f.id}
+                            field={f}
+                            onRemove={() => removeField(f.id)}
+                            onAcresChange={(newAcres) => {
+                              set("selectedFields", form.selectedFields.map(sf =>
+                                sf.id === f.id
+                                  ? { ...sf, acres: newAcres, _origAcres: sf._origAcres ?? sf.acres }
+                                  : sf
+                              ));
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div style={{ position:"relative" }}>
                     <div style={{
