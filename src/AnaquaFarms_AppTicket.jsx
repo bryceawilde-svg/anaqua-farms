@@ -1825,7 +1825,7 @@ export default function App() {
         imported++;
       });
       setFieldLibrary(fl => [...fl, ...added]);
-      supabase.from("fields").upsert(added.map(a => ({ ...a, user_id: session.user.id, org_id: currentOrg?.id }))).then(({ error }) => {
+      supabase.from("fields").upsert(added.map(a => fieldForWrite({ ...a, user_id: session.user.id, org_id: currentOrg?.id }))).then(({ error }) => {
         if (error) showToast("Failed to import fields: " + error.message);
       });
       setFieldUpMsg(`✓ Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
@@ -1841,7 +1841,7 @@ export default function App() {
     const autoTraits = NON_GMO_CROPS.includes(newField.crop) ? ["non-gmo"] : (newField.traits || []);
     const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"", traits: autoTraits };
     setFieldLibrary(fl => [...fl, newFieldRec]);
-    supabase.from("fields").upsert({ ...newFieldRec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    supabase.from("fields").upsert(fieldForWrite({ ...newFieldRec, user_id: session.user.id, org_id: currentOrg?.id })).then(({ error }) => {
       if (error) showToast("Failed to save field: " + error.message);
     });
     setNewField({ name:"", acres:"", crop:"", traits:[] });
@@ -1852,6 +1852,9 @@ export default function App() {
       if (error) showToast("Failed to delete field: " + error.message);
     });
   };
+  // Strip computed columns that PostgREST can't write back to the fields table
+  const fieldForWrite = ({ boundary_geojson, ...rest }) => rest; // eslint-disable-line no-unused-vars
+
   const copyBoundary = async (sourceId) => {
     const { error } = await supabase.rpc("copy_field_boundary", {
       p_source_id: sourceId,
@@ -1889,7 +1892,7 @@ export default function App() {
     if (!editFieldDraft.name || !editFieldDraft.acres) return alert("Field name and acres are required.");
     const updated = { ...editFieldDraft, acres: parseFloat(editFieldDraft.acres) };
     setFieldLibrary(fl => fl.map(f => f.id === updated.id ? updated : f));
-    supabase.from("fields").upsert({ ...updated, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    supabase.from("fields").upsert(fieldForWrite({ ...updated, user_id: session.user.id, org_id: currentOrg?.id })).then(({ error }) => {
       if (error) showToast("Failed to update field: " + error.message);
       else showToast("Field saved.", "success");
     });
