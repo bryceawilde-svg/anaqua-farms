@@ -736,7 +736,6 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
     <span>Printed ${new Date().toLocaleString()}</span>
   </div>
 </div>
-<script>window.onload = () => window.print();</script>
 </body>
 </html>`;
 
