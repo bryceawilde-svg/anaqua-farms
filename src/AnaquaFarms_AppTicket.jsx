@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import AgResearchFeed from "./AgResearchFeed";
 import FieldMapPicker from "./FieldMapPicker";
 import BoundaryAssignMap from "./BoundaryAssignMap";
+import ApplicatorView from "./ApplicatorView";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
 
@@ -1191,6 +1192,7 @@ function normalizeTicket(tk) {
     licensedApplicant:        tk.licensed_applicant         || tk.licensedApplicant         || "",
     licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense  || "",
     nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant      || "",
+    team_view:                tk.team_view                  ?? false,
     totalAcres:               tk.total_acres                || tk.totalAcres                || "0",
     fullLoads:                tk.full_loads                 || tk.fullLoads                 || "—",
     partialAcres:             tk.partial_acres              || tk.partialAcres              || null,
@@ -1400,8 +1402,32 @@ export default function App() {
     setAuthWorking(false);
   }
 
-  const isPro    = userPlan === "pro" || currentOrg?.plan === "pro";
-  const isOwner  = userRole === "owner";
+  const isPro      = userPlan === "pro" || currentOrg?.plan === "pro";
+  const isOwner    = userRole === "owner";
+  const isViewer   = userRole === "viewer";
+
+  // Viewers land in applicator view and can't navigate away
+  useEffect(() => {
+    if (isViewer) setView("applicator");
+  }, [isViewer]); // eslint-disable-line
+
+  const toggleTeamView = async (ticketId, current) => {
+    const next = !current;
+    setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, team_view: next } : t));
+    const { error } = await supabase.from("tickets").update({ team_view: next }).eq("id", ticketId);
+    if (error) {
+      showToast("Failed to update team view: " + error.message);
+      setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, team_view: current } : t));
+    }
+  };
+
+  const moveField = (index, dir) => {
+    const arr = [...form.selectedFields];
+    const swap = index + dir;
+    if (swap < 0 || swap >= arr.length) return;
+    [arr[index], arr[swap]] = [arr[swap], arr[index]];
+    set("selectedFields", arr);
+  };
 
   async function submitSectorChat() {
     const question = chatInput.trim();
@@ -1798,6 +1824,7 @@ export default function App() {
   const [copyBoundaryTargetId, setCopyBoundaryTargetId] = useState(null);
   const [boundarySearch,       setBoundarySearch]       = useState("");
   const [fmFillMissingOnly,    setFmFillMissingOnly]    = useState(false);
+  const [fieldReorderMode,     setFieldReorderMode]     = useState(false);
   const [fmReviewMode,         setFmReviewMode]         = useState("table"); // "table" | "map"
   const [fmDropState,          setFmDropState]          = useState(null);    // { fmid, search } — open dropdown
 
@@ -2188,7 +2215,10 @@ export default function App() {
         </div>
         {/* Tab nav: scrollable row on mobile */}
         <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
-          {[["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"],["team","👥 Team"]].map(([v,l]) => {
+          {(isViewer
+            ? [["applicator","📋 Applications"]]
+            : [["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"],["team","👥 Team"],["applicator","📱 Applicator"]]
+          ).map(([v,l]) => {
             const locked = v === "research" && !isPro;
             return (
               <button key={v} onClick={() => !locked && setView(v)}
@@ -2211,6 +2241,14 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth:880, margin:"0 auto", padding: isMobile ? "12px 10px 80px" : "24px 16px 40px" }}>
+
+        {/* ══ APPLICATOR VIEW ══════════════════════════════════════════════════════ */}
+        {view === "applicator" && (
+          <ApplicatorView
+            tickets={tickets.filter(t => t.team_view)}
+            fieldLibrary={fieldLibrary}
+          />
+        )}
 
         {/* ══ NEW TICKET ══════════════════════════════════════════════════════════ */}
         {view === "form" && (
@@ -2502,7 +2540,7 @@ export default function App() {
                   <div style={{ display:"flex", gap:2 }}>
                     {["List","Map"].map(mode => (
                       <button key={mode}
-                        onClick={() => setFieldMapView(mode === "Map")}
+                        onClick={() => { setFieldMapView(mode === "Map"); setFieldReorderMode(false); }}
                         style={{
                           padding:"3px 10px", fontSize:12, fontWeight:700, cursor:"pointer",
                           border:"1.5px solid #c8dbb0", borderRadius:4,
@@ -2511,11 +2549,23 @@ export default function App() {
                         }}
                       >{mode}</button>
                     ))}
+                    {!fieldMapView && form.selectedFields.length > 1 && (
+                      <button
+                        onClick={() => setFieldReorderMode(m => !m)}
+                        title="Reorder fields"
+                        style={{
+                          padding:"3px 8px", fontSize:12, fontWeight:700, cursor:"pointer",
+                          border:"1.5px solid #c8dbb0", borderRadius:4,
+                          background: fieldReorderMode ? "#e6f5d0" : "#f9fdf5",
+                          color: "#4a7a20",
+                        }}
+                      >⇅</button>
+                    )}
                   </div>
                 </div>
 
                 {/* In list mode, chips go above the input; in map mode they go below the map so the map doesn't jump */}
-                {!fieldMapView && form.selectedFields.length > 0 && (
+                {!fieldMapView && form.selectedFields.length > 0 && !fieldReorderMode && (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:2, marginBottom:6 }}>
                     {form.selectedFields.map(f => (
                       <FieldTag
@@ -2530,6 +2580,27 @@ export default function App() {
                           ));
                         }}
                       />
+                    ))}
+                  </div>
+                )}
+
+                {/* Field reorder panel */}
+                {!fieldMapView && fieldReorderMode && form.selectedFields.length > 0 && (
+                  <div style={{ border:"1.5px solid #c8dbb0", borderRadius:6, overflow:"hidden", marginBottom:6 }}>
+                    <div style={{ padding:"6px 10px", background:"#f0f7e8", fontSize:11, fontWeight:700, color:"#2a5c0f", display:"flex", justifyContent:"space-between" }}>
+                      <span>FIELD ORDER — drag or tap ↑↓ to reprioritize</span>
+                      <button onClick={() => setFieldReorderMode(false)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"#888" }}>Done</button>
+                    </div>
+                    {form.selectedFields.map((f, i) => (
+                      <div key={f.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderBottom:"1px solid #eef5e8", background:"#fff" }}>
+                        <span style={{ width:20, height:20, borderRadius:"50%", background:"#2a5c0f", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, flexShrink:0 }}>{i+1}</span>
+                        <span style={{ flex:1, fontSize:13, fontWeight:600, color:"#222" }}>{f.name}</span>
+                        <span style={{ fontSize:11, color:"#888" }}>{parseFloat(f.acres||0).toFixed(1)} ac</span>
+                        <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                          <button onClick={() => moveField(i, -1)} disabled={i===0} style={{ background:"none", border:"1px solid #c8dbb0", borderRadius:3, width:22, height:18, cursor:i===0?"default":"pointer", color:i===0?"#ccc":"#4a7a20", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>↑</button>
+                          <button onClick={() => moveField(i,  1)} disabled={i===form.selectedFields.length-1} style={{ background:"none", border:"1px solid #c8dbb0", borderRadius:3, width:22, height:18, cursor:i===form.selectedFields.length-1?"default":"pointer", color:i===form.selectedFields.length-1?"#ccc":"#4a7a20", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>↓</button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -3427,6 +3498,19 @@ export default function App() {
                           background:"#2a5c0f", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700
                         }}>✏ Edit</button>
+                        {isOwner && (
+                          <button
+                            onClick={() => toggleTeamView(t.id, t.team_view)}
+                            title={t.team_view ? "Remove from applicator queue" : "Add to applicator queue"}
+                            style={{
+                              border: `1.5px solid ${t.team_view ? "#2a5c0f" : "#c8dbb0"}`,
+                              borderRadius: 5, padding: "7px 12px", cursor: "pointer",
+                              fontSize: 13, fontWeight: 700,
+                              background: t.team_view ? "#2a5c0f" : "#f9fdf5",
+                              color:      t.team_view ? "#fff"    : "#4a7a20",
+                            }}
+                          >{t.team_view ? "✓ In Queue" : "＋ Queue"}</button>
+                        )}
                       </div>
                     </div>
                   )}
