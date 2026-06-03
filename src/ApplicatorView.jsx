@@ -27,6 +27,27 @@ function nowHHMM() {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function degToCompass(deg) {
+  return ["N","NE","E","SE","S","SW","W","NW"][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+}
+
+async function fetchFieldWeather(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+      `&current=wind_speed_10m,wind_direction_10m,temperature_2m` +
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1`
+    );
+    const data = await res.json();
+    const c = data.current;
+    return {
+      windSpeed: Math.round(c.wind_speed_10m),
+      windDir:   degToCompass(c.wind_direction_10m),
+      airTemp:   Math.round(c.temperature_2m),
+    };
+  } catch { return {}; }
+}
+
 function estimateStart(stopHHMM, acres, acresPerHour = 75) {
   const mins = Math.round((parseFloat(acres) || 0) / Math.max(acresPerHour, 1) * 60);
   const [h, m] = stopHHMM.split(":").map(Number);
@@ -110,7 +131,6 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                   style={{ background: "none", border: "1px solid #e0a0a0", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#c0392b", flexShrink: 0, whiteSpace: "nowrap" }}
                 >✕</button>
               )}
-              <span style={{ color: "#c8dbb0", fontSize: 20, flexShrink: 0 }}>›</span>
             </div>
           );
         })}
@@ -158,12 +178,16 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     exitReorder();
   };
 
-  const handleStart = (field) => {
+  const handleStart = async (field) => {
     const idx = schedule.findIndex(fs => fs.id === field.id);
     if (idx === -1) return;
-    const now = nowHHMM();
+    const now   = nowHHMM();
+    const today = new Date().toISOString().slice(0, 10);
+    const weather = (field.centroid_lat && field.centroid_lng)
+      ? await fetchFieldWeather(field.centroid_lat, field.centroid_lng)
+      : {};
     const updated = schedule.map((fs, i) =>
-      i === idx ? { ...fs, actualTimeStart: now } : fs
+      i === idx ? { ...fs, actualTimeStart: now, actualDateStart: today, fieldWeather: weather } : fs
     );
     onSaveFieldSchedule(t.id, updated);
   };

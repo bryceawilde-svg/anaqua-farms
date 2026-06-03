@@ -54,9 +54,18 @@ const CROP_TRAITS = {
     { key: "glufosinate", label: "Glufosinate (Liberty Link)" },
     { key: "glyphosate",  label: "Glyphosate (RR)" },
   ],
+  // Grain sorghum: some varieties carry commercial herbicide tolerance traits.
+  // Unchecked = conventional; checking a trait marks the variety as tolerant to that chemistry.
+  Grain: [
+    { key: "double-team", label: "Double Team (Quizalofop / Aggressor)" },
+    { key: "inzen",       label: "Inzen (Nicosulfuron / Zest)" },
+  ],
 };
 // Crops that are always non-GMO — no grass herbicides
-const NON_GMO_CROPS = ["Grain", "Sorghum"];
+// "Grain" removed: some grain sorghum varieties carry GMO tolerance traits (see CROP_TRAITS)
+const NON_GMO_CROPS = ["Sorghum"];
+// Grain fields with no tolerance trait checked are treated as conventional
+const GRAIN_GMO_TRAITS = ["double-team", "inzen"];
 const FORM_LABELS  = {
   L:"Liquid Flowable / SC", E:"Emulsifiable Concentrate (EC)", S:"Soluble Liquid (SL)",
   WDG:"Water Dispersible Granule / DF", WP:"Wettable Powder", D:"Dry Flowable", A:"Adjuvant / Surfactant",
@@ -780,8 +789,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
 function downloadCSV(tickets, orgName) {
   if (!tickets.length) return;
   const header = [
-    "Date","Time Start","Time End","Location/Field","Acres","Crop/Site","Target Pest",
-    "Wind Speed (mph)","Wind Direction","Air Temp (F)",
+    "App Date","Actual Start","Actual Stop","Location/Field","Acres","Crop/Site","Target Pest",
+    "Field Wind Speed (mph)","Field Wind Dir","Field Air Temp (F)",
     "Tank Size (gal)","Pressure (PSI)","Gal/Acre","Acre Loads","Full Loads","Partial Load (ac)",
     "Equipment","Licensed Applicator","Non-Licensed Applicator",
     "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
@@ -792,10 +801,14 @@ function downloadCSV(tickets, orgName) {
     const chems    = t.chemicals.length ? t.chemicals : [{ name:"", epa:"", rei:"", ratePerAcre:"", unit:"", totalPerTank:"" }];
     return schedule.flatMap(fs =>
       chems.map(c => [
-        t.date, fs.timeStart||"", fs.timeEnd||"",
+        fs.actualDateEnd || fs.actualDateStart || t.date,
+        fs.actualTimeStart || fs.timeStart || "",
+        fs.actualTimeEnd   || fs.timeEnd   || "",
         `"${fs.name}"`, fs.acres,
         t.crop, `"${t.targetPest||""}"`,
-        t.windSpeed, t.windDir, t.airTemp||"",
+        (fs.fieldWeather?.windSpeed ?? t.windSpeed) || "",
+        (fs.fieldWeather?.windDir   ?? t.windDir)   || "",
+        (fs.fieldWeather?.airTemp   ?? t.airTemp)   || "",
         t.tankSize, t.pressure, t.galPerAcre, t.acreLoads, t.fullLoads, t.partialAcres||"0",
         `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, `"${t.nonLicensedApplicant||""}"`,
         `"${c.name||""}"`, c.epa||"", c.rei||"",
@@ -1679,7 +1692,9 @@ export default function App() {
       const f = fieldLibrary.find(x => x.id === sf.id);
       if (!f) return null;
       const crop = f.crop || form.crop || "";
-      return { name: f.name, crop, traits: f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []), season: cropSeasons[crop] || "in_season" };
+      const fHasGMOTrait = (f.traits || []).some(k => GRAIN_GMO_TRAITS.includes(k));
+      const defaultTraits = (NON_GMO_CROPS.includes(f.crop) || (f.crop === "Grain" && !fHasGMOTrait)) ? ["non-gmo"] : [];
+      return { name: f.name, crop, traits: f.traits || defaultTraits, season: cropSeasons[crop] || "in_season" };
     }).filter(Boolean);
     if (!filledRows.length || !fieldsWithTraits.length) { setAiCropSafety(null); return; }
     if (cropSafetyDebounceRef.current) clearTimeout(cropSafetyDebounceRef.current);
@@ -1926,7 +1941,10 @@ export default function App() {
   const addManualField = () => {
     if (!newField.name || !newField.acres) return alert("Field name and acres are required.");
     const nextId = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) + 1 : 1;
-    const autoTraits = NON_GMO_CROPS.includes(newField.crop) ? ["non-gmo"] : (newField.traits || []);
+    const hasGMOTrait = (newField.traits || []).some(k => GRAIN_GMO_TRAITS.includes(k));
+    const autoTraits = (NON_GMO_CROPS.includes(newField.crop) || (newField.crop === "Grain" && !hasGMOTrait))
+      ? ["non-gmo"]
+      : (newField.traits || []);
     const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"", traits: autoTraits };
     setFieldLibrary(fl => [...fl, newFieldRec]);
     supabase.from("fields").upsert(fieldForWrite({ ...newFieldRec, user_id: session.user.id, org_id: currentOrg?.id })).then(({ error }) => {
@@ -3305,39 +3323,37 @@ export default function App() {
                 {view === "log" && (
           <div>
             {/* Header row */}
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:8 }}>
-              <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:16 }}>
-                {tickets.length} Ticket{tickets.length!==1?"s":""} saved
+            <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
+              {/* Date range row */}
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
+                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"4px 4px", fontSize:11, fontFamily:"inherit", flex:1, minWidth:0 }}
+                  title="Report from date"/>
+                <span style={{ fontSize:11, color:"#888", flexShrink:0 }}>–</span>
+                <input type="date" value={tdaTo} onChange={e=>setTdaTo(e.target.value)}
+                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"4px 4px", fontSize:11, fontFamily:"inherit", flex:1, minWidth:0 }}
+                  title="Report to date"/>
               </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {/* Buttons row */}
+              <div style={{ display:"flex", gap:8 }}>
                 <button onClick={() => downloadCSV(tickets, currentOrg?.name)} disabled={!tickets.length} style={{
-                  background: tickets.length ? "#2a5c0f" : "#ccc",
-                  color:"#fff", border:"none", borderRadius:6, padding: isMobile ? "10px 14px" : "8px 16px",
-                  cursor: tickets.length ? "pointer" : "default", fontSize:13, fontWeight:700
-                }}>⬇ CSV</button>
-                <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-                  <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
-                    style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding: isMobile?"8px 6px":"5px 8px", fontSize: isMobile?14:12, fontFamily:"inherit" }}
-                    title="Report from date"/>
-                  <span style={{ fontSize:12, color:"#888" }}>to</span>
-                  <input type="date" value={tdaTo} onChange={e=>setTdaTo(e.target.value)}
-                    style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding: isMobile?"8px 6px":"5px 8px", fontSize: isMobile?14:12, fontFamily:"inherit" }}
-                    title="Report to date"/>
-                  <button onClick={() => {
-                    const filtered = tickets.filter(t => {
-                      if (tdaFrom && t.date < tdaFrom) return false;
-                      if (tdaTo   && t.date > tdaTo)   return false;
-                      return true;
-                    });
-                    if (!filtered.length) return alert("No tickets in selected date range.");
-                    downloadTDAReport(filtered, currentOrg?.name);
-                  }} disabled={!tickets.length} style={{
-                    background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
-                    color:"#fff", border:"none", borderRadius:6,
-                    padding: isMobile ? "10px 14px" : "8px 14px",
-                    cursor: tickets.length ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                  }}>📋 TDA Report</button>
-                </div>
+                  flex:1, background: tickets.length ? "#2a5c0f" : "#ccc",
+                  color:"#fff", border:"none", borderRadius:6, padding:"10px 0",
+                  cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
+                }}>CSV</button>
+                <button onClick={() => {
+                  const filtered = tickets.filter(t => {
+                    if (tdaFrom && t.date < tdaFrom) return false;
+                    if (tdaTo   && t.date > tdaTo)   return false;
+                    return true;
+                  });
+                  if (!filtered.length) return alert("No tickets in selected date range.");
+                  downloadTDAReport(filtered, currentOrg?.name);
+                }} disabled={!tickets.length} style={{
+                  flex:1, background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
+                  color:"#fff", border:"none", borderRadius:6, padding:"10px 0",
+                  cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
+                }}>TDA Report</button>
               </div>
             </div>
 
@@ -3453,13 +3469,14 @@ export default function App() {
                       {/* Field schedule */}
                       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                         <thead>
-                          <tr>{["Field","Acres","App. Date"].map(h => (
+                          <tr>{["Field","Acres","App. Date","Wind","Temp"].map(h => (
                             <th key={h} style={{ textAlign: h==="Field"?"left":"right", color:"#4a7a20", fontSize:10, fontWeight:700, paddingBottom:3, borderBottom:"1px solid #c8dbb0" }}>{h}</th>
                           ))}</tr>
                         </thead>
                         <tbody>
                           {(t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
                             const editingEnd = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualTimeEnd";
+                            const w = fs.fieldWeather || {};
                             return (
                               <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
                                 <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
@@ -3483,6 +3500,12 @@ export default function App() {
                                   ) : (
                                     <span style={{ color:"#bbb", fontSize:11 }}>—</span>
                                   )}
+                                </td>
+                                <td style={{ padding:"3px 0", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap" }}>
+                                  {w.windSpeed != null ? `${w.windSpeed} ${w.windDir||""}`.trim() : "—"}
+                                </td>
+                                <td style={{ padding:"3px 0", textAlign:"right", fontSize:11, color:"#555" }}>
+                                  {w.airTemp != null ? `${w.airTemp}°F` : "—"}
                                 </td>
                               </tr>
                             );
@@ -4069,9 +4092,11 @@ export default function App() {
                   </div>
                 </div>
               )}
-              {NON_GMO_CROPS.includes(newField.crop) && (
+              {(NON_GMO_CROPS.includes(newField.crop) || (newField.crop === "Grain" && !(newField.traits||[]).some(k => GRAIN_GMO_TRAITS.includes(k)))) && (
                 <div style={{ marginTop:8, fontSize:12, color:"#7a5000", fontWeight:600 }}>
-                  ⚠ Non-GMO crop — grass herbicide applications will be flagged automatically.
+                  {newField.crop === "Grain"
+                    ? "⚠ Conventional sorghum — no herbicide tolerance selected. Grass herbicide applications will be flagged."
+                    : "⚠ Non-GMO crop — grass herbicide applications will be flagged automatically."}
                 </div>
               )}
             </div>
@@ -4197,7 +4222,8 @@ export default function App() {
                           </tr>
                         );
                       }
-                      const fieldTraits = f.traits || (NON_GMO_CROPS.includes(f.crop) ? ["non-gmo"] : []);
+                      const fHasGMO2 = (f.traits || []).some(k => GRAIN_GMO_TRAITS.includes(k));
+                      const fieldTraits = f.traits || ((NON_GMO_CROPS.includes(f.crop) || (f.crop === "Grain" && !fHasGMO2)) ? ["non-gmo"] : []);
                       const isCopying   = copyBoundaryTargetId === f.id;
                       const boundarySourceOptions = fieldLibrary.filter(s =>
                         s.id !== f.id &&
