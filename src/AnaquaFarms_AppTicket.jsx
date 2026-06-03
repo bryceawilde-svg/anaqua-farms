@@ -1815,6 +1815,14 @@ export default function App() {
     if (error) console.error("Failed to save actual time:", error);
   };
 
+  const saveFieldSchedule = async (ticketId, updatedSchedule) => {
+    setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, fieldSchedule: updatedSchedule } : t));
+    const { error } = await supabase.from("tickets")
+      .update({ field_schedule: updatedSchedule })
+      .eq("id", ticketId);
+    if (error) showToast("Failed to save field time: " + error.message);
+  };
+
   // ── Field Manager
   const fieldFileRef = useRef();
   const [fieldUpMsg,    setFieldUpMsg]    = useState("");
@@ -2247,6 +2255,8 @@ export default function App() {
           <ApplicatorView
             tickets={tickets.filter(t => t.team_view)}
             fieldLibrary={fieldLibrary}
+            onSaveFieldSchedule={saveFieldSchedule}
+            isOwner={isOwner}
           />
         )}
 
@@ -3326,7 +3336,8 @@ export default function App() {
               const pestStr   = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest||"");
               return (
                 <div key={t.id} style={{
-                  background:"#fff", border:`1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
+                  background:"#fff",
+                  border: t.team_view ? `3px solid #1a6bbf` : `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
                   borderRadius:8, marginBottom: isMobile ? 8 : 10,
                   boxShadow: isOpen ? "0 2px 12px rgba(42,92,15,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
                   overflow:"hidden", transition:"box-shadow 0.15s"
@@ -3368,7 +3379,6 @@ export default function App() {
                         <span>💨 {t.windSpeed} mph {t.windDir}</span>
                         <span>🌡 {t.airTemp}°F</span>
                         <span>⛽ {t.tankSize} gal</span>
-                        <span>📦 {t.fullLoads} full{t.partialAcres?` + 1 partial (${t.partialAcres} ac)`:""}</span>
                         {t.equipmentType && <span>🚜 {t.equipmentType}</span>}
                         {t.licensedApplicant && <span>👤 {t.licensedApplicant}</span>}
                       </div>
@@ -3376,39 +3386,17 @@ export default function App() {
                       {/* Field schedule */}
                       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                         <thead>
-                          <tr>{["Field","Acres","Start","End","Actual Start","Actual End","Duration"].map(h => (
+                          <tr>{["Field","Acres","App. Date"].map(h => (
                             <th key={h} style={{ textAlign: h==="Field"?"left":"right", color:"#4a7a20", fontSize:10, fontWeight:700, paddingBottom:3, borderBottom:"1px solid #c8dbb0" }}>{h}</th>
                           ))}</tr>
                         </thead>
                         <tbody>
                           {(t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
-                            const mins = Math.round((parseFloat(fs.acres) / (t.acresPerHour || 75)) * 60);
-                            const dur  = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
-                            const editingStart = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualTimeStart";
-                            const editingEnd   = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualTimeEnd";
+                            const editingEnd = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualTimeEnd";
                             return (
                               <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
                                 <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
-                                <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{fs.acres}</td>
-                                <td style={{ padding:"3px 0", textAlign:"right", color:"#2a5c0f", fontWeight:600 }}>{fmtTime(fs.timeStart)}</td>
-                                <td style={{ padding:"3px 0", textAlign:"right", color:"#2a5c0f", fontWeight:600 }}>{fmtTime(fs.timeEnd)}</td>
-                                <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }}
-                                  onClick={() => !editingStart && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualTimeStart" })}>
-                                  {editingStart ? (
-                                    <input type="time" autoFocus defaultValue={fs.actualTimeStart||""}
-                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:90 }}
-                                      onBlur={e => { saveActualTime(t, i, "actualTimeStart", e.target.value); setEditingActualTime(null); }}
-                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualTimeStart", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
-                                    />
-                                  ) : fs.actualTimeStart ? (
-                                    <span style={{ color:"#1a6b2f", fontWeight:600 }}>
-                                      <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"#2a5c0f", marginRight:3, verticalAlign:"middle" }}/>
-                                      {fmtTime(fs.actualTimeStart)}
-                                    </span>
-                                  ) : (
-                                    <span style={{ color:"#bbb", fontSize:11 }}>— <span style={{ fontSize:9 }}>✎</span></span>
-                                  )}
-                                </td>
+                                <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
                                 <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }}
                                   onClick={() => !editingEnd && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualTimeEnd" })}>
                                   {editingEnd ? (
@@ -3420,13 +3408,12 @@ export default function App() {
                                   ) : fs.actualTimeEnd ? (
                                     <span style={{ color:"#1a6b2f", fontWeight:600 }}>
                                       <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"#2a5c0f", marginRight:3, verticalAlign:"middle" }}/>
-                                      {fmtTime(fs.actualTimeEnd)}
+                                      {t.date ? new Date(t.date + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" }) : "—"}
                                     </span>
                                   ) : (
-                                    <span style={{ color:"#bbb", fontSize:11 }}>— <span style={{ fontSize:9 }}>✎</span></span>
+                                    <span style={{ color:"#bbb", fontSize:11 }}>—</span>
                                   )}
                                 </td>
-                                <td style={{ padding:"3px 0", textAlign:"right", color:"#888", fontSize:11 }}>{dur}</td>
                               </tr>
                             );
                           })}
@@ -3437,7 +3424,7 @@ export default function App() {
                       {t.chemicals.length > 0 && (
                         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                           <thead>
-                            <tr>{["Chemical","EPA #","REI","Rate/Acre","Unit","Full Tank","Partial Load"].map(h => (
+                            <tr>{["Chemical","Rate/Acre","Unit","EPA #","REI"].map(h => (
                               <th key={h} style={{ ...th, fontSize:10, padding:"4px 6px" }}>{h}</th>
                             ))}</tr>
                           </thead>
@@ -3445,12 +3432,10 @@ export default function App() {
                             {t.chemicals.map((c,i) => (
                               <tr key={i}>
                                 <td style={td}>{c.name}</td>
+                                <td style={td}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</td>
+                                <td style={td}>{c.unit}</td>
                                 <td style={td}>{c.epa}</td>
                                 <td style={td}>{c.rei}</td>
-                                <td style={td}>{c.ratePerAcre}</td>
-                                <td style={td}>{c.unit}</td>
-                                <td style={{ ...td, fontWeight:700, color:"#2a5c0f" }}>{c.totalPerTankFmt || c.totalPerTank}</td>
-                                <td style={{ ...td, fontWeight:700, color:"#e07020" }}>{c.partialPerTankFmt || "—"}</td>
                               </tr>
                             ))}
                           </tbody>

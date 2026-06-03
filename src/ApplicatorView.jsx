@@ -2,24 +2,52 @@ import { useState } from "react";
 import ApplicatorMapView from "./ApplicatorMapView";
 
 const CROP_COLORS = { Cotton: "#FFE600", Corn: "#00D9FF" };
+
 function cropChip(crop) {
-  const bg = CROP_COLORS[crop] || "#e6f5d0";
+  const bg    = CROP_COLORS[crop] || "#e6f5d0";
   const color = crop === "Cotton" ? "#7a5f00" : crop === "Corn" ? "#005a7a" : "#2a5c0f";
   return <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 700, marginLeft: 6 }}>{crop}</span>;
 }
 
 function fmtDate(d) {
   if (!d) return "";
-  const parts = d.split("-");
-  if (parts.length !== 3) return d;
-  return `${parseInt(parts[1])}/${parseInt(parts[2])}/${parts[0].slice(2)}`;
+  const p = d.split("-");
+  return p.length === 3 ? `${parseInt(p[1])}/${parseInt(p[2])}/${p[0].slice(2)}` : d;
 }
 
-export default function ApplicatorView({ tickets, fieldLibrary }) {
-  const [selectedTicket, setSelectedTicket] = useState(null);
-  const [focusFieldId,   setFocusFieldId]   = useState(null);
+function fmtHHMM(t) {
+  if (!t) return "—";
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${((h % 12) || 12)}:${String(m).padStart(2, "0")} ${ampm}`;
+}
 
-  // Merge boundary_geojson from fieldLibrary into ticket's selectedFields
+function nowHHMM() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function estimateStart(stopHHMM, acres, acresPerHour = 75) {
+  const mins = Math.round((parseFloat(acres) || 0) / Math.max(acresPerHour, 1) * 60);
+  const [h, m] = stopHHMM.split(":").map(Number);
+  const safe = Math.max(0, h * 60 + m - mins);
+  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function ensureSchedule(ticket, enrichedFields) {
+  if (ticket.fieldSchedule?.length) return ticket.fieldSchedule;
+  return enrichedFields.map(f => ({
+    id: f.id, name: f.name, acres: f.acres,
+    timeStart: "", timeEnd: "",
+    actualTimeStart: "", actualTimeEnd: "",
+  }));
+}
+
+export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, isOwner }) {
+  const [selectedTicket,   setSelectedTicket]   = useState(null);
+  const [focusFieldId,     setFocusFieldId]     = useState(null);
+  const [completedExpanded, setCompletedExpanded] = useState(false);
+
   const enrichFields = (selectedFields) =>
     (selectedFields || []).map(f => ({
       ...f,
@@ -29,7 +57,7 @@ export default function ApplicatorView({ tickets, fieldLibrary }) {
   // ── Ticket list ──────────────────────────────────────────────────────────
   if (!selectedTicket) {
     return (
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "0 0 40px" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
         <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #e8f5e0", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 20 }}>🌱</div>
           <div>
@@ -47,15 +75,13 @@ export default function ApplicatorView({ tickets, fieldLibrary }) {
 
         {tickets.map(t => {
           const fields = t.selectedFields || [];
-          const chems  = (t.chemicals || t.chem_rows || []).filter(c => c.name || c.chemId);
+          const chems  = (t.chemicals || []).filter(c => c.name);
+          const sched  = t.fieldSchedule || [];
+          const doneCount = sched.filter(fs => fs.actualTimeEnd).length;
           return (
             <div key={t.id}
-              onClick={() => { setSelectedTicket(t); setFocusFieldId(null); }}
-              style={{
-                margin: "10px 12px", borderRadius: 8, border: "1.5px solid #c8dbb0",
-                background: "#fff", padding: "14px 16px", cursor: "pointer",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-              }}
+              onClick={() => { setSelectedTicket(t); setFocusFieldId(null); setCompletedExpanded(false); }}
+              style={{ margin: "10px 12px", borderRadius: 8, border: "1.5px solid #c8dbb0", background: "#fff", padding: "14px 16px", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
@@ -69,13 +95,8 @@ export default function ApplicatorView({ tickets, fieldLibrary }) {
               </div>
               <div style={{ marginTop: 6, fontSize: 13, color: "#555" }}>
                 {fields.length} field{fields.length !== 1 ? "s" : ""} · {parseFloat(t.totalAcres || t.total_acres || 0).toFixed(1)} ac
+                {doneCount > 0 && <span style={{ marginLeft: 8, color: "#2a5c0f", fontWeight: 700 }}>{doneCount}/{fields.length} done</span>}
                 {chems.length > 0 && <span style={{ marginLeft: 8, color: "#888" }}>· {chems.length} chemical{chems.length !== 1 ? "s" : ""}</span>}
-              </div>
-              <div style={{ marginTop: 4, fontSize: 12, color: "#aaa", display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {fields.slice(0, 4).map(f => <span key={f.id}>{f.name}</span>).reduce((acc, el, i) =>
-                  i === 0 ? [el] : [...acc, <span key={`sep-${i}`} style={{ color: "#ddd" }}>·</span>, el], []
-                )}
-                {fields.length > 4 && <span>+{fields.length - 4} more</span>}
               </div>
             </div>
           );
@@ -85,10 +106,42 @@ export default function ApplicatorView({ tickets, fieldLibrary }) {
   }
 
   // ── Ticket detail ────────────────────────────────────────────────────────
-  const t            = selectedTicket;
-  const enriched     = enrichFields(t.selectedFields);
-  const chems        = (t.chemicals || t.chem_rows || []).filter(c => c.name);
-  const ticketNum    = String(t.ticketNumber || t.ticket_number || "").padStart(3, "0");
+  // Re-sync ticket from tickets prop so state updates propagate
+  const t         = tickets.find(tk => tk.id === selectedTicket.id) || selectedTicket;
+  const enriched  = enrichFields(t.selectedFields);
+  const schedule  = ensureSchedule(t, enriched);
+  const acresPerHour = parseFloat(t.acresPerHour || t.acres_per_hour) || 75;
+  const chems     = (t.chemicals || []).filter(c => c.name);
+  const ticketNum = String(t.ticketNumber || t.ticket_number || "").padStart(3, "0");
+
+  // Classify each field
+  const getEntry = (fieldId) => schedule.find(fs => fs.id === fieldId) || { actualTimeStart: "", actualTimeEnd: "" };
+  const pendingFields   = enriched.filter(f => !getEntry(f.id).actualTimeEnd);
+  const completedFields = enriched.filter(f =>  getEntry(f.id).actualTimeEnd);
+
+  const handleStart = (field) => {
+    const idx = schedule.findIndex(fs => fs.id === field.id);
+    if (idx === -1) return;
+    const now = nowHHMM();
+    const updated = schedule.map((fs, i) =>
+      i === idx ? { ...fs, actualTimeStart: now } : fs
+    );
+    onSaveFieldSchedule(t.id, updated);
+  };
+
+  const handleStop = (field) => {
+    const idx = schedule.findIndex(fs => fs.id === field.id);
+    if (idx === -1) return;
+    const now      = nowHHMM();
+    const entry    = schedule[idx];
+    const start    = entry.actualTimeStart || estimateStart(now, field.acres, acresPerHour);
+    const updated  = schedule.map((fs, i) =>
+      i === idx ? { ...fs, actualTimeStart: start, actualTimeEnd: now } : fs
+    );
+    onSaveFieldSchedule(t.id, updated);
+    // If focused field just completed, clear focus
+    if (focusFieldId === field.id) setFocusFieldId(null);
+  };
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
@@ -100,96 +153,178 @@ export default function ApplicatorView({ tickets, fieldLibrary }) {
         >‹</button>
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, color: "#1a4a0a" }}>
-            #{ticketNum} — {fmtDate(t.date)}
-            {t.crop && cropChip(t.crop)}
+            #{ticketNum} — {fmtDate(t.date)}{t.crop && cropChip(t.crop)}
           </div>
           <div style={{ fontSize: 12, color: "#888" }}>
-            {enriched.length} fields · {parseFloat(t.totalAcres || t.total_acres || 0).toFixed(1)} ac
+            {pendingFields.length} remaining · {completedFields.length} done · {parseFloat(t.totalAcres || t.total_acres || 0).toFixed(1)} ac total
           </div>
         </div>
       </div>
 
       {/* Map */}
       <div style={{ margin: "10px 12px 0" }}>
-        <ApplicatorMapView fields={enriched} focusFieldId={focusFieldId} height={260} />
+        <ApplicatorMapView fields={enriched} focusFieldId={focusFieldId} height={250} />
       </div>
 
-      {/* Field list */}
+      {/* Fields to spray */}
       <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
         <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>
-          FIELDS TO SPRAY
+          FIELDS TO SPRAY{pendingFields.length > 0 ? ` (${pendingFields.length})` : " — ALL DONE ✓"}
         </div>
-        {enriched.length === 0 && (
-          <div style={{ padding: "12px 14px", fontSize: 13, color: "#aaa" }}>No fields on this ticket.</div>
+        {pendingFields.length === 0 && (
+          <div style={{ padding: "12px 14px", fontSize: 13, color: "#aaa" }}>All fields completed.</div>
         )}
-        {enriched.map((f, i) => {
+        {pendingFields.map((f) => {
+          const entry     = getEntry(f.id);
+          const origIdx   = enriched.indexOf(f);
+          const started   = !!entry.actualTimeStart;
           const isFocused = focusFieldId === f.id;
+
           return (
             <div key={f.id}
-              onClick={() => setFocusFieldId(isFocused ? null : f.id)}
               style={{
-                padding: "11px 14px", borderBottom: "1px solid #eef5e8", cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 10,
-                background: isFocused ? "#fffbec" : "transparent",
-                transition: "background 0.15s",
+                borderBottom: "1px solid #eef5e8",
+                background: isFocused ? "#fffbec" : "#fff",
               }}
             >
-              <div style={{
-                width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
-                background: isFocused ? "#FFE600" : "#2a5c0f",
-                color: isFocused ? "#7a5f00" : "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 800, fontSize: 13,
-              }}>{i + 1}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#1a1a1a" }}>{f.name}</div>
-                <div style={{ fontSize: 12, color: "#888" }}>
-                  {parseFloat(f.acres || 0).toFixed(2)} ac
-                  {f.crop && <span style={{ marginLeft: 6, color: "#4aaa1a", fontWeight: 600 }}>{f.crop}</span>}
+              {/* Field name row — Start/Stop inline */}
+              <div
+                style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}
+              >
+                <div
+                  onClick={() => setFocusFieldId(isFocused ? null : f.id)}
+                  style={{ cursor: "pointer", width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                    background: isFocused ? "#FFE600" : "#2a5c0f",
+                    color: isFocused ? "#7a5f00" : "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontWeight: 800, fontSize: 13,
+                  }}>{origIdx + 1}</div>
+                <div onClick={() => setFocusFieldId(isFocused ? null : f.id)} style={{ flex: 1, cursor: "pointer" }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1a1a1a" }}>{f.name}</div>
+                  <div style={{ fontSize: 12, color: "#888" }}>
+                    {parseFloat(f.acres || 0).toFixed(2)} ac
+                    {started && <span style={{ marginLeft: 6, color: "#2a5c0f", fontWeight: 600 }}>▶ {fmtHHMM(entry.actualTimeStart)}</span>}
+                  </div>
                 </div>
-              </div>
-              <div style={{ fontSize: 11, color: isFocused ? "#b8900a" : "#c8dbb0", fontWeight: 700 }}>
-                {isFocused ? "● focused" : (f.boundary_geojson ? "⦿ map" : "")}
+                {/* Inline Start / Stop */}
+                {!started ? (
+                  <button
+                    onClick={() => handleStart(f)}
+                    style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
+                      background: "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}
+                  >▶ Start</button>
+                ) : (
+                  <button
+                    onClick={() => handleStop(f)}
+                    style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
+                      background: "#c0392b", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}
+                  >■ Stop</button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
+      {/* Completed fields — collapsible */}
+      {completedFields.length > 0 && (
+        <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
+          <button
+            onClick={() => setCompletedExpanded(e => !e)}
+            style={{
+              width: "100%", padding: "10px 14px", background: "#f5f5f5", border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              fontSize: 12, fontWeight: 800, color: "#888", letterSpacing: "0.06em",
+            }}
+          >
+            <span>COMPLETED ({completedFields.length})</span>
+            <span style={{ fontSize: 14 }}>{completedExpanded ? "▲" : "▼"}</span>
+          </button>
+          {completedExpanded && completedFields.map(f => {
+            const entry   = getEntry(f.id);
+            const origIdx = enriched.indexOf(f);
+            const schedIdx = schedule.findIndex(fs => fs.id === f.id);
+            return (
+              <div key={f.id} style={{ padding: "10px 14px", borderTop: "1px solid #eee", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#bbb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                  ✓
+                </div>
+                <div style={{ flex: 1, opacity: 0.6 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#555", textDecoration: "line-through" }}>{f.name}</div>
+                  <div style={{ fontSize: 12, color: "#aaa" }}>
+                    {parseFloat(f.acres || 0).toFixed(2)} ac
+                    {entry.actualTimeEnd && t.date && <span style={{ marginLeft: 6 }}>{fmtDate(t.date)}</span>}
+                  </div>
+                </div>
+                {isOwner && schedIdx !== -1 && (
+                  <button
+                    onClick={() => {
+                      const updated = schedule.map((fs, j) =>
+                        j === schedIdx ? { ...fs, actualTimeStart: "", actualTimeEnd: "" } : fs
+                      );
+                      onSaveFieldSchedule(t.id, updated);
+                    }}
+                    title="Reset field to pending"
+                    style={{ background: "none", border: "1px solid #e0a0a0", borderRadius: 4, padding: "4px 8px", cursor: "pointer", fontSize: 11, color: "#c0392b", whiteSpace: "nowrap" }}
+                  >↩ Reset</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Machine settings */}
+      {(t.galPerAcre || t.gal_per_acre || t.pressure || t.tankSize || t.tank_size) && (
+        <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
+          <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>MACHINE SETTINGS</div>
+          <div style={{ padding: "10px 14px", display: "flex", gap: 24, flexWrap: "wrap" }}>
+            {[
+              ["Gal/Acre",   t.galPerAcre   || t.gal_per_acre],
+              ["Pressure",   t.pressure     ? `${t.pressure} PSI` : null],
+              ["Tank Size",  t.tankSize     || t.tank_size ? `${t.tankSize || t.tank_size} gal` : null],
+            ].filter(([,v]) => v).map(([label, val]) => (
+              <div key={label}>
+                <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a" }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Chemicals */}
       {chems.length > 0 && (
         <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
-          <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>
-            CHEMICALS
-          </div>
+          <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>CHEMICALS</div>
           {chems.map((c, i) => (
-            <div key={i} style={{ padding: "9px 14px", borderBottom: "1px solid #eef5e8", fontSize: 13 }}>
-              <div style={{ fontWeight: 700, color: "#1a1a1a" }}>{c.name}</div>
-              <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
-                {c.ratePerAcre && <span>{c.ratePerAcre} {c.unit || ""}/ac</span>}
-                {c.epa && <span style={{ marginLeft: 10 }}>EPA: {c.epa}</span>}
-                {c.rei && <span style={{ marginLeft: 10 }}>REI: {c.rei}</span>}
+            <div key={i} style={{ padding: "9px 14px", borderBottom: "1px solid #eef5e8", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div>
+                <div style={{ fontWeight: 700, color: "#1a1a1a" }}>{c.name}</div>
+                <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
+                  {c.ratePerAcre && <span>{c.ratePerAcre} {c.unit || ""}/ac</span>}
+                </div>
               </div>
+              {(c.totalPerTankFmt || c.totalPerTank) && (
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Full Tank</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#2a5c0f" }}>{c.totalPerTankFmt || c.totalPerTank}</div>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Application details */}
+      {/* Conditions */}
       <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
-        <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>
-          APPLICATION DETAILS
-        </div>
+        <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>CONDITIONS</div>
         <div style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: 13 }}>
           {[
-            ["Date",       fmtDate(t.date)],
-            ["Start Time", t.timeStart || t.time_start || "—"],
             ["Wind",       t.windSpeed ? `${t.windSpeed} mph ${t.windDir || ""}` : "—"],
-            ["Temp",       t.airTemp ? `${t.airTemp}°F` : "—"],
-            ["Tank",       t.tankSize ? `${t.tankSize} gal` : "—"],
+            ["Temp",       t.airTemp   ? `${t.airTemp}°F` : "—"],
             ["Equipment",  t.equipmentType || t.equipment_type || "—"],
             ["Applicator", t.licensedApplicant || t.licensed_applicant || "—"],
-            ["Gal/Ac",     t.galPerAcre || t.gal_per_acre || "—"],
           ].map(([label, val]) => (
             <div key={label}>
               <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
@@ -197,7 +332,7 @@ export default function ApplicatorView({ tickets, fieldLibrary }) {
             </div>
           ))}
         </div>
-        {(t.notes) && (
+        {t.notes && (
           <div style={{ padding: "8px 14px", borderTop: "1px solid #eef5e8", fontSize: 13 }}>
             <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>Notes</div>
             <div style={{ color: "#555" }}>{t.notes}</div>

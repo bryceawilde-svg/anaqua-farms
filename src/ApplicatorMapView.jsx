@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-const BASE_STYLE  = { color: "#4aaa1a", weight: 2,   fillColor: "#4aaa1a", fillOpacity: 0.22, opacity: 0.85 };
+const BASE_STYLE  = { color: "#4a9fd4", weight: 2,   fillColor: "#7ec8e3", fillOpacity: 0.30, opacity: 0.90 };
 const FOCUS_STYLE = { color: "#fff",    weight: 3,   fillColor: "#FFE600", fillOpacity: 0.70, opacity: 1 };
 
 export default function ApplicatorMapView({ fields, focusFieldId, height = 280 }) {
