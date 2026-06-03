@@ -4,8 +4,9 @@ import "leaflet/dist/leaflet.css";
 
 const BASE_STYLE  = { color: "#4a9fd4", weight: 2,   fillColor: "#7ec8e3", fillOpacity: 0.30, opacity: 0.90 };
 const FOCUS_STYLE = { color: "#fff",    weight: 3,   fillColor: "#FFE600", fillOpacity: 0.70, opacity: 1 };
+const DONE_STYLE  = { color: "#aaa",    weight: 1.5, fillColor: "#ccc",    fillOpacity: 0.20, opacity: 0.50 };
 
-export default function ApplicatorMapView({ fields, focusFieldId, height = 280 }) {
+export default function ApplicatorMapView({ fields, focusFieldId, completedFieldIds = [], height = 280 }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
   const layersRef    = useRef({});  // field id → L.geoJSON layer
@@ -45,8 +46,13 @@ export default function ApplicatorMapView({ fields, focusFieldId, height = 280 }
 
   // Highlight + fly to focused field
   useEffect(() => {
+    const doneSet = new Set(completedFieldIds);
     Object.entries(layersRef.current).forEach(([id, layer]) => {
-      layer.setStyle(Number(id) === focusFieldId ? FOCUS_STYLE : BASE_STYLE);
+      const numId = Number(id);
+      layer.setStyle(
+        numId === focusFieldId ? FOCUS_STYLE :
+        doneSet.has(numId)     ? DONE_STYLE  : BASE_STYLE
+      );
     });
     if (focusFieldId && layersRef.current[focusFieldId]) {
       try {
@@ -56,7 +62,7 @@ export default function ApplicatorMapView({ fields, focusFieldId, height = 280 }
         );
       } catch { /* no-op */ }
     }
-  }, [focusFieldId]);
+  }, [focusFieldId, completedFieldIds]); // eslint-disable-line
 
   return (
     <div ref={containerRef} style={{ height, width: "100%", borderRadius: 6, overflow: "hidden" }} />

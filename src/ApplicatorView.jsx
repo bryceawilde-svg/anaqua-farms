@@ -90,8 +90,11 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                   <span style={{ fontWeight: 900, fontSize: 18, color: "#1a4a0a", fontFamily: "monospace" }}>
                     #{String(t.ticketNumber || t.ticket_number || "").padStart(3, "0")}
                   </span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: "#333" }}>{fmtDate(t.date)}</span>
-                  {t.crop && cropChip(t.crop)}
+                  {t.crop && (() => {
+                    const bg    = CROP_COLORS[t.crop] || "#e6f5d0";
+                    const color = t.crop === "Cotton" ? "#7a5f00" : t.crop === "Corn" ? "#005a7a" : "#2a5c0f";
+                    return <span style={{ background: bg, color, borderRadius: 5, padding: "2px 10px", fontSize: 18, fontWeight: 800 }}>{t.crop}</span>;
+                  })()}
                   {doneCount > 0 && (
                     <span style={{ fontSize: 12, color: "#2a5c0f", fontWeight: 700 }}>
                       {doneCount}/{total} done
@@ -204,7 +207,12 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
 
       {/* Map */}
       <div style={{ margin: "10px 12px 0" }}>
-        <ApplicatorMapView fields={enriched} focusFieldId={focusFieldId} height={250} />
+        <ApplicatorMapView
+          fields={enriched}
+          focusFieldId={focusFieldId}
+          completedFieldIds={completedFields.map(f => f.id)}
+          height={250}
+        />
       </div>
 
       {/* Fields to spray */}
