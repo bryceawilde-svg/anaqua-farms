@@ -4855,8 +4855,8 @@ export default function App() {
                 </div>
                 <div style={{ marginTop:12, background:"#f0f7e8", borderRadius:6, padding:"10px 12px", fontSize:11, color:"#444" }}>
                   <strong>App link to share:</strong>{" "}
-                  <a href="https://fancy-heliotrope-5cae85.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color:"#2a5c0f" }}>
-                    fancy-heliotrope-5cae85.netlify.app
+                  <a href="https://boomlog.app" target="_blank" rel="noopener noreferrer" style={{ color:"#2a5c0f" }}>
+                    boomlog.app
                   </a>
                 </div>
               </div>
