@@ -360,7 +360,6 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
     <th style="width:36px;text-align:center;padding:5px 4px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Step</th>
     <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">Product</th>
     <th style="padding:5px 8px;font-size:9px;color:${isPartial?"#c05000":"#1a7a20"};background:#e6f5d0;text-align:right;text-transform:uppercase;">Add to Tank</th>
-    <th style="padding:5px 8px;font-size:9px;color:#2a5c0f;background:#e6f5d0;text-transform:uppercase;">REI</th>
   </tr>`;
   const fillRow2 = (target) => `<tr style="background:#e6f5d0">
     <td style="text-align:center;padding:7px 4px"><div style="background:#2a5c0f;color:#fff;font-size:12px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">✓</div></td>
@@ -390,7 +389,6 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
           ${lbOzLine ? `<div style="font-size:10px;font-weight:400;color:#888;margin-top:1px">${lbOzLine}</div>` : ""}
           ${jugLine  ? `<div style="font-size:10px;font-weight:700;color:#7a3a9a;margin-top:1px">${jugLine}</div>` : ""}
         </td>
-        <td style="padding:7px 8px;font-size:10px;color:#c05000;font-weight:700">${chem.rei}</td>
       </tr>`;
     }).join("");
   };
@@ -428,7 +426,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   const partialCard = hasPartial ? `
   <div style="border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;width:100%">
     <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;">
-      ⚠ PARTIAL LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac
+      ⚠ LAST LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac
     </div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr>
@@ -682,20 +680,59 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
     ${form.flushCleanout ? `<div style="background:#e8f4ff;border:1.5px solid #1a6a8a;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:900;color:#0e3a5c;">🚿 FLUSH REQUIRED</div>` : ""}
   </div>` : ""}
 
+  <h3>Tank Setup</h3>
+  ${tankSetupHtml}
+
+  ${chemSectionHtml}
+
+  ${(() => {
+    const fields = form.selectedFields || [];
+    const PER_COL = 10;
+    const COLS = 3;
+    const chunkCount = Math.ceil(fields.length / (PER_COL * COLS)) || 1;
+    let html = `<div style="margin-bottom:6px;">
+      <div style="font-size:8px;font-weight:900;color:#fff;background:#2a5c0f;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;display:inline-block;">Field List &mdash; ${totalAcres.toFixed(2)} ac</div>`;
+    for (let chunk = 0; chunk < chunkCount; chunk++) {
+      const start = chunk * PER_COL * COLS;
+      const rowFields = fields.slice(start, start + PER_COL * COLS);
+      html += `<div style="display:flex;gap:6px;margin-bottom:4px;">`;
+      for (let col = 0; col < COLS; col++) {
+        const colFields = rowFields.slice(col * PER_COL, col * PER_COL + PER_COL);
+        if (!colFields.length) { html += `<div style="flex:1;"></div>`; continue; }
+        html += `<div style="flex:1;min-width:0;">
+          <table style="border-collapse:collapse;width:100%;border:1px solid #c8dbb0;font-size:8.5px;">
+            <thead><tr>
+              <th style="padding:2px 5px;background:#e6f5d0;color:#2a5c0f;text-align:left;">Field</th>
+              <th style="padding:2px 5px;background:#e6f5d0;color:#2a5c0f;text-align:right;">Ac</th>
+            </tr></thead>
+            <tbody>${colFields.map((f, j) => {
+              const globalIdx = start + col * PER_COL + j;
+              const mapsUrl = f.centroid_lat && f.centroid_lng
+                ? `https://maps.google.com/?q=${f.centroid_lat},${f.centroid_lng}&z=15` : null;
+              const nameCell = mapsUrl
+                ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color:#2a5c0f;text-decoration:none;">${globalIdx+1}. ${f.name} 📍</a>`
+                : `${globalIdx+1}. ${f.name}`;
+              return `<tr style="border-top:1px solid #eef5e8;">
+                <td style="padding:2px 5px;">${nameCell}</td>
+                <td style="padding:2px 5px;text-align:right;">${parseFloat(f.acres).toFixed(1)}</td>
+              </tr>`;
+            }).join("")}</tbody>
+          </table>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+    return html;
+  })()}
+
   <div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;">
-    <div style="flex:1;min-width:0;">
-      <div style="font-size:8px;font-weight:900;color:#fff;background:#2a5c0f;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Field List &mdash; ${totalAcres.toFixed(2)} ac</div>
-      <table style="border:1px solid #c8dbb0;border-top:none;">
-        <thead><tr><th>Field</th><th style="text-align:right">Acres</th></tr></thead>
-        <tbody>${fieldRows}</tbody>
-      </table>
-    </div>
     ${resolvedChems.length ? `<div style="flex:1;min-width:0;">
       <div style="font-size:8px;font-weight:900;color:#fff;background:#1a3a6a;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Total Chemical Needed</div>
       <table style="border-collapse:collapse;width:100%;border:1.5px solid #b0c8e8;border-top:none;">
         <thead><tr>
-          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:left;">Product</th>
-          <th style="padding:3px 8px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;">Total</th>
+          <th style="padding:3px 6px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:left;">Product</th>
+          <th style="padding:3px 6px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;white-space:nowrap;">Total</th>
         </tr></thead>
         <tbody>${resolvedChems.map(r => {
           const allLoadsOz = r.calc.totalPerTankRaw * (parseInt(fullLoads)||0) + (hasPartial ? r.calc.partialPerTankRaw : 0);
@@ -705,32 +742,26 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
           const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(allLoadsOz) : null;
           const jugSub  = r.chem.containerSize ? fmtContainerCount(allLoadsOz, r.chem) : (r.jug2_5gal ? fmtJugCount(allLoadsOz) : null);
           return `<tr>
-            <td style="padding:4px 6px;font-weight:400;font-size:9.5px;color:#111;">${r.chem.name}</td>
-            <td style="padding:4px 6px;text-align:right;font-size:9.5px;font-weight:400;color:#111;">
+            <td style="padding:3px 6px;font-size:9px;color:#111;">${r.chem.name}</td>
+            <td style="padding:3px 6px;text-align:right;font-size:9px;color:#111;white-space:nowrap;">
               ${fmt}
-              ${lbOzSub ? `<div style="font-size:8px;color:#888">${lbOzSub}</div>` : ""}
-              ${jugSub  ? `<div style="font-size:8px;font-weight:700;color:#7a3a9a">${jugSub}</div>` : ""}
+              ${lbOzSub ? `<div style="font-size:7.5px;color:#888">${lbOzSub}</div>` : ""}
+              ${jugSub  ? `<div style="font-size:7.5px;font-weight:700;color:#7a3a9a">${jugSub}</div>` : ""}
             </td>
           </tr>`;
         }).join("")}</tbody>
       </table>
-    </div>` : ""}
+    </div>` : `<div style="flex:1;"></div>`}
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;border:1px solid #c8dbb0;border-radius:5px;background:#f9fdf5;gap:10px;">
+      <div style="text-align:right;">
+        <div style="font-size:9px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.06em;">REI Re-Entry Report</div>
+        <div style="font-size:8px;color:#555;margin-top:2px;">Scan to view earliest re-entry<br/>times for all chemicals applied</div>
+      </div>
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://drive.google.com/drive/folders/1dM5v_307Px_bh7FqgHUlCKokMvrwh75O?usp=sharing')}" width="80" height="80" style="display:block;border:2px solid #2a5c0f;border-radius:4px;"/>
+    </div>
   </div>
-
-  <h3>Tank Setup</h3>
-  ${tankSetupHtml}
-
-  ${chemSectionHtml}
 
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
-
-  <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px;padding:6px 8px;border:1px solid #c8dbb0;border-radius:5px;background:#f9fdf5;">
-    <div style="text-align:right;">
-      <div style="font-size:9px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.06em;">REI Re-Entry Report</div>
-      <div style="font-size:8px;color:#555;margin-top:2px;">Scan to view earliest re-entry<br/>times for all chemicals applied</div>
-    </div>
-    <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://drive.google.com/drive/folders/1dM5v_307Px_bh7FqgHUlCKokMvrwh75O?usp=sharing')}" width="80" height="80" style="display:block;border:2px solid #2a5c0f;border-radius:4px;"/>
-  </div>
 
   <div class="footer">
     <span>${orgName || "BoomLog"} &mdash; Application Ticket</span>
