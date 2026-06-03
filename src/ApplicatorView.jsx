@@ -169,13 +169,13 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     const idx = schedule.findIndex(fs => fs.id === field.id);
     if (idx === -1) return;
     const now      = nowHHMM();
+    const today    = new Date().toISOString().slice(0, 10); // YYYY-MM-DD of actual stop
     const entry    = schedule[idx];
     const start    = entry.actualTimeStart || estimateStart(now, field.acres, acresPerHour);
     const updated  = schedule.map((fs, i) =>
-      i === idx ? { ...fs, actualTimeStart: start, actualTimeEnd: now } : fs
+      i === idx ? { ...fs, actualTimeStart: start, actualTimeEnd: now, actualDateEnd: today } : fs
     );
     onSaveFieldSchedule(t.id, updated);
-    // If focused field just completed, clear focus
     if (focusFieldId === field.id) setFocusFieldId(null);
   };
 
@@ -334,7 +334,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                   <div style={{ fontWeight: 700, fontSize: 14, color: "#555", textDecoration: "line-through" }}>{f.name}</div>
                   <div style={{ fontSize: 12, color: "#aaa" }}>
                     {parseFloat(f.acres || 0).toFixed(2)} ac
-                    {entry.actualTimeEnd && t.date && <span style={{ marginLeft: 6 }}>{fmtDate(t.date)}</span>}
+                    {entry.actualTimeEnd && <span style={{ marginLeft: 6 }}>{fmtDate(entry.actualDateEnd || t.date)}</span>}
                   </div>
                 </div>
                 {isOwner && schedIdx !== -1 && (

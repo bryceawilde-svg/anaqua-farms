@@ -3394,13 +3394,19 @@ export default function App() {
                     <div style={{ padding: isMobile ? "10px 12px" : "14px 16px", borderTop:"1.5px solid #eef5e8" }}>
 
                       {/* Summary row */}
-                      <div style={{ display:"flex", gap:12, fontSize:12, color:"#555", flexWrap:"wrap", marginBottom:10 }}>
-                        <span>🌾 {t.totalAcres} ac</span>
-                        <span>💨 {t.windSpeed} mph {t.windDir}</span>
-                        <span>🌡 {t.airTemp}°F</span>
-                        <span>⛽ {t.tankSize} gal</span>
-                        {t.equipmentType && <span>🚜 {t.equipmentType}</span>}
-                        {t.licensedApplicant && <span>👤 {t.licensedApplicant}</span>}
+                      <div style={{ display:"flex", gap:8, fontSize:12, color:"#555", flexWrap:"wrap", marginBottom:10 }}>
+                        {[
+                          t.totalAcres        && `${t.totalAcres} ac`,
+                          t.windSpeed         && `${t.windSpeed} mph ${t.windDir || ""}`.trim(),
+                          t.airTemp           && `${t.airTemp}°F`,
+                          t.tankSize          && `${t.tankSize} gal`,
+                          t.pressure          && `${t.pressure} PSI`,
+                          t.galPerAcre        && `${t.galPerAcre} gal/ac`,
+                          t.equipmentType,
+                          t.licensedApplicant,
+                        ].filter(Boolean).map((item, i) => (
+                          <span key={i} style={{ background:"#f0f7e8", borderRadius:4, padding:"2px 7px", whiteSpace:"nowrap" }}>{item}</span>
+                        ))}
                       </div>
 
                       {/* Field schedule */}
@@ -3428,7 +3434,10 @@ export default function App() {
                                   ) : fs.actualTimeEnd ? (
                                     <span style={{ color:"#1a6b2f", fontWeight:600 }}>
                                       <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"#2a5c0f", marginRight:3, verticalAlign:"middle" }}/>
-                                      {t.date ? new Date(t.date + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" }) : "—"}
+                                      {(() => {
+                                        const d = fs.actualDateEnd || t.date;
+                                        return d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" }) : "—";
+                                      })()}
                                     </span>
                                   ) : (
                                     <span style={{ color:"#bbb", fontSize:11 }}>—</span>
@@ -3495,7 +3504,7 @@ export default function App() {
                         }} style={{
                           background:"#e8f5dc", color:"#2a5c0f", border:"1.5px solid #c8dbb0", borderRadius:5,
                           padding:"7px 14px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                        }}>📋 Copy Mix</button>
+                        }}>Copy Mix</button>
                         <button onClick={() => {
                           printTicket(
                             t,
@@ -3507,7 +3516,7 @@ export default function App() {
                         }} style={{
                           background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                        }}>🖨 Print</button>
+                        }}>Print</button>
                         <button onClick={() => {
                           setForm({
                             ...t,
@@ -3532,7 +3541,7 @@ export default function App() {
                         }} style={{
                           background:"#2a5c0f", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700
-                        }}>✏ Edit</button>
+                        }}>Edit</button>
                         {isOwner && (
                           <button
                             onClick={() => toggleTeamView(t.id, t.team_view)}
@@ -3544,7 +3553,7 @@ export default function App() {
                               background: t.team_view ? "#2a5c0f" : "#f9fdf5",
                               color:      t.team_view ? "#fff"    : "#4a7a20",
                             }}
-                          >{t.team_view ? "✓ In Queue" : "＋ Queue"}</button>
+                          >{t.team_view ? "In Queue" : "+ Queue"}</button>
                         )}
                       </div>
                     </div>
