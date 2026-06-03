@@ -1689,11 +1689,21 @@ export default function App() {
   const saveTicket = async () => {
     if (isSaving) return null;
     setIsSaving(true);
-    if (!form.selectedFields.length) { setIsSaving(false); return alert("Please select at least one field."); }
-    if (!form.crop)                  { setIsSaving(false); return alert("Please select a crop."); }
-    const hasChems = form.chemRows.some(r => r.chemId);
-    if (hasChems && !form.tankSize)   { setIsSaving(false); return alert("Tank size is required when chemicals are added."); }
-    if (hasChems && !form.galPerAcre) { setIsSaving(false); return alert("Gal/acre is required when chemicals are added."); }
+    const missing = [
+      !form.selectedFields.length               && "Fields",
+      !form.crop                                && "Crop",
+      !(Array.isArray(form.targetPest) ? form.targetPest.length : form.targetPest) && "Target pest/weed/disease",
+      !form.windSpeed                           && "Wind speed",
+      !form.equipmentType                       && "Equipment",
+      !form.licensedApplicant                   && "Applicator",
+      !form.tankSize                            && "Tank size",
+      !form.pressure                            && "Pressure",
+      !form.galPerAcre                          && "Gal/acre",
+    ].filter(Boolean);
+    if (missing.length) {
+      setIsSaving(false);
+      return alert("Please complete the following before saving:\n\n• " + missing.join("\n• "));
+    }
     const { acreLoadsRaw } = calcTotals({ ...form, totalAcres });
     const chemDetails = form.chemRows
       .filter(r => r.chemId && (r.ratePerAcre || (r.inputMode === "galtank" && r.galPerTank)))
