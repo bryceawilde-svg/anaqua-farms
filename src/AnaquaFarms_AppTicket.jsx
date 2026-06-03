@@ -1404,7 +1404,7 @@ export default function App() {
 
   const isPro      = userPlan === "pro" || currentOrg?.plan === "pro";
   const isOwner    = userRole === "owner";
-  const isViewer   = userRole === "viewer";
+  const isViewer   = userRole === "viewer" || userRole === "applicator";
 
   // Viewers land in applicator view and can't navigate away
   useEffect(() => {
@@ -2235,7 +2235,7 @@ export default function App() {
         <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
           {(isViewer
             ? [["applicator","📋 Applications"]]
-            : [["form","🌱 Ticket"],["log","📋 Saved"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["chemMgr","🧪 Chems"],["team","👥 Team"],["applicator","📱 Applicator"]]
+            : [["applicator","📱 Applicator"],["log","📋 Saved"],["form","🌱 Ticket"],["chemMgr","🧪 Chems"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]]
           ).map(([v,l]) => {
             const locked = v === "research" && !isPro;
             return (
@@ -2268,6 +2268,14 @@ export default function App() {
             onSaveFieldSchedule={saveFieldSchedule}
             onReorderFields={reorderTicketFields}
             isOwner={isOwner}
+            onToggleQueue={(id, val) => toggleTeamView(id, !val)}
+            onPrintTicket={(tk) => printTicket(
+              tk,
+              chemicals,
+              parseFloat(tk.totalAcres) || 0,
+              tk.fieldSchedule || buildFieldSchedule(tk.selectedFields || [], tk.timeStart),
+              currentOrg?.name
+            )}
           />
         )}
 
@@ -3348,7 +3356,7 @@ export default function App() {
               return (
                 <div key={t.id} style={{
                   background:"#fff",
-                  border: t.team_view ? `3px solid #1a6bbf` : `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
+                  border: t.team_view ? `2px solid #1a6bbf` : `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
                   borderRadius:8, marginBottom: isMobile ? 8 : 10,
                   boxShadow: isOpen ? "0 2px 12px rgba(42,92,15,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
                   overflow:"hidden", transition:"box-shadow 0.15s"
@@ -3456,7 +3464,37 @@ export default function App() {
                       {t.notes && <div style={{ fontSize:12, color:"#666", marginBottom:10 }}>Notes: {t.notes}</div>}
 
                       {/* Actions */}
-                      <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+                      <div style={{ display:"flex", justifyContent:"flex-start", gap:8, flexWrap:"wrap" }}>
+                        <button onClick={() => {
+                          setForm({
+                            ...blank(),
+                            crop:        t.crop || "",
+                            targetPest:  Array.isArray(t.targetPest) ? t.targetPest : [],
+                            tankSize:    t.tankSize || "",
+                            pressure:    t.pressure || "",
+                            galPerAcre:  t.galPerAcre || "",
+                            acresPerHour: t.acresPerHour || 75,
+                            equipmentType: t.equipmentType || "",
+                            licensedApplicant: t.licensedApplicant || "",
+                            nonLicensedApplicant: t.nonLicensedApplicant || "",
+                            chemRows: (t.chemicals || []).filter(c => c.name).map(c => ({
+                              id: crypto.randomUUID(),
+                              chemId: chemicals.find(x => x.name === c.name)?.id || "",
+                              ratePerAcre: c.ratePerAcre,
+                              inputMode: c.inputMode || "rate",
+                              galPerTank: c.galPerTank || "",
+                              roundQtrGal: c.roundQtrGal || false,
+                              jug2_5gal: c.jug2_5gal || false,
+                            })),
+                          });
+                          setManualTank(!["1600","1200","1000"].includes(String(t.tankSize)));
+                          setEditingId(null);
+                          setExpandedTicket(null);
+                          setView("form");
+                        }} style={{
+                          background:"#e8f5dc", color:"#2a5c0f", border:"1.5px solid #c8dbb0", borderRadius:5,
+                          padding:"7px 14px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
+                        }}>📋 Copy Mix</button>
                         <button onClick={() => {
                           printTicket(
                             t,
@@ -4606,7 +4644,7 @@ export default function App() {
               <div>
                 <div style={{ ...sectionTitle, marginBottom:2 }}>👥 {currentOrg?.name}</div>
                 <div style={{ fontSize:11, color:"#888" }}>
-                  {session?.user?.email} · {userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : "Viewer"}
+                  {session?.user?.email} · {userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : userRole === "applicator" ? "Applicator" : "Viewer"}
                 </div>
               </div>
               {isOwner && (editingOrgName ? (
@@ -4681,6 +4719,7 @@ export default function App() {
                           }} style={{ border:"1px solid #c8dbb0", borderRadius:4, fontSize:11, padding:"2px 4px", fontFamily:"inherit" }}>
                             <option value="owner">Owner</option>
                             <option value="member">Member</option>
+                            <option value="applicator">Applicator</option>
                             <option value="viewer">Viewer</option>
                           </select>
                         ) : (
@@ -4735,6 +4774,7 @@ export default function App() {
                     <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                       style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"7px 8px", fontSize:13, fontFamily:"inherit", background:"#fff" }}>
                       <option value="member">Member — can create tickets, read settings</option>
+                      <option value="applicator">Applicator — applicator view only</option>
                       <option value="viewer">Viewer — read-only</option>
                       <option value="owner">Owner — full access</option>
                     </select>

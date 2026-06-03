@@ -43,7 +43,7 @@ function ensureSchedule(ticket, enrichedFields) {
   }));
 }
 
-export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner }) {
+export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue }) {
   const [selectedTicket,    setSelectedTicket]    = useState(null);
   const [focusFieldId,      setFocusFieldId]      = useState(null);
   const [completedExpanded, setCompletedExpanded] = useState(false);
@@ -76,30 +76,38 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
         )}
 
         {tickets.map(t => {
-          const fields = t.selectedFields || [];
-          const chems  = (t.chemicals || []).filter(c => c.name);
-          const sched  = t.fieldSchedule || [];
+          const sched     = t.fieldSchedule || [];
           const doneCount = sched.filter(fs => fs.actualTimeEnd).length;
+          const total     = (t.selectedFields || []).length;
           return (
             <div key={t.id}
+              style={{ margin: "10px 12px", borderRadius: 8, border: "1.5px solid #c8dbb0", background: "#fff", padding: "12px 16px", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", gap: 8 }}
               onClick={() => { setSelectedTicket(t); setFocusFieldId(null); setCompletedExpanded(false); }}
-              style={{ margin: "10px 12px", borderRadius: 8, border: "1.5px solid #c8dbb0", background: "#fff", padding: "14px 16px", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <span style={{ fontWeight: 800, fontSize: 15, color: "#1a4a0a" }}>
+              {/* Main info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 900, fontSize: 18, color: "#1a4a0a", fontFamily: "monospace" }}>
                     #{String(t.ticketNumber || t.ticket_number || "").padStart(3, "0")}
                   </span>
-                  <span style={{ fontSize: 13, color: "#555", marginLeft: 8 }}>{fmtDate(t.date)}</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "#333" }}>{fmtDate(t.date)}</span>
                   {t.crop && cropChip(t.crop)}
+                  {doneCount > 0 && (
+                    <span style={{ fontSize: 12, color: "#2a5c0f", fontWeight: 700 }}>
+                      {doneCount}/{total} done
+                    </span>
+                  )}
                 </div>
-                <span style={{ color: "#c8dbb0", fontSize: 20, marginTop: -2 }}>›</span>
               </div>
-              <div style={{ marginTop: 6, fontSize: 13, color: "#555" }}>
-                {fields.length} field{fields.length !== 1 ? "s" : ""} · {parseFloat(t.totalAcres || t.total_acres || 0).toFixed(1)} ac
-                {doneCount > 0 && <span style={{ marginLeft: 8, color: "#2a5c0f", fontWeight: 700 }}>{doneCount}/{fields.length} done</span>}
-                {chems.length > 0 && <span style={{ marginLeft: 8, color: "#888" }}>· {chems.length} chemical{chems.length !== 1 ? "s" : ""}</span>}
-              </div>
+              {/* Owner-only remove button */}
+              {isOwner && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleQueue && onToggleQueue(t.id, false); }}
+                  title="Remove from queue"
+                  style={{ background: "none", border: "1px solid #e0a0a0", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontSize: 11, color: "#c0392b", flexShrink: 0, whiteSpace: "nowrap" }}
+                >✕</button>
+              )}
+              <span style={{ color: "#c8dbb0", fontSize: 20, flexShrink: 0 }}>›</span>
             </div>
           );
         })}
@@ -173,12 +181,17 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
-      {/* Header */}
-      <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid #e8f5e0", display: "flex", alignItems: "center", gap: 10 }}>
-        <button
-          onClick={() => { setSelectedTicket(null); setFocusFieldId(null); }}
-          style={{ background: "none", border: "none", color: "#2a5c0f", fontSize: 22, cursor: "pointer", padding: "0 6px 0 0", lineHeight: 1 }}
-        >‹</button>
+      {/* Back bar — full-width tap target */}
+      <div
+        onClick={() => { setSelectedTicket(null); setFocusFieldId(null); setReorderMode(false); setTapOrder([]); }}
+        style={{ padding: "11px 16px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}
+      >
+        <span style={{ fontSize: 18, color: "#2a5c0f", lineHeight: 1 }}>‹</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#2a5c0f" }}>Back to Queue</span>
+      </div>
+
+      {/* Ticket header */}
+      <div style={{ padding: "10px 16px 8px", borderBottom: "1px solid #e8f5e0", display: "flex", alignItems: "center", gap: 10 }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, color: "#1a4a0a" }}>
             #{ticketNum} — {fmtDate(t.date)}{t.crop && cropChip(t.crop)}
@@ -364,7 +377,15 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       {/* Chemicals */}
       {chems.length > 0 && (
         <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
-          <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>CHEMICALS</div>
+          <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>CHEMICALS</span>
+            <button
+              onClick={() => onPrintTicket(t)}
+              style={{ padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                border: "1.5px solid #1a4a8a", borderRadius: 4,
+                background: "#1a4a8a", color: "#fff" }}
+            >🖨 Ticket</button>
+          </div>
           {chems.map((c, i) => (
             <div key={i} style={{ padding: "9px 14px", borderBottom: "1px solid #eef5e8", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <div>
