@@ -43,10 +43,12 @@ function ensureSchedule(ticket, enrichedFields) {
   }));
 }
 
-export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, isOwner }) {
-  const [selectedTicket,   setSelectedTicket]   = useState(null);
-  const [focusFieldId,     setFocusFieldId]     = useState(null);
+export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner }) {
+  const [selectedTicket,    setSelectedTicket]    = useState(null);
+  const [focusFieldId,      setFocusFieldId]      = useState(null);
   const [completedExpanded, setCompletedExpanded] = useState(false);
+  const [reorderMode,       setReorderMode]       = useState(false);
+  const [tapOrder,          setTapOrder]          = useState([]);  // field IDs in tapped sequence
 
   const enrichFields = (selectedFields) =>
     (selectedFields || []).map(f => ({
@@ -119,6 +121,32 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
   const pendingFields   = enriched.filter(f => !getEntry(f.id).actualTimeEnd);
   const completedFields = enriched.filter(f =>  getEntry(f.id).actualTimeEnd);
 
+  const enterReorder = () => { setReorderMode(true); setTapOrder([]); };
+  const exitReorder  = () => { setReorderMode(false); setTapOrder([]); };
+
+  const tapField = (fieldId) => {
+    setTapOrder(prev =>
+      prev.includes(fieldId)
+        ? prev.filter(id => id !== fieldId)   // deselect
+        : [...prev, fieldId]                   // add next in sequence
+    );
+  };
+
+  const saveReorder = () => {
+    // Fields tapped in order, then any untapped pending fields in original order
+    const tapped   = tapOrder.map(id => pendingFields.find(f => f.id === id)).filter(Boolean);
+    const untapped = pendingFields.filter(f => !tapOrder.includes(f.id));
+    const newAll   = [...tapped, ...untapped, ...completedFields];
+    const newSchedule = newAll.map(f =>
+      schedule.find(fs => fs.id === f.id) || {
+        id: f.id, name: f.name, acres: f.acres,
+        timeStart: "", timeEnd: "", actualTimeStart: "", actualTimeEnd: "",
+      }
+    );
+    onReorderFields(t.id, newAll, newSchedule);
+    exitReorder();
+  };
+
   const handleStart = (field) => {
     const idx = schedule.findIndex(fs => fs.id === field.id);
     if (idx === -1) return;
@@ -168,57 +196,97 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
 
       {/* Fields to spray */}
       <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
-        <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>
-          FIELDS TO SPRAY{pendingFields.length > 0 ? ` (${pendingFields.length})` : " — ALL DONE ✓"}
+        <div style={{ padding: "8px 14px", background: reorderMode ? "#fffbe8" : "#f0f7e8", borderBottom: "1px solid #c8dbb0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: reorderMode ? "#7a5000" : "#2a5c0f", letterSpacing: "0.06em" }}>
+            {reorderMode
+              ? `TAP IN SPRAY ORDER (${tapOrder.length}/${pendingFields.length})`
+              : `FIELDS TO SPRAY${pendingFields.length > 0 ? ` (${pendingFields.length})` : " — ALL DONE ✓"}`}
+          </span>
+          {pendingFields.length > 1 && !reorderMode && (
+            <button onClick={enterReorder}
+              style={{ padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                border: "1.5px solid #c8dbb0", borderRadius: 4, background: "#fff", color: "#4a7a20" }}>
+              ⇅ Prioritize
+            </button>
+          )}
+          {reorderMode && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={exitReorder}
+                style={{ padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  border: "1.5px solid #ccc", borderRadius: 4, background: "#fff", color: "#888" }}>
+                Cancel
+              </button>
+              <button onClick={saveReorder}
+                style={{ padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  border: "1.5px solid #2a5c0f", borderRadius: 4, background: "#2a5c0f", color: "#fff" }}>
+                ✓ Save Order
+              </button>
+            </div>
+          )}
         </div>
         {pendingFields.length === 0 && (
           <div style={{ padding: "12px 14px", fontSize: 13, color: "#aaa" }}>All fields completed.</div>
         )}
-        {pendingFields.map((f) => {
-          const entry     = getEntry(f.id);
-          const origIdx   = enriched.indexOf(f);
-          const started   = !!entry.actualTimeStart;
-          const isFocused = focusFieldId === f.id;
+        {pendingFields.map((f, listIdx) => {
+          const entry      = getEntry(f.id);
+          const started    = !!entry.actualTimeStart;
+          const isFocused  = focusFieldId === f.id;
+          const tapPos     = tapOrder.indexOf(f.id);  // -1 if not yet tapped
+          const isTapped   = tapPos !== -1;
+
+          // In reorder mode the whole row is the tap target
+          const rowClick = reorderMode
+            ? () => tapField(f.id)
+            : () => setFocusFieldId(isFocused ? null : f.id);
 
           return (
             <div key={f.id}
+              onClick={rowClick}
               style={{
-                borderBottom: "1px solid #eef5e8",
-                background: isFocused ? "#fffbec" : "#fff",
+                borderBottom: "1px solid #eef5e8", cursor: reorderMode ? "pointer" : "default",
+                background: reorderMode
+                  ? (isTapped ? "#e6f5d0" : "#fff")
+                  : (isFocused ? "#fffbec" : "#fff"),
+                transition: "background 0.1s",
               }}
             >
-              {/* Field name row — Start/Stop inline */}
-              <div
-                style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}
-              >
-                <div
-                  onClick={() => setFocusFieldId(isFocused ? null : f.id)}
-                  style={{ cursor: "pointer", width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
-                    background: isFocused ? "#FFE600" : "#2a5c0f",
-                    color: isFocused ? "#7a5f00" : "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontWeight: 800, fontSize: 13,
-                  }}>{origIdx + 1}</div>
-                <div onClick={() => setFocusFieldId(isFocused ? null : f.id)} style={{ flex: 1, cursor: "pointer" }}>
+              <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Number circle: shows tap sequence in reorder mode */}
+                <div style={{
+                  width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontWeight: 800, fontSize: 13,
+                  background: reorderMode
+                    ? (isTapped ? "#2a5c0f" : "#e0e0e0")
+                    : (isFocused ? "#FFE600" : "#2a5c0f"),
+                  color: reorderMode
+                    ? (isTapped ? "#fff" : "#999")
+                    : (isFocused ? "#7a5f00" : "#fff"),
+                }}>
+                  {reorderMode ? (isTapped ? tapPos + 1 : "·") : listIdx + 1}
+                </div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, color: "#1a1a1a" }}>{f.name}</div>
                   <div style={{ fontSize: 12, color: "#888" }}>
                     {parseFloat(f.acres || 0).toFixed(2)} ac
-                    {started && <span style={{ marginLeft: 6, color: "#2a5c0f", fontWeight: 600 }}>▶ {fmtHHMM(entry.actualTimeStart)}</span>}
+                    {started && !reorderMode && <span style={{ marginLeft: 6, color: "#2a5c0f", fontWeight: 600 }}>▶ {fmtHHMM(entry.actualTimeStart)}</span>}
                   </div>
                 </div>
-                {/* Inline Start / Stop */}
-                {!started ? (
-                  <button
-                    onClick={() => handleStart(f)}
-                    style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-                      background: "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}
-                  >▶ Start</button>
-                ) : (
-                  <button
-                    onClick={() => handleStop(f)}
-                    style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-                      background: "#c0392b", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}
-                  >■ Stop</button>
+                {/* Start/Stop — hidden in reorder mode */}
+                {!reorderMode && (
+                  !started ? (
+                    <button onClick={(e) => { e.stopPropagation(); handleStart(f); }}
+                      style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
+                        background: "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>
+                      ▶ Start
+                    </button>
+                  ) : (
+                    <button onClick={(e) => { e.stopPropagation(); handleStop(f); }}
+                      style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
+                        background: "#c0392b", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>
+                      ■ Stop
+                    </button>
+                  )
                 )}
               </div>
             </div>

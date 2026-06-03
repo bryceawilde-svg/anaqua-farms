@@ -1823,6 +1823,16 @@ export default function App() {
     if (error) showToast("Failed to save field time: " + error.message);
   };
 
+  const reorderTicketFields = async (ticketId, newSelectedFields, newFieldSchedule) => {
+    setTickets(prev => prev.map(t =>
+      t.id === ticketId ? { ...t, selectedFields: newSelectedFields, fieldSchedule: newFieldSchedule } : t
+    ));
+    const { error } = await supabase.from("tickets")
+      .update({ selected_fields: newSelectedFields, field_schedule: newFieldSchedule })
+      .eq("id", ticketId);
+    if (error) showToast("Failed to save field order: " + error.message);
+  };
+
   // ── Field Manager
   const fieldFileRef = useRef();
   const [fieldUpMsg,    setFieldUpMsg]    = useState("");
@@ -2256,6 +2266,7 @@ export default function App() {
             tickets={tickets.filter(t => t.team_view)}
             fieldLibrary={fieldLibrary}
             onSaveFieldSchedule={saveFieldSchedule}
+            onReorderFields={reorderTicketFields}
             isOwner={isOwner}
           />
         )}
