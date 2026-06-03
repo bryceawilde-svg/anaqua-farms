@@ -3356,7 +3356,8 @@ export default function App() {
               return (
                 <div key={t.id} style={{
                   background:"#fff",
-                  border: t.team_view ? `2px solid #1a6bbf` : `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
+                  border: `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
+                  outline: t.team_view ? `3px solid #1a6bbf` : "none",
                   borderRadius:8, marginBottom: isMobile ? 8 : 10,
                   boxShadow: isOpen ? "0 2px 12px rgba(42,92,15,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
                   overflow:"hidden", transition:"box-shadow 0.15s"
