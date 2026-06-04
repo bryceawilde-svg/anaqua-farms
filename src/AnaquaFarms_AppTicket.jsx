@@ -1600,28 +1600,29 @@ export default function App() {
 
   // Poll queued tickets every 15 s — WebSockets drop silently on mobile,
   // so realtime alone isn't reliable when the screen locks or network switches.
+  // Only fetches id + field_schedule — ~1-3 KB per ticket vs 15-50 KB for select("*")
   const refreshTeamTickets = React.useCallback(async () => {
     if (!session?.user?.id) return;
     const { data } = await supabase.from("tickets")
-      .select("*")
-      .eq("team_view", true)
-      .order("created_at", { ascending: false });
+      .select("id, field_schedule")
+      .eq("team_view", true);
     if (data) {
-      setTickets(prev => {
-        const map = new Map(prev.map(t => [t.id, t]));
-        data.forEach(row => map.set(row.id, normalizeTicket(row)));
-        return Array.from(map.values()).sort((a, b) =>
-          new Date(b.created_at||0) - new Date(a.created_at||0)
-        );
-      });
+      setTickets(prev => prev.map(t => {
+        const fresh = data.find(r => r.id === t.id);
+        if (!fresh) return t;
+        const sched = fresh.field_schedule || t.fieldSchedule || [];
+        return { ...t, fieldSchedule: sched, field_schedule: sched };
+      }));
     }
   }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Poll only when the applicator view is active; 30 s interval keeps data
+  // fresh without burning metered mobile data (≈ 150 KB/hr vs 8 MB/hr).
   useEffect(() => {
-    if (!session?.user?.id) return;
-    const id = setInterval(refreshTeamTickets, 15000);
+    if (!session?.user?.id || view !== "applicator") return;
+    const id = setInterval(refreshTeamTickets, 30000);
     return () => clearInterval(id);
-  }, [refreshTeamTickets]);
+  }, [refreshTeamTickets, view]);
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
