@@ -1598,6 +1598,31 @@ export default function App() {
     return () => { supabase.removeChannel(channel); };
   }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Poll queued tickets every 15 s — WebSockets drop silently on mobile,
+  // so realtime alone isn't reliable when the screen locks or network switches.
+  const refreshTeamTickets = React.useCallback(async () => {
+    if (!session?.user?.id) return;
+    const { data } = await supabase.from("tickets")
+      .select("*")
+      .eq("team_view", true)
+      .order("created_at", { ascending: false });
+    if (data) {
+      setTickets(prev => {
+        const map = new Map(prev.map(t => [t.id, t]));
+        data.forEach(row => map.set(row.id, normalizeTicket(row)));
+        return Array.from(map.values()).sort((a, b) =>
+          new Date(b.created_at||0) - new Date(a.created_at||0)
+        );
+      });
+    }
+  }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const id = setInterval(refreshTeamTickets, 15000);
+    return () => clearInterval(id);
+  }, [refreshTeamTickets]);
+
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
   const totalAcres        = acresOverride !== "" ? (parseFloat(acresOverride) || 0) : autoAcres;
@@ -2366,6 +2391,7 @@ export default function App() {
             isOwner={isOwner}
             farmLat={currentOrg?.farm_lat}
             farmLng={currentOrg?.farm_lng}
+            onRefresh={refreshTeamTickets}
             onToggleQueue={(id, val) => toggleTeamView(id, !val)}
             onPrintTicket={(tk) => printTicket(
               tk,

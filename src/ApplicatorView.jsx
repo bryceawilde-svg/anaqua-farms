@@ -69,12 +69,13 @@ function ensureSchedule(ticket, enrichedFields) {
   }));
 }
 
-export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue, farmLat, farmLng }) {
+export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue, farmLat, farmLng, onRefresh }) {
   const [selectedTicket,    setSelectedTicket]    = useState(null);
   const [focusFieldId,      setFocusFieldId]      = useState(null);
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const [reorderMode,       setReorderMode]       = useState(false);
   const [tapOrder,          setTapOrder]          = useState([]);  // field IDs in tapped sequence
+  const [syncing,           setSyncing]           = useState(false);
 
   const enrichFields = (selectedFields) =>
     (selectedFields || []).map(f => ({
@@ -88,10 +89,16 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
         <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #e8f5e0", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 20 }}>🌱</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: "#1a4a0a" }}>Planned Applications</div>
             <div style={{ fontSize: 12, color: "#888" }}>{tickets.length} ticket{tickets.length !== 1 ? "s" : ""} queued</div>
           </div>
+          <button
+            onClick={async () => { setSyncing(true); await onRefresh?.(); setSyncing(false); }}
+            disabled={syncing}
+            title="Sync latest data"
+            style={{ background: "none", border: "1.5px solid #c8dbb0", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#2a5c0f" }}
+          >{syncing ? "⟳" : "⟳ Sync"}</button>
         </div>
 
         {tickets.length === 0 && (
@@ -225,12 +232,20 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
       {/* Back bar — full-width tap target */}
-      <div
-        onClick={() => { setSelectedTicket(null); setFocusFieldId(null); setReorderMode(false); setTapOrder([]); }}
-        style={{ padding: "11px 16px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}
-      >
-        <span style={{ fontSize: 18, color: "#2a5c0f", lineHeight: 1 }}>‹</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#2a5c0f" }}>Back to Queue</span>
+      <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #c8dbb0" }}>
+        <div
+          onClick={() => { setSelectedTicket(null); setFocusFieldId(null); setReorderMode(false); setTapOrder([]); }}
+          style={{ flex: 1, padding: "11px 16px", background: "#f0f7e8", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}
+        >
+          <span style={{ fontSize: 18, color: "#2a5c0f", lineHeight: 1 }}>‹</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#2a5c0f" }}>Back to Queue</span>
+        </div>
+        <button
+          onClick={async () => { setSyncing(true); await onRefresh?.(); setSyncing(false); }}
+          disabled={syncing}
+          title="Sync latest data"
+          style={{ background: "#f0f7e8", border: "none", borderLeft: "1px solid #c8dbb0", padding: "11px 14px", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#2a5c0f" }}
+        >{syncing ? "⟳" : "⟳"}</button>
       </div>
 
       {/* Ticket header */}
