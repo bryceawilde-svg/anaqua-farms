@@ -33,19 +33,24 @@ function degToCompass(deg) {
 
 async function fetchFieldWeather(lat, lng) {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
       `&current=wind_speed_10m,wind_direction_10m,temperature_2m` +
-      `&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1`
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph`,
+      { signal: controller.signal }
     );
+    clearTimeout(timer);
     const data = await res.json();
-    const c = data.current;
+    const c = data?.current;
+    if (!c || c.wind_speed_10m == null) return null;
     return {
       windSpeed: Math.round(c.wind_speed_10m),
       windDir:   degToCompass(c.wind_direction_10m),
       airTemp:   Math.round(c.temperature_2m),
     };
-  } catch { return {}; }
+  } catch { return null; }
 }
 
 function estimateStart(stopHHMM, acres, acresPerHour = 75) {
@@ -64,7 +69,7 @@ function ensureSchedule(ticket, enrichedFields) {
   }));
 }
 
-export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue }) {
+export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue, farmLat, farmLng }) {
   const [selectedTicket,    setSelectedTicket]    = useState(null);
   const [focusFieldId,      setFocusFieldId]      = useState(null);
   const [completedExpanded, setCompletedExpanded] = useState(false);
@@ -178,18 +183,29 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     exitReorder();
   };
 
-  const handleStart = async (field) => {
+  const handleStart = (field) => {
     const idx = schedule.findIndex(fs => fs.id === field.id);
     if (idx === -1) return;
     const now   = nowHHMM();
     const today = new Date().toISOString().slice(0, 10);
-    const weather = (field.centroid_lat && field.centroid_lng)
-      ? await fetchFieldWeather(field.centroid_lat, field.centroid_lng)
-      : {};
+
+    // Save start time immediately — don't wait for weather
     const updated = schedule.map((fs, i) =>
-      i === idx ? { ...fs, actualTimeStart: now, actualDateStart: today, fieldWeather: weather } : fs
+      i === idx ? { ...fs, actualTimeStart: now, actualDateStart: today } : fs
     );
     onSaveFieldSchedule(t.id, updated);
+
+    // Fetch weather in background using field centroid or org farm location as fallback
+    const wxLat = field.centroid_lat || farmLat;
+    const wxLng = field.centroid_lng || farmLng;
+    if (wxLat && wxLng) {
+      fetchFieldWeather(wxLat, wxLng).then(weather => {
+        if (!weather) return; // API failed — don't overwrite with empty data
+        onSaveFieldSchedule(t.id, updated.map((fs, i) =>
+          i === idx ? { ...fs, fieldWeather: weather } : fs
+        ));
+      });
+    }
   };
 
   const handleStop = (field) => {

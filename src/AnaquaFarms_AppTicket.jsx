@@ -1275,6 +1275,8 @@ export default function App() {
   const [inviteRole,       setInviteRole]       = useState("member");
   const [editingOrgName,   setEditingOrgName]   = useState(false);
   const [orgNameDraft,     setOrgNameDraft]     = useState("");
+  const [farmZipDraft,     setFarmZipDraft]     = useState("");
+  const [farmZipSaving,    setFarmZipSaving]    = useState(false);
 
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
@@ -1641,8 +1643,9 @@ export default function App() {
   };
 
   // 78569 = Mission/McAllen TX area — geocoded coords
-  const WX_LAT = 26.2159;
-  const WX_LON = -98.3253;
+  // Use org-configured farm location; fall back to central McAllen if not set
+  const WX_LAT = currentOrg?.farm_lat  || 26.2159;
+  const WX_LON = currentOrg?.farm_lng  || -98.3253;
 
   const fetchWeather = async () => {
     setWxLoading(true);
@@ -1887,6 +1890,30 @@ export default function App() {
       .update({ field_schedule: updatedSchedule })
       .eq("id", ticketId);
     if (error) showToast("Failed to save field time: " + error.message);
+  };
+
+  const saveFarmZip = async () => {
+    const zip = farmZipDraft.trim().replace(/\D/g, "");
+    if (zip.length !== 5) return alert("Enter a valid 5-digit ZIP code.");
+    setFarmZipSaving(true);
+    try {
+      const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+      if (!res.ok) { alert("ZIP code not found. Please try another."); return; }
+      const data = await res.json();
+      const place = data.places?.[0];
+      if (!place) { alert("ZIP code not found."); return; }
+      const lat = parseFloat(place.latitude);
+      const lng = parseFloat(place.longitude);
+      const { error } = await supabase.from("organizations")
+        .update({ farm_zip: zip, farm_lat: lat, farm_lng: lng })
+        .eq("id", currentOrg.id);
+      if (error) { showToast("Failed to save location: " + error.message); return; }
+      setCurrentOrg(prev => ({ ...prev, farm_zip: zip, farm_lat: lat, farm_lng: lng }));
+      setFarmZipDraft("");
+      showToast(`Farm location set to ${zip} (${place["place name"]}, ${place["state abbreviation"]}).`, "success");
+    } catch {
+      alert("Could not look up ZIP code. Check your connection and try again.");
+    } finally { setFarmZipSaving(false); }
   };
 
   const reorderTicketFields = async (ticketId, newSelectedFields, newFieldSchedule) => {
@@ -2337,6 +2364,8 @@ export default function App() {
             onSaveFieldSchedule={saveFieldSchedule}
             onReorderFields={reorderTicketFields}
             isOwner={isOwner}
+            farmLat={currentOrg?.farm_lat}
+            farmLng={currentOrg?.farm_lng}
             onToggleQueue={(id, val) => toggleTeamView(id, !val)}
             onPrintTicket={(tk) => printTicket(
               tk,
@@ -4748,6 +4777,37 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {/* Farm Location */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitle, marginBottom:6 }}>Farm Location</div>
+                <div style={{ fontSize:12, color:"#555", marginBottom:8 }}>
+                  Used for weather auto-fill on tickets. Enter your farm's ZIP code.
+                </div>
+                {currentOrg?.farm_zip && (
+                  <div style={{ fontSize:12, color:"#2a5c0f", fontWeight:600, marginBottom:8 }}>
+                    Current: {currentOrg.farm_zip}
+                    <span style={{ fontWeight:400, color:"#888", marginLeft:8 }}>
+                      ({parseFloat(currentOrg.farm_lat).toFixed(4)}, {parseFloat(currentOrg.farm_lng).toFixed(4)})
+                    </span>
+                  </div>
+                )}
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <input
+                    value={farmZipDraft}
+                    onChange={e => setFarmZipDraft(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                    placeholder="5-digit ZIP"
+                    maxLength={5}
+                    style={{ ...inp, width:110, fontSize:14 }}
+                  />
+                  <button onClick={saveFarmZip} disabled={farmZipSaving || farmZipDraft.length !== 5}
+                    style={{ background: farmZipDraft.length === 5 ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: farmZipDraft.length === 5 ? "pointer" : "default", fontSize:13, fontWeight:700 }}>
+                    {farmZipSaving ? "Looking up…" : "Set Location"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Org plan */}
             {isOwner && (
