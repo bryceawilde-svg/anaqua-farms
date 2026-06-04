@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#1a4a0a"/>
+  <!-- Sprout stem -->
+  <rect x="248" y="260" width="16" height="130" rx="8" fill="#6aaa40"/>
+  <!-- Left leaf -->
+  <ellipse cx="220" cy="270" rx="50" ry="28" fill="#4aaa1a" transform="rotate(-30 220 270)"/>
+  <!-- Right leaf -->
+  <ellipse cx="292" cy="270" rx="50" ry="28" fill="#4aaa1a" transform="rotate(30 292 270)"/>
+  <!-- Center leaf -->
+  <ellipse cx="256" cy="210" rx="36" ry="60" fill="#6aaa40"/>
+  <!-- BoomLog text mark -->
+  <text x="256" y="430" font-family="Georgia,serif" font-size="56" font-weight="bold" fill="white" text-anchor="middle" letter-spacing="2">BoomLog</text>
+</svg>
