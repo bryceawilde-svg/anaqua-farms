@@ -1277,6 +1277,7 @@ export default function App() {
   const [orgNameDraft,     setOrgNameDraft]     = useState("");
   const [farmZipDraft,     setFarmZipDraft]     = useState("");
   const [farmZipSaving,    setFarmZipSaving]    = useState(false);
+  const [cropInput,        setCropInput]        = useState("");
 
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
@@ -1462,6 +1463,13 @@ export default function App() {
   const isOwner    = userRole === "owner";
   const isViewer   = userRole === "viewer" || userRole === "applicator";
 
+  // Org crop list — falls back to crops already assigned to fields if org list is empty
+  const orgCrops = React.useMemo(() => {
+    const saved = Array.isArray(currentOrg?.crops) ? currentOrg.crops : [];
+    if (saved.length) return saved;
+    return [...new Set(fieldLibrary.map(f => f.crop).filter(Boolean))].sort();
+  }, [currentOrg?.crops, fieldLibrary]);
+
   // Viewers land in applicator view and can't navigate away
   useEffect(() => {
     if (isViewer) setView("applicator");
@@ -1619,10 +1627,17 @@ export default function App() {
   // Poll only when the applicator view is active; 30 s interval keeps data
   // fresh without burning metered mobile data (≈ 150 KB/hr vs 8 MB/hr).
   useEffect(() => {
-    if (!session?.user?.id || view !== "applicator") return;
+    // Poll when applicator view is open (any role) OR when owner/member is on
+    // the saved-tickets tab and there are active queued tickets to watch.
+    const hasActiveQueue = tickets.some(t => t.team_view);
+    const shouldPoll = session?.user?.id && (
+      view === "applicator" ||
+      (view === "log" && hasActiveQueue)
+    );
+    if (!shouldPoll) return;
     const id = setInterval(refreshTeamTickets, 30000);
     return () => clearInterval(id);
-  }, [refreshTeamTickets, view]);
+  }, [refreshTeamTickets, view, tickets.some(t => t.team_view)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Total acres auto-computed from selected fields
   const autoAcres         = form.selectedFields.reduce((s, f) => s + (parseFloat(f.acres) || 0), 0);
@@ -1919,28 +1934,51 @@ export default function App() {
   };
 
   const saveFarmZip = async () => {
-    const zip = farmZipDraft.trim().replace(/\D/g, "");
-    if (zip.length !== 5) return alert("Enter a valid 5-digit ZIP code.");
+    const query = farmZipDraft.trim();
+    if (!query) return;
     setFarmZipSaving(true);
     try {
-      const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
-      if (!res.ok) { alert("ZIP code not found. Please try another."); return; }
+      // Nominatim (OpenStreetMap) — works with city names, postal codes, addresses worldwide
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      if (!res.ok) { alert("Location not found. Try a nearby city or town name."); return; }
       const data = await res.json();
-      const place = data.places?.[0];
-      if (!place) { alert("ZIP code not found."); return; }
-      const lat = parseFloat(place.latitude);
-      const lng = parseFloat(place.longitude);
+      if (!data.length) { alert("Location not found. Try entering a city name, town, or postal code."); return; }
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      // Show first 3 parts of display name (e.g. "Lyford, Willacy County, Texas")
+      const displayName = data[0].display_name.split(",").slice(0, 3).join(",").trim();
       const { error } = await supabase.from("organizations")
-        .update({ farm_zip: zip, farm_lat: lat, farm_lng: lng })
+        .update({ farm_zip: query, farm_lat: lat, farm_lng: lng })
         .eq("id", currentOrg.id);
       if (error) { showToast("Failed to save location: " + error.message); return; }
-      setCurrentOrg(prev => ({ ...prev, farm_zip: zip, farm_lat: lat, farm_lng: lng }));
+      setCurrentOrg(prev => ({ ...prev, farm_zip: query, farm_lat: lat, farm_lng: lng }));
       setFarmZipDraft("");
-      showToast(`Farm location set to ${zip} (${place["place name"]}, ${place["state abbreviation"]}).`, "success");
+      showToast(`Farm location set to ${displayName}.`, "success");
     } catch {
-      alert("Could not look up ZIP code. Check your connection and try again.");
+      alert("Could not look up location. Check your connection and try again.");
     } finally { setFarmZipSaving(false); }
   };
+
+  const saveOrgCrops = async (newList) => {
+    const { error } = await supabase.from("organizations")
+      .update({ crops: newList })
+      .eq("id", currentOrg.id);
+    if (error) showToast("Failed to save crops: " + error.message);
+    else setCurrentOrg(prev => ({ ...prev, crops: newList }));
+  };
+
+  const addOrgCrop = async () => {
+    const name = cropInput.trim();
+    if (!name) return;
+    if (orgCrops.includes(name)) { setCropInput(""); return; }
+    await saveOrgCrops([...orgCrops, name]);
+    setCropInput("");
+  };
+
+  const removeOrgCrop = (name) => saveOrgCrops(orgCrops.filter(c => c !== name));
 
   const reorderTicketFields = async (ticketId, newSelectedFields, newFieldSchedule) => {
     setTickets(prev => prev.map(t =>
@@ -1964,6 +2002,8 @@ export default function App() {
   const [fieldReorderMode,     setFieldReorderMode]     = useState(false);
   const [fmReviewMode,         setFmReviewMode]         = useState("table"); // "table" | "map"
   const [fmDropState,          setFmDropState]          = useState(null);    // { fmid, search } — open dropdown
+  const [fmAvailCols,          setFmAvailCols]          = useState([]);
+  const [fmColMap,             setFmColMap]             = useState({ nameCol:"", idCol:"", farmCol:"", cropCol:"" });
 
   // ── Shapefile importer state
   const [fmStage,       setFmStage]       = useState("upload"); // "upload" | "review" | "result"
@@ -2514,7 +2554,7 @@ export default function App() {
               <div style={{ marginBottom:12 }}>
                 <label style={labelStyle}>Crop / Site</label>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {[...new Set([...fieldLibrary.map(f=>f.crop).filter(Boolean),"Cotton","Corn","Fallow"])].sort().map(crop => (
+                  {[...new Set([...orgCrops, ...fieldLibrary.map(f=>f.crop).filter(Boolean)])].filter(Boolean).sort().map(crop => (
                     <button key={crop} type="button"
                       onClick={() => set("crop", crop)}
                       style={{
@@ -3699,6 +3739,40 @@ export default function App() {
               const resetFm = () => {
                 setFmStage("upload"); setFmFeatures([]); setFmMatches({});
                 setFmParseError(""); setFmImportError(""); setFmResult(null);
+                setFmAvailCols([]); setFmColMap({ nameCol:"", idCol:"", farmCol:"", cropCol:"" });
+              };
+
+              // Normalize mapped columns → standard names, then run matching → go to review
+              const confirmMapping = () => {
+                const normalized = fmFeatures.map((feat, i) => {
+                  const p = feat.properties || {};
+                  return {
+                    ...feat,
+                    properties: {
+                      ...p,
+                      FLD_FMID:   fmColMap.idCol   ? String(p[fmColMap.idCol]   ?? `_idx_${i}`) : `_idx_${i}`,
+                      FLD_NM:     String(p[fmColMap.nameCol] || `Feature ${i+1}`),
+                      FARM_NM:    fmColMap.farmCol  ? String(p[fmColMap.farmCol]  ?? "") : "",
+                      CROP_CYCLE: fmColMap.cropCol  ? String(p[fmColMap.cropCol]  ?? "") : "",
+                    }
+                  };
+                });
+                setFmFeatures(normalized);
+                const ms = {};
+                normalized.forEach(feat => {
+                  const fmid = feat.properties.FLD_FMID;
+                  const name = feat.properties.FLD_NM;
+                  if (!fmid) return;
+                  const byName = fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
+                  if (byName) { ms[fmid] = { status:"auto", fieldId: byName.id, confirmed: true }; return; }
+                  let best = null, bestScore = 0;
+                  fieldLibrary.forEach(f => { const s = fmSimilarity(name, f.name); if (s > bestScore) { bestScore = s; best = f; } });
+                  ms[fmid] = best && bestScore >= 0.8
+                    ? { status:"suggested", fieldId: best.id, confirmed: false }
+                    : { status:"unmatched", fieldId: "__new__", confirmed: false };
+                });
+                setFmMatches(ms);
+                setFmStage("review");
               };
 
               const handleFmZip = async (file) => {
@@ -3718,33 +3792,45 @@ export default function App() {
                   let result = await source.read();
                   while (!result.done) { features.push(result.value); result = await source.read(); }
 
-                  // Build initial match state
-                  const matchState = {};
-                  features.forEach(feat => {
-                    const fmid = feat.properties?.FLD_FMID;
-                    const name = feat.properties?.FLD_NM || "";
-                    if (!fmid) return;
-                    // Tier 1: fmid match
-                    const byFmid = fieldLibrary.find(f => f.fmid && f.fmid === fmid);
-                    if (byFmid) { matchState[fmid] = { status:"auto", fieldId: byFmid.id, confirmed: true }; return; }
-                    // Tier 2: exact name match
-                    const byName = fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
-                    if (byName) { matchState[fmid] = { status:"auto", fieldId: byName.id, confirmed: true }; return; }
-                    // Tier 3: fuzzy
-                    let best = null, bestScore = 0;
-                    fieldLibrary.forEach(f => {
-                      const score = fmSimilarity(name, f.name);
-                      if (score > bestScore) { bestScore = score; best = f; }
-                    });
-                    if (best && bestScore >= 0.8) {
-                      matchState[fmid] = { status:"suggested", fieldId: best.id, confirmed: false };
-                    } else {
-                      matchState[fmid] = { status:"unmatched", fieldId: "__new__", confirmed: false };
-                    }
-                  });
+                  const firstProps = features[0]?.properties || {};
+                  const cols = Object.keys(firstProps);
+
+                  // Auto-detect which column serves each role
+                  const detect = (...candidates) => candidates.find(c => cols.includes(c)) || "";
+                  const detected = {
+                    nameCol: detect("FLD_NM","NAME","Field Name","FieldName","FIELD_NAME","FIELD_NM","Name","label","Label","FIELDNAME","name"),
+                    idCol:   detect("FLD_FMID","FIELD_ID","FieldId","GlobalID","GLOBALID","FID","ID","field_id"),
+                    farmCol: detect("FARM_NM","FARM_NAME","FarmName","Farm","FARMNAME","farm_name","Farm Name","FARM"),
+                    cropCol: detect("CROP_CYCLE","CROP","Crop","Year","YEAR","Season","SEASON","CropYear","crop"),
+                  };
+
                   setFmFeatures(features);
-                  setFmMatches(matchState);
-                  setFmStage("review");
+                  setFmColMap(detected);
+
+                  if ("FLD_FMID" in firstProps) {
+                    // FarmMobile format — skip mapping, build match state and go straight to review
+                    const ms = {};
+                    features.forEach(feat => {
+                      const fmid = feat.properties.FLD_FMID;
+                      const name = feat.properties.FLD_NM || "";
+                      if (!fmid) return;
+                      const byFmid = fieldLibrary.find(f => f.fmid && f.fmid === fmid);
+                      if (byFmid) { ms[fmid] = { status:"auto", fieldId: byFmid.id, confirmed: true }; return; }
+                      const byName = fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
+                      if (byName) { ms[fmid] = { status:"auto", fieldId: byName.id, confirmed: true }; return; }
+                      let best = null, bestScore = 0;
+                      fieldLibrary.forEach(f => { const s = fmSimilarity(name, f.name); if (s > bestScore) { bestScore = s; best = f; } });
+                      ms[fmid] = best && bestScore >= 0.8
+                        ? { status:"suggested", fieldId: best.id, confirmed: false }
+                        : { status:"unmatched", fieldId: "__new__", confirmed: false };
+                    });
+                    setFmMatches(ms);
+                    setFmStage("review");
+                  } else {
+                    // Unknown format — show column mapping stage
+                    setFmAvailCols(cols);
+                    setFmStage("mapping");
+                  }
                 } catch (err) {
                   setFmParseError("Parse error: " + err.message);
                 } finally {
@@ -3852,6 +3938,86 @@ export default function App() {
                       <input ref={fmFileRef} type="file" accept=".zip" style={{ display:"none" }}
                         onChange={e => handleFmZip(e.target.files[0])} />
                       {fmParseError && <div style={{ color:"#c0392b", fontSize:12, marginTop:6 }}>{fmParseError}</div>}
+                    </div>
+                  )}
+
+                  {/* Stage 1b: Column Mapping — shown for non-FarmMobile shapefiles */}
+                  {fmStage === "mapping" && (
+                    <div>
+                      <div style={{ fontSize:13, color:"#555", marginBottom:14 }}>
+                        <strong>{fmFeatures.length} features found.</strong> We couldn't auto-detect the format.
+                        Tell us which column holds each piece of data.
+                      </div>
+
+                      {[
+                        { key:"nameCol", label:"Field Name", required:true,  hint:"The column that holds each field's name" },
+                        { key:"idCol",   label:"Unique ID",  required:false, hint:"Optional — improves matching accuracy" },
+                        { key:"farmCol", label:"Farm Name",  required:false, hint:"Display only" },
+                        { key:"cropCol", label:"Crop / Year",required:false, hint:"Display only" },
+                      ].map(({ key, label, required, hint }) => (
+                        <div key={key} style={{ marginBottom:12 }}>
+                          <label style={{ ...labelStyle, fontSize:12 }}>
+                            {label}{required && <span style={{ color:"#c0392b" }}> *</span>}
+                            <span style={{ fontWeight:400, color:"#aaa", marginLeft:6 }}>{hint}</span>
+                          </label>
+                          <select value={fmColMap[key]} onChange={e => setFmColMap(m => ({ ...m, [key]: e.target.value }))}
+                            style={{ ...inp, fontSize:13, width:"100%", maxWidth:320 }}>
+                            <option value="">— {required ? "required" : "not used"} —</option>
+                            {fmAvailCols.map(col => (
+                              <option key={col} value={col}>{col}
+                                {fmFeatures[0]?.properties?.[col] != null
+                                  ? ` (e.g. "${String(fmFeatures[0].properties[col]).slice(0,30)}")`
+                                  : ""
+                                }
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+
+                      {/* Preview first 3 features with current mapping */}
+                      {fmColMap.nameCol && (
+                        <div style={{ marginBottom:14 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:"#555", marginBottom:4 }}>Preview (first 3 features):</div>
+                          <div style={{ overflowX:"auto" }}>
+                            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                              <thead>
+                                <tr>{["Field Name","Farm","Crop/Year","ID"].map(h => (
+                                  <th key={h} style={{ ...th, fontSize:10 }}>{h}</th>
+                                ))}</tr>
+                              </thead>
+                              <tbody>
+                                {fmFeatures.slice(0,3).map((feat,i) => {
+                                  const p = feat.properties || {};
+                                  return (
+                                    <tr key={i} style={{ borderBottom:"1px solid #eef5e8" }}>
+                                      <td style={td}>{fmColMap.nameCol ? p[fmColMap.nameCol] : "—"}</td>
+                                      <td style={td}>{fmColMap.farmCol ? p[fmColMap.farmCol] : "—"}</td>
+                                      <td style={td}>{fmColMap.cropCol ? p[fmColMap.cropCol] : "—"}</td>
+                                      <td style={{ ...td, color:"#888", fontSize:10 }}>{fmColMap.idCol ? p[fmColMap.idCol] : "(auto)"}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button
+                          disabled={!fmColMap.nameCol}
+                          onClick={confirmMapping}
+                          style={{ background: fmColMap.nameCol ? "#2a5c0f" : "#ccc", color:"#fff", border:"none",
+                            borderRadius:6, padding:"8px 16px", cursor: fmColMap.nameCol ? "pointer" : "not-allowed",
+                            fontSize:13, fontWeight:700 }}>
+                          Continue to Review →
+                        </button>
+                        <button onClick={resetFm}
+                          style={{ background:"none", border:"none", color:"#888", cursor:"pointer", fontSize:12, textDecoration:"underline" }}>
+                          Start Over
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -4805,12 +4971,47 @@ export default function App() {
               ))}
             </div>
 
+            {/* Crops */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitle, marginBottom:6 }}>Crops</div>
+                <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+                  These appear as quick-select buttons on new tickets. Add any crop your operation grows.
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                  {orgCrops.map(crop => (
+                    <span key={crop} style={{ display:"flex", alignItems:"center", gap:4, background:"#e6f5d0", border:"1.5px solid #c8dbb0", borderRadius:5, padding:"4px 10px", fontSize:13, fontWeight:600, color:"#2a5c0f" }}>
+                      {crop}
+                      <button onClick={() => removeOrgCrop(crop)}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:14, padding:"0 0 0 2px", lineHeight:1 }}>×</button>
+                    </span>
+                  ))}
+                  {orgCrops.length === 0 && (
+                    <span style={{ fontSize:12, color:"#aaa" }}>No crops added yet — add your first one below.</span>
+                  )}
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <input
+                    value={cropInput}
+                    onChange={e => setCropInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addOrgCrop()}
+                    placeholder="e.g. Wheat, Soybeans, Sorghum…"
+                    style={{ ...inp, flex:1, fontSize:13 }}
+                  />
+                  <button onClick={addOrgCrop} disabled={!cropInput.trim()}
+                    style={{ background: cropInput.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: cropInput.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
+                    + Add
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Farm Location */}
             {isOwner && (
               <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
                 <div style={{ ...sectionTitle, marginBottom:6 }}>Farm Location</div>
                 <div style={{ fontSize:12, color:"#555", marginBottom:8 }}>
-                  Used for weather auto-fill on tickets. Enter your farm's ZIP code.
+                  Used for weather auto-fill on tickets. Enter a city, town, or postal code — works worldwide.
                 </div>
                 {currentOrg?.farm_zip && (
                   <div style={{ fontSize:12, color:"#2a5c0f", fontWeight:600, marginBottom:8 }}>
@@ -4823,14 +5024,14 @@ export default function App() {
                 <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                   <input
                     value={farmZipDraft}
-                    onChange={e => setFarmZipDraft(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                    placeholder="5-digit ZIP"
-                    maxLength={5}
-                    style={{ ...inp, width:110, fontSize:14 }}
+                    onChange={e => setFarmZipDraft(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && saveFarmZip()}
+                    placeholder="e.g. Lyford, TX or 78560"
+                    style={{ ...inp, flex:1, fontSize:13 }}
                   />
-                  <button onClick={saveFarmZip} disabled={farmZipSaving || farmZipDraft.length !== 5}
-                    style={{ background: farmZipDraft.length === 5 ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: farmZipDraft.length === 5 ? "pointer" : "default", fontSize:13, fontWeight:700 }}>
-                    {farmZipSaving ? "Looking up…" : "Set Location"}
+                  <button onClick={saveFarmZip} disabled={farmZipSaving || !farmZipDraft.trim()}
+                    style={{ background: farmZipDraft.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: farmZipDraft.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
+                    {farmZipSaving ? "Looking up…" : "Find Location"}
                   </button>
                 </div>
               </div>
