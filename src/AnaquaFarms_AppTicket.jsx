@@ -1332,6 +1332,16 @@ export default function App() {
   const [manualTank,     setManualTank]     = useState(false);
   const [manualGpa,      setManualGpa]      = useState(false);
   const [manualPsi,      setManualPsi]      = useState(false);
+  const [showTankGear,   setShowTankGear]   = useState(false);
+  const [tankPresets,    setTankPresets]    = useState(() => {
+    try { return JSON.parse(localStorage.getItem("bl_tankPresets")) || [1600,1200,1000]; } catch { return [1600,1200,1000]; }
+  });
+  const [psiPresets,     setPsiPresets]     = useState(() => {
+    try { return JSON.parse(localStorage.getItem("bl_psiPresets"))  || [30,40,45,50]; }   catch { return [30,40,45,50]; }
+  });
+  const [gpaPresets,     setGpaPresets]     = useState(() => {
+    try { return JSON.parse(localStorage.getItem("bl_gpaPresets"))  || [8,10,12]; }        catch { return [8,10,12]; }
+  });
   const [acresOverride,  setAcresOverride]  = useState("");   // empty = use auto-sum
   const [showAcresInput, setShowAcresInput] = useState(false);
   const [wxLoading,   setWxLoading]   = useState(false);
@@ -2322,7 +2332,7 @@ export default function App() {
         {/* ══ APPLICATOR VIEW ══════════════════════════════════════════════════════ */}
         {view === "applicator" && (
           <ApplicatorView
-            tickets={tickets.filter(t => t.team_view)}
+            tickets={tickets.filter(t => t.team_view).slice().reverse()}
             fieldLibrary={fieldLibrary}
             onSaveFieldSchedule={saveFieldSchedule}
             onReorderFields={reorderTicketFields}
@@ -2787,13 +2797,44 @@ export default function App() {
 
             {/* Tank Setup */}
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Tank Setup & Calculations</div>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                <span style={sectionTitle}>Tank Setup & Calculations</span>
+                <button onClick={() => setShowTankGear(g => !g)} title="Customize presets"
+                  style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color: showTankGear ? "#2a5c0f" : "#aaa", padding:"2px 4px" }}>⚙</button>
+              </div>
+              {showTankGear && (
+                <div style={{ background:"#f5fff0", border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", marginBottom:12 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#2a5c0f", marginBottom:8 }}>Customize preset buttons</div>
+                  {[
+                    { label:"Tank Size (gal)", presets: tankPresets, setPresets: setTankPresets, key:"bl_tankPresets" },
+                    { label:"Pressure (PSI)",  presets: psiPresets,  setPresets: setPsiPresets,  key:"bl_psiPresets"  },
+                    { label:"Gal / Acre",      presets: gpaPresets,  setPresets: setGpaPresets,  key:"bl_gpaPresets"  },
+                  ].map(({ label, presets, setPresets, key }) => (
+                    <div key={key} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                      <span style={{ fontSize:11, color:"#555", minWidth:100 }}>{label}</span>
+                      {presets.map((v, i) => (
+                        <input key={i} type="number" defaultValue={v}
+                          onBlur={e => {
+                            const num = parseFloat(e.target.value);
+                            if (isNaN(num) || num <= 0) { e.target.value = String(presets[i]); return; }
+                            const updated = presets.map((x, j) => j === i ? num : x);
+                            setPresets(updated);
+                            localStorage.setItem(key, JSON.stringify(updated));
+                          }}
+                          style={{ width:52, border:"1.5px solid #c8dbb0", borderRadius:4, padding:"3px 4px", fontSize:12, fontFamily:"inherit", textAlign:"center" }}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                  <button onClick={() => setShowTankGear(false)} style={{ marginTop:4, fontSize:11, background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 12px", cursor:"pointer", fontWeight:700 }}>Done</button>
+                </div>
+              )}
               <div style={{ display:"grid", gridTemplateColumns:rGrid(1, 4, isMobile), gap:10, marginBottom:12 }}>
                 <div>
                   <label style={labelStyle}>Tank Size (gal)</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
-                      {[1600,1200,1000].map(size => (
+                      {tankPresets.map(size => (
                         <button key={size}
                           onClick={() => { set("tankSize", String(size)); setManualTank(false); }}
                           style={{
@@ -2829,7 +2870,7 @@ export default function App() {
                   <label style={labelStyle}>Pressure (PSI)</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
-                      {[30,40,45,50].map(psi => (
+                      {psiPresets.map(psi => (
                         <button key={psi} type="button"
                           onClick={() => { set("pressure", String(psi)); setManualPsi(false); }}
                           style={{
@@ -2865,7 +2906,7 @@ export default function App() {
                   <label style={labelStyle}>Gal / Acre</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
-                      {[8,10,12].map(gpa => (
+                      {gpaPresets.map(gpa => (
                         <button key={gpa} type="button"
                           onClick={() => { set("galPerAcre", String(gpa)); setManualGpa(false); }}
                           style={{
@@ -3322,40 +3363,6 @@ export default function App() {
         {/* ══ SAVED TICKETS ══════════════════════════════════════════════════════ */}
                 {view === "log" && (
           <div>
-            {/* Header row */}
-            <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
-              {/* Date range row */}
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
-                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"4px 4px", fontSize:11, fontFamily:"inherit", flex:1, minWidth:0 }}
-                  title="Report from date"/>
-                <span style={{ fontSize:11, color:"#888", flexShrink:0 }}>–</span>
-                <input type="date" value={tdaTo} onChange={e=>setTdaTo(e.target.value)}
-                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"4px 4px", fontSize:11, fontFamily:"inherit", flex:1, minWidth:0 }}
-                  title="Report to date"/>
-              </div>
-              {/* Buttons row */}
-              <div style={{ display:"flex", gap:8 }}>
-                <button onClick={() => downloadCSV(tickets, currentOrg?.name)} disabled={!tickets.length} style={{
-                  flex:1, background: tickets.length ? "#2a5c0f" : "#ccc",
-                  color:"#fff", border:"none", borderRadius:6, padding:"10px 0",
-                  cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
-                }}>CSV</button>
-                <button onClick={() => {
-                  const filtered = tickets.filter(t => {
-                    if (tdaFrom && t.date < tdaFrom) return false;
-                    if (tdaTo   && t.date > tdaTo)   return false;
-                    return true;
-                  });
-                  if (!filtered.length) return alert("No tickets in selected date range.");
-                  downloadTDAReport(filtered, currentOrg?.name);
-                }} disabled={!tickets.length} style={{
-                  flex:1, background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
-                  color:"#fff", border:"none", borderRadius:6, padding:"10px 0",
-                  cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
-                }}>TDA Report</button>
-              </div>
-            </div>
 
             {tickets.length === 0 ? (
               <div style={{ textAlign:"center", padding:60, color:"#999", fontSize:14 }}>
@@ -3561,7 +3568,7 @@ export default function App() {
                               jug2_5gal: c.jug2_5gal || false,
                             })),
                           });
-                          setManualTank(!["1600","1200","1000"].includes(String(t.tankSize)));
+                          setManualTank(!tankPresets.map(String).includes(String(t.tankSize)));
                           setEditingId(null);
                           setExpandedTicket(null);
                           setView("form");
@@ -3596,7 +3603,7 @@ export default function App() {
                             }))
                           });
                           setEditingId(t.id);
-                          setManualTank(!["1600","1200","1000"].includes(String(t.tankSize)));
+                          setManualTank(!tankPresets.map(String).includes(String(t.tankSize)));
                           setAcresOverride("");
                           setShowAcresInput(false);
                           setManualGpa(false);
@@ -4887,6 +4894,40 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* Reporting */}
+            <div style={{...card, padding: isMobile ? "10px 12px" : "14px 18px", marginTop:12}}>
+              <div style={sectionTitle}>Reports</div>
+              <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:8 }}>
+                <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
+                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
+                  title="Report from date"/>
+                <span style={{ fontSize:12, color:"#888", flexShrink:0 }}>–</span>
+                <input type="date" value={tdaTo} onChange={e=>setTdaTo(e.target.value)}
+                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
+                  title="Report to date"/>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={() => downloadCSV(tickets, currentOrg?.name)} disabled={!tickets.length} style={{
+                  flex:1, background: tickets.length ? "#2a5c0f" : "#ccc",
+                  color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
+                  cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
+                }}>CSV</button>
+                <button onClick={() => {
+                  const filtered = tickets.filter(t => {
+                    if (tdaFrom && t.date < tdaFrom) return false;
+                    if (tdaTo   && t.date > tdaTo)   return false;
+                    return true;
+                  });
+                  if (!filtered.length) return alert("No tickets in selected date range.");
+                  downloadTDAReport(filtered, currentOrg?.name);
+                }} disabled={!tickets.length} style={{
+                  flex:1, background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
+                  color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
+                  cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
+                }}>TDA Report</button>
+              </div>
+            </div>
           </div>
         )}
 
