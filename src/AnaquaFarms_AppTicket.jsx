@@ -3450,7 +3450,18 @@ export default function App() {
                         {t.partialAcres ? ` + partial` : ""}
                       </div>
                     </div>
-                    <div style={{ color:"#888", fontSize:18, flexShrink:0 }}>{isOpen ? "▲" : "▼"}</div>
+                    {isOwner && (
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleTeamView(t.id, t.team_view); }}
+                        title={t.team_view ? "Remove from queue" : "Add to queue"}
+                        style={{
+                          width:32, height:32, borderRadius:6, border:"none", cursor:"pointer", flexShrink:0,
+                          background: t.team_view ? "#1a6bbf" : "#e8f0ff",
+                          color:      t.team_view ? "#fff"    : "#1a6bbf",
+                          fontSize: 20, fontWeight: 900, display:"flex", alignItems:"center", justifyContent:"center",
+                        }}
+                      >{t.team_view ? "✓" : "+"}</button>
+                    )}
                   </div>
 
                   {/* ── Expanded detail */}
@@ -3613,19 +3624,6 @@ export default function App() {
                           background:"#2a5c0f", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700
                         }}>Edit</button>
-                        {isOwner && (
-                          <button
-                            onClick={() => toggleTeamView(t.id, t.team_view)}
-                            title={t.team_view ? "Remove from applicator queue" : "Add to applicator queue"}
-                            style={{
-                              border: `1.5px solid ${t.team_view ? "#2a5c0f" : "#c8dbb0"}`,
-                              borderRadius: 5, padding: "7px 12px", cursor: "pointer",
-                              fontSize: 13, fontWeight: 700,
-                              background: t.team_view ? "#2a5c0f" : "#f9fdf5",
-                              color:      t.team_view ? "#fff"    : "#4a7a20",
-                            }}
-                          >{t.team_view ? "In Queue" : "+ Queue"}</button>
-                        )}
                       </div>
                     </div>
                   )}
@@ -4936,7 +4934,7 @@ export default function App() {
       {/* ── Floating Sector Chat (Pro only) ──────────────────────────── */}
 
       {/* Floating bubble — hidden when chat is open */}
-      {isPro && !chatOpen && (
+      {isPro && !isViewer && !chatOpen && (
         <button
           onClick={() => setChatOpen(true)}
           title="Application Sector Advisor"
@@ -4960,7 +4958,7 @@ export default function App() {
         >💬</button>
       )}
 
-      {isPro && chatOpen && (
+      {isPro && !isViewer && chatOpen && (
         <div style={{
           position: "fixed",
           bottom: isMobile ? 0 : 96,

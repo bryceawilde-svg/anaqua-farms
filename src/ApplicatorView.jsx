@@ -410,7 +410,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       {chems.length > 0 && (
         <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
           <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>CHEMICALS</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>PRODUCTS</span>
             <button
               onClick={() => onPrintTicket(t)}
               style={{ padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
@@ -419,19 +419,8 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
             >🖨 Ticket</button>
           </div>
           {chems.map((c, i) => (
-            <div key={i} style={{ padding: "9px 14px", borderBottom: "1px solid #eef5e8", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <div>
-                <div style={{ fontWeight: 700, color: "#1a1a1a" }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
-                  {c.ratePerAcre && <span>{c.ratePerAcre} {c.unit || ""}/ac</span>}
-                </div>
-              </div>
-              {(c.totalPerTankFmt || c.totalPerTank) && (
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 11, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Full Tank</div>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#2a5c0f" }}>{c.totalPerTankFmt || c.totalPerTank}</div>
-                </div>
-              )}
+            <div key={i} style={{ padding: "9px 14px", borderBottom: "1px solid #eef5e8", fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>
+              {c.name}
             </div>
           ))}
         </div>
