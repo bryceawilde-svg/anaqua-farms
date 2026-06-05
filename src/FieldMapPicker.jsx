@@ -4,8 +4,9 @@ import "leaflet/dist/leaflet.css";
 
 // High-contrast colors that read clearly on Esri satellite imagery
 const CROP_COLORS = {
-  Cotton: "#FFE600",  // bright yellow
-  Corn:   "#00D9FF",  // bright cyan
+  Cotton:  "#FFE600",  // bright yellow
+  Corn:    "#00D9FF",  // bright cyan
+  Soybean: "#7CFC00",  // lawn green
 };
 const DEFAULT_COLOR = "#FF8C00";  // orange for no-crop / unknown
 

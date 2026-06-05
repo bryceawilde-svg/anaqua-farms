@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
         chemLib: { id: number; name: string; formType: string; epa: string }[];
       };
       systemPrompt =
-        'You are a crop protection specialist for South Texas / Rio Grande Valley production. ' +
+        'You are a crop protection specialist for row-crop production. ' +
         'Select the best products from the provided library to control the listed pest(s) on the given crop. ' +
         'Factor in: crop growth stage typical for the given month, equipment type (e.g. ground rig vs. aerial affects rate and coverage), ' +
         'and whether the product is labeled for that crop and pest combination. ' +
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
         chemicals: { name: string; epa: string }[];
       };
       systemPrompt =
-        'You are a strict pesticide label compliance checker for South Texas crop production. ' +
+        'You are a strict pesticide label compliance checker for row-crop production. ' +
         'Apply these rules MECHANICALLY — do not hedge, do not assume the farmer knows what they are doing, flag every violation.\n\n' +
         'SKIP pre_season and post_harvest fields entirely. Only check fields where season = "in_season".\n\n' +
         'RULE 1 — TRAIT VIOLATIONS. Use EPA number and product name to identify the active ingredient, then apply:\n' +
@@ -140,17 +140,24 @@ Deno.serve(async (req) => {
         'REQUIRES trait "glyphosate". Flag if "glyphosate" is NOT in the field\'s traits array.\n' +
         '• Glufosinate products (Liberty 280, Ignite 280, Reckon 280 SL, any "glufosinate" generic): ' +
         'REQUIRES trait "glufosinate". Flag if "glufosinate" is NOT in the field\'s traits array.\n' +
-        '• 2,4-D products (Enlist One, any Enlist Duo, any "2,4-D" label): ' +
-        'REQUIRES trait "2,4-D". Flag if "2,4-D" is NOT in the field\'s traits array.\n' +
+        '• 2,4-D products (Enlist One, Enlist Duo, any "2,4-D" label) on COTTON or CORN: ' +
+        'REQUIRES trait "2,4-D". Flag if "2,4-D" is NOT in the field\'s traits array. ' +
+        'Conventional corn is NOT Enlist tolerant — flag if trait is missing.\n' +
         '• Dicamba products (XtendiMax, Engenia, Tavium, Fexapan, any "dicamba" label): ' +
         'REQUIRES trait "dicamba". Flag if "dicamba" is NOT in the field\'s traits array.\n' +
         'An empty traits array [] means the field is conventional — flag ALL four categories above.\n' +
-        'Grain Sorghum is NEVER GMO — always flag glyphosate, glufosinate, 2,4-D, and dicamba regardless of traits.\n\n' +
+        'Soybean follows identical trait rules as Cotton: requires "glyphosate", "glufosinate", "2,4-D", or "dicamba" trait respectively. ' +
+        'An empty traits array means conventional soybeans — flag ALL four.\n' +
+        'Grain Sorghum (crop = "Grain") with NO traits or trait "non-gmo": conventional — always flag glyphosate, glufosinate, 2,4-D, and dicamba.\n' +
+        'Grain Sorghum with trait "double-team": tolerant to quizalofop (Aggressor/Sequence) ONLY — still flag glyphosate, glufosinate, 2,4-D, dicamba.\n' +
+        'Grain Sorghum with trait "inzen": tolerant to nicosulfuron (Zest) ONLY — still flag glyphosate, glufosinate, 2,4-D, dicamba.\n\n' +
         'RULE 2 — GRASS KILLERS ON GRASS CROPS. These active ingredients KILL corn and grain sorghum:\n' +
         '• Clethodim (Select Max, Volunteer, Arrow, Select 2 EC)\n' +
         '• Sethoxydim (Poast Ultra, Poast Plus)\n' +
         '• Fluazifop (Fusilade DX)\n' +
-        'Flag any of the above on Corn or Grain Sorghum fields.\n\n' +
+        '• Quizalofop (Aggressor, Sequence): safe ONLY on Grain Sorghum with trait "double-team"\n' +
+        '• Nicosulfuron (Zest): safe ONLY on Grain Sorghum with trait "inzen"\n' +
+        'Flag any of the above on Corn or Grain Sorghum fields unless the matching trait exception applies.\n\n' +
         'Return ONLY a raw JSON object, no markdown, no code fences:\n' +
         '{"violations":[{"field":"<field name>","chemical":"<product name>","reason":"<one sentence: active ingredient + specific rule violated>"}]}\n' +
         'Never mention EPA numbers in the reason text. Return empty array if no violations.';
@@ -284,13 +291,13 @@ Deno.serve(async (req) => {
       const query = `${cropPart} ${topicPart} 2024 2025 research extension`;
       useWebSearch = true;
       systemPrompt =
-        'You are an agricultural research assistant helping a Texas crop producer stay current on research for cotton, corn, and grain sorghum in the South Texas / Rio Grande Valley region. ' +
+        'You are an agricultural research assistant helping a crop producer stay current on research and extension publications. ' +
         'Search the web and return a JSON array of exactly 2 high-quality, recent research articles or extension publications. ' +
         'Return ONLY valid JSON — no markdown, no backticks, no preamble. Each object must have: ' +
         'title (string), source (string — publication or university), year (string e.g. "2025"), ' +
         'crop (string: "Cotton", "Corn", "Sorghum", or "General"), topic (string — brief label), ' +
         'summary (string — 3-5 sentences, plain language, actionable for a working farmer), url (string or ""). ' +
-        'Prioritize: Texas A&M AgriLife Extension, USDA ARS, university extension, Delta Farm Press, Progressive Farmer. Prefer 2023-2025 sources.';
+        'Prioritize: land-grant university extension services, USDA ARS, Delta Farm Press, Progressive Farmer, and regional ag publications. Prefer 2023-2025 sources.';
       userMessage =
         `Find 2 of the best recent research or extension articles on: ${topicLabel} for ${crop} production.\n` +
         `Web search query: "${query}"\n` +
@@ -304,7 +311,7 @@ Deno.serve(async (req) => {
         history: { role: "user" | "assistant"; content: string }[];
       };
       const sectorSystem =
-        'You are a senior agricultural application sector advisor specializing in South Texas and Rio Grande Valley crop production (cotton, corn, grain sorghum). ' +
+        'You are a senior agricultural application sector advisor specializing in row-crop production. ' +
         'Always respond with a formal, structured report using these exact markdown sections:\n\n' +
         '## Summary\n' +
         'One to three sentences with the direct answer.\n\n' +

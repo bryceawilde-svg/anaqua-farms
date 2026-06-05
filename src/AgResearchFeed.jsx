@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
-const CROPS = ["All", "Cotton", "Corn", "Sorghum"];
+const CROPS = ["All", "Cotton", "Corn", "Soybean", "Sorghum"];
 const TOPICS = [
   { id: "chemicals", label: "New Chemicals" },
   { id: "pest",      label: "Pest & Disease" },

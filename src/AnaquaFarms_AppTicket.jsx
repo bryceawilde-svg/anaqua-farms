@@ -8,7 +8,35 @@ import JSZip from "jszip";
 import * as shapefile from "shapefile";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const CROPS_LIST = ["Cotton", "Corn"];
+// Full reference crop list — used as the org crop library default.
+// CROP_TRAITS keys (Cotton, Corn, Soybean, Grain, Grain Sorghum) get
+// GMO trait checkboxes; all others default to no trait UI.
+const CROPS_LIST = [
+  // Row Crops
+  "Cotton","Corn","Soybean","Grain Sorghum","Forage Sorghum","Sorghum-Sudan",
+  "Winter Wheat","Spring Wheat","Durum Wheat","Barley","Oats","Rye","Triticale",
+  "Rice","Peanut","Sunflower","Canola","Flaxseed","Safflower","Mustard","Hemp",
+  "Millet","Buckwheat","Sugar Beet","Sugarcane",
+  // Pulse / Legume
+  "Dry Bean","Navy Bean","Pinto Bean","Black Bean","Kidney Bean",
+  "Chickpea","Lentil","Field Pea","Faba Bean","Cowpea","Edamame",
+  // Forage / Hay
+  "Alfalfa","Bermudagrass","Bahiagrass","Orchardgrass","Timothy",
+  "Tall Fescue","Ryegrass","Bromegrass","Sudangrass","Clover","Hairy Vetch",
+  // Vegetables
+  "Tomato","Potato","Sweet Potato","Onion","Garlic","Lettuce","Spinach",
+  "Cabbage","Broccoli","Cauliflower","Kale","Sweet Corn","Bell Pepper",
+  "Chile Pepper","Cucumber","Squash","Pumpkin","Watermelon","Cantaloupe",
+  "Celery","Carrot","Beet","Okra","Asparagus","Eggplant","Green Bean","Lima Bean",
+  // Tree Fruits / Nuts
+  "Apple","Peach","Pear","Plum","Cherry","Citrus","Pecan","Walnut","Almond","Pistachio","Avocado",
+  // Small Fruits
+  "Strawberry","Blueberry","Grape","Blackberry","Raspberry","Cranberry",
+  // Specialty
+  "Hops","Tobacco","Mint","Lavender","Ginseng",
+  // Other
+  "Fallow","Cover Crop","Pasture","Other",
+];
 const WIND_DIRS  = ["N","NE","E","SE","S","SW","W","NW"];
 
 // ── Responsive helpers ────────────────────────────────────────────────────────
@@ -43,29 +71,44 @@ const DEFAULT_FIELDS = [
 
 const WALES_ORDER  = ["W","A","L","E","S","WDG","WP","D"];
 
+// ── GMO Trait × Herbicide Tolerance Reference ────────────────────────────────
+// Keys must match the trait logic in the AI crop-safety prompt.
+// label format: "Trait System (Active Ingredient / Brand)"
 const CROP_TRAITS = {
   Cotton: [
-    { key: "glyphosate",  label: "Glyphosate (Roundup Ready)" },
-    { key: "glufosinate", label: "Glufosinate (Liberty)" },
-    { key: "2,4-D",       label: "2,4-D (Enlist One)" },
-    { key: "dicamba",     label: "Dicamba (Xtend)" },
+    { key: "glyphosate",  label: "Glyphosate — RR Flex / XtendFlex / Enlist E3" },
+    { key: "glufosinate", label: "Glufosinate — LibertyLink / XtendFlex / Enlist E3 / TwinLink" },
+    { key: "2,4-D",       label: "2,4-D Choline — Enlist E3 (Enlist One / Enlist Duo)" },
+    { key: "dicamba",     label: "Dicamba — XtendFlex / Xtend (XtendiMax / Engenia / Tavium)" },
   ],
   Corn: [
-    { key: "glufosinate", label: "Glufosinate (Liberty Link)" },
-    { key: "glyphosate",  label: "Glyphosate (RR)" },
+    { key: "glyphosate",  label: "Glyphosate — Roundup Ready 2 / SmartStax" },
+    { key: "glufosinate", label: "Glufosinate — LibertyLink / SmartStax" },
+    { key: "2,4-D",       label: "2,4-D Choline — Enlist Corn (Enlist One / Enlist Duo)" },
   ],
-  // Grain sorghum: some varieties carry commercial herbicide tolerance traits.
-  // Unchecked = conventional; checking a trait marks the variety as tolerant to that chemistry.
+  Soybean: [
+    { key: "glyphosate",  label: "Glyphosate — Roundup Ready 2 / RR2 Xtend" },
+    { key: "glufosinate", label: "Glufosinate — LibertyLink (Ignite / Liberty 280)" },
+    { key: "2,4-D",       label: "2,4-D Choline — Enlist E3 (Enlist One / Enlist Duo)" },
+    { key: "dicamba",     label: "Dicamba — RR2 Xtend / XtendFlex (XtendiMax / Engenia / Tavium)" },
+  ],
+  // Grain sorghum (legacy key "Grain" kept for existing DB records)
+  // "Grain Sorghum" is the new canonical name — both show the same traits
   Grain: [
-    { key: "double-team", label: "Double Team (Quizalofop / Aggressor)" },
-    { key: "inzen",       label: "Inzen (Nicosulfuron / Zest)" },
+    { key: "double-team", label: "Double Team — Quizalofop (Aggressor / Sequence)" },
+    { key: "inzen",       label: "Inzen — Nicosulfuron (Zest / Nicosulfuron generics)" },
+  ],
+  "Grain Sorghum": [
+    { key: "double-team", label: "Double Team — Quizalofop (Aggressor / Sequence)" },
+    { key: "inzen",       label: "Inzen — Nicosulfuron (Zest / Nicosulfuron generics)" },
   ],
 };
-// Crops that are always non-GMO — no grass herbicides
-// "Grain" removed: some grain sorghum varieties carry GMO tolerance traits (see CROP_TRAITS)
-const NON_GMO_CROPS = ["Sorghum"];
-// Grain fields with no tolerance trait checked are treated as conventional
+// Crops always treated as conventional (no GMO tolerance traits available)
+const NON_GMO_CROPS = ["Sorghum","Forage Sorghum","Sorghum-Sudan"];
+// Keys that indicate a Grain/Grain Sorghum field is GMO (not conventional)
 const GRAIN_GMO_TRAITS = ["double-team", "inzen"];
+// All crop names that map to grain sorghum logic (GMO possible but not default)
+const GRAIN_SORGHUM_CROPS = ["Grain", "Grain Sorghum"];
 const FORM_LABELS  = {
   L:"Liquid Flowable / SC", E:"Emulsifiable Concentrate (EC)", S:"Soluble Liquid (SL)",
   WDG:"Water Dispersible Granule / DF", WP:"Wettable Powder", D:"Dry Flowable", A:"Adjuvant / Surfactant",
@@ -1278,6 +1321,9 @@ export default function App() {
   const [farmZipDraft,     setFarmZipDraft]     = useState("");
   const [farmZipSaving,    setFarmZipSaving]    = useState(false);
   const [cropInput,        setCropInput]        = useState("");
+  const [resetAction,      setResetAction]      = useState(null);   // "fields" | "chemicals" | "account"
+  const [resetConfirm,     setResetConfirm]     = useState("");
+  const [resetWorking,     setResetWorking]     = useState(false);
 
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
@@ -1747,7 +1793,7 @@ export default function App() {
       if (!f) return null;
       const crop = f.crop || form.crop || "";
       const fHasGMOTrait = (f.traits || []).some(k => GRAIN_GMO_TRAITS.includes(k));
-      const defaultTraits = (NON_GMO_CROPS.includes(f.crop) || (f.crop === "Grain" && !fHasGMOTrait)) ? ["non-gmo"] : [];
+      const defaultTraits = (NON_GMO_CROPS.includes(f.crop) || (GRAIN_SORGHUM_CROPS.includes(f.crop) && !fHasGMOTrait)) ? ["non-gmo"] : [];
       return { name: f.name, crop, traits: f.traits || defaultTraits, season: cropSeasons[crop] || "in_season" };
     }).filter(Boolean);
     if (!filledRows.length || !fieldsWithTraits.length) { setAiCropSafety(null); return; }
@@ -1962,6 +2008,63 @@ export default function App() {
     } finally { setFarmZipSaving(false); }
   };
 
+  const executeReset = async () => {
+    if (resetConfirm !== "DELETE" || !currentOrg?.id) return;
+    setResetWorking(true);
+    try {
+      if (resetAction === "fields") {
+        const { error } = await supabase.from("fields").delete().eq("org_id", currentOrg.id);
+        if (error) { showToast("Reset failed: " + error.message); return; }
+        setFieldLibrary([]);
+        showToast("Field library cleared.", "success");
+      } else if (resetAction === "chemicals") {
+        const { error } = await supabase.from("chemicals").delete().eq("org_id", currentOrg.id);
+        if (error) { showToast("Reset failed: " + error.message); return; }
+        setChemicals([]);
+        showToast("Chemical library cleared.", "success");
+      } else if (resetAction === "account") {
+        // Delete in dependency order: tickets first, then library data
+        const tables = ["tickets", "fields", "chemicals", "equipment",
+                        "licensed_applicators", "non_licensed_applicators", "pests"];
+        for (const table of tables) {
+          const { error } = await supabase.from(table).delete().eq("org_id", currentOrg.id);
+          if (error) { showToast(`Reset failed on ${table}: ` + error.message); return; }
+        }
+        setTickets([]);
+        setFieldLibrary([]);
+        setChemicals([]);
+        setEquipment([]);
+        setLicensed([]);
+        setNonLicensed([]);
+        setPestLibrary([]);
+        showToast("Account data cleared.", "success");
+      }
+      setResetAction(null);
+      setResetConfirm("");
+    } finally { setResetWorking(false); }
+  };
+
+  const runFieldMerge = async () => {
+    if (fieldMergeIds.size < 2 || !fieldMergeKeepId || !fieldMergeName.trim()) return;
+    setFieldMerging(true);
+    const ids = Array.from(fieldMergeIds);
+    const { error } = await supabase.rpc("merge_fields_with_boundary", {
+      p_source_ids: ids,
+      p_new_name:   fieldMergeName.trim(),
+      p_keep_id:    fieldMergeKeepId,
+      p_org_id:     currentOrg?.id,
+    });
+    if (error) { showToast("Merge failed: " + error.message); setFieldMerging(false); return; }
+    // Refresh field library to get updated boundary_geojson
+    const { data } = await supabase.from("fields").select("*, boundary_geojson").order("name");
+    if (data) setFieldLibrary(data.map(x => ({ ...x, traits: x.traits || [] })));
+    setFieldMergeIds(new Set());
+    setFieldMergeName("");
+    setFieldMergeKeepId(null);
+    setFieldMerging(false);
+    showToast(`Fields merged into "${fieldMergeName.trim()}".`, "success");
+  };
+
   const saveOrgCrops = async (newList) => {
     const { error } = await supabase.from("organizations")
       .update({ crops: newList })
@@ -1993,6 +2096,19 @@ export default function App() {
   // ── Field Manager
   const fieldFileRef = useRef();
   const [fieldUpMsg,    setFieldUpMsg]    = useState("");
+  const [csvStage,      setCsvStage]      = useState("idle");
+  const [csvHeaders,    setCsvHeaders]    = useState([]);
+  const [csvRows,       setCsvRows]       = useState([]);
+  const [csvColMap,     setCsvColMap]     = useState({ nameCol:"", acresCol:"", cropCol:"", latCol:"", lngCol:"", coordCol:"" });
+  const [csvImporting,  setCsvImporting]  = useState(false);
+  const [csvSelected,   setCsvSelected]   = useState(new Set()); // row indices checked for merge
+  const [csvMergeGroups,setCsvMergeGroups]= useState([]);        // [{name, indices, acres}]
+  const [csvMergeName,  setCsvMergeName]  = useState("");        // name being chosen for pending merge
+  const [csvCropMap,    setCsvCropMap]    = useState({});        // { rawCropName: resolvedCropName }
+  const [fieldMergeIds, setFieldMergeIds] = useState(new Set()); // field IDs selected to merge
+  const [fieldMergeName,setFieldMergeName]= useState("");
+  const [fieldMergeKeepId,setFieldMergeKeepId] = useState(null);
+  const [fieldMerging,  setFieldMerging]  = useState(false);
   const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"", traits:[] });
   const [editingFieldId,       setEditingFieldId]       = useState(null);
   const [editFieldDraft,       setEditFieldDraft]       = useState({});
@@ -2016,43 +2132,194 @@ export default function App() {
   const [fmResult,      setFmResult]      = useState(null);     // { updated, created, rows }
   const fmFileRef = useRef();
 
+  // Robust CSV line parser — handles quoted fields containing commas, escaped quotes
+  const parseCSVLine = (line) => {
+    const result = []; let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+      else if (c === ',' && !inQ) { result.push(cur.trim()); cur = ""; }
+      else cur += c;
+    }
+    result.push(cur.trim());
+    return result;
+  };
+
+  // Strip $, commas, % and parse to float
+  const parseNum = (s) => {
+    const n = parseFloat(String(s||"").replace(/[$,%\s]/g,"").replace(/,/g,""));
+    return isNaN(n) ? null : n;
+  };
+
+  // Parse a combined "lat, lng" / "lat lng" / "lat/lng" column into {lat, lng}
+  const parseCombinedCoord = (val) => {
+    const s = String(val||"").replace(/[()[\]]/g,"").trim();
+    const parts = s.split(/[,;\s/|]+/).map(x => x.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+      if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180)
+        return { lat, lng };
+    }
+    return null;
+  };
+
   const handleFieldCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const lines = ev.target.result.split("\n").filter(Boolean);
-      let imported = 0, skipped = 0;
-      const maxId  = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) : 0;
-      const added  = [];
-      lines.slice(1).forEach((line, i) => {
-        const parts = line.split(",").map(s => s.trim().replace(/^"|"$/g,""));
-        if (!parts[0] || isNaN(parseFloat(parts[1]))) { skipped++; return; }
-        added.push({ id: maxId + i + 1, name: parts[0], acres: parseFloat(parts[1]), crop: parts[2]||"" });
-        imported++;
-      });
-      setFieldLibrary(fl => [...fl, ...added]);
-      supabase.from("fields").upsert(added.map(a => fieldForWrite({ ...a, user_id: session.user.id, org_id: currentOrg?.id }))).then(({ error }) => {
-        if (error) showToast("Failed to import fields: " + error.message);
-      });
-      setFieldUpMsg(`✓ Imported ${imported} field(s)${skipped ? `, skipped ${skipped}` : ""}.`);
-      setTimeout(() => setFieldUpMsg(""), 4000);
+      // Strip UTF-8 BOM if present
+      const text = ev.target.result.replace(/^﻿/, "");
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { showToast("CSV needs at least a header row and one data row."); return; }
+
+      const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g,"").trim());
+      const rows = lines.slice(1)
+        .map(line => {
+          const parts = parseCSVLine(line);
+          const obj = {};
+          headers.forEach((h, i) => { obj[h] = (parts[i] || "").replace(/^"|"$/g, "").trim(); });
+          return obj;
+        })
+        .filter(r => Object.values(r).some(v => v)); // skip blank rows
+
+      if (!rows.length) { showToast("No data rows found."); return; }
+
+      // Auto-detect columns
+      const find = (...terms) => {
+        const lowerH = headers.map(h => h.toLowerCase());
+        return headers.find((_, i) => terms.some(t => lowerH[i].includes(t))) || "";
+      };
+      const detected = {
+        nameCol:  find("field name","fieldname","name","tract","field","parcel"),
+        acresCol: find("acres","area","acreage","size"),
+        cropCol:  find("crop","commodity","crop type","croptype","planted"),
+        latCol:   find("latitude"," lat ","y_coord"),
+        lngCol:   find("longitude"," lng ","long","x_coord"),
+        // combined lat/lng column (e.g. "26.4483, -97.9014")
+        coordCol: find("coord","coordinates","location","gps","latlong","lat/long","lat,long"),
+      };
+
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+      setCsvColMap(detected);
+      setCsvMergeGroups([]);
+      setCsvSelected(new Set());
+      setCsvCropMap({});
+      setCsvStage("mapping");
     };
     reader.readAsText(file);
     e.target.value = "";
   };
 
-  const addManualField = () => {
+  const runCSVImport = async () => {
+    if (!csvColMap.nameCol) return;
+    setCsvImporting(true);
+    let addedCount = 0, updatedCount = 0, skippedCount = 0;
+    const toAdd = [], toUpdate = [];
+    // id is now assigned by the fields_id_seq sequence — don't set it manually
+
+    // Build effective rows: merge groups collapsed to one entry, others as-is
+    const mergedIndices = new Set(csvMergeGroups.flatMap(g => g.indices));
+    const effectiveRows = [
+      ...csvMergeGroups.map(g => ({
+        _merged: true,
+        _name: g.name,
+        _acres: g.acres,
+        _lat: null, _lng: null,
+        _crop: csvColMap.cropCol
+          ? csvRows[g.indices[0]]?.[csvColMap.cropCol]?.trim() || ""
+          : "",
+      })),
+      ...csvRows
+        .map((row, i) => ({ ...row, _rowIdx: i }))
+        .filter(row => !mergedIndices.has(row._rowIdx)),
+    ];
+
+    effectiveRows.forEach((row) => {
+      let name, acres, crop, lat, lng;
+
+      if (row._merged) {
+        name = row._name; acres = row._acres; crop = row._crop; lat = null; lng = null;
+      } else {
+        name  = row[csvColMap.nameCol]?.trim();
+        acres = csvColMap.acresCol ? parseNum(row[csvColMap.acresCol]) : null;
+        const rawCrop = csvColMap.cropCol ? row[csvColMap.cropCol]?.trim() || "" : "";
+        crop = rawCrop ? (csvCropMap[rawCrop] ?? rawCrop) : "";
+        // Separate or combined coordinate columns
+        if (csvColMap.coordCol) {
+          const c = parseCombinedCoord(row[csvColMap.coordCol]);
+          lat = c?.lat ?? null; lng = c?.lng ?? null;
+        } else {
+          lat = csvColMap.latCol ? parseNum(row[csvColMap.latCol]) : null;
+          lng = csvColMap.lngCol ? parseNum(row[csvColMap.lngCol]) : null;
+        }
+      }
+
+      const existing = fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        const patch = { ...existing };
+        if (acres != null) patch.acres = acres;
+        if (crop) patch.crop = crop;
+        if (lat != null && lng != null) { patch.centroid_lat = lat; patch.centroid_lng = lng; }
+        toUpdate.push(patch);
+        updatedCount++;
+      } else {
+        const rec = { name, acres: acres ?? 0, crop, traits: [] };
+        if (lat != null && lng != null) { rec.centroid_lat = lat; rec.centroid_lng = lng; }
+        toAdd.push(rec);
+        addedCount++;
+      }
+    });
+
+    try {
+      if (toAdd.length) {
+        const { data: inserted, error } = await supabase.from("fields")
+          .insert(toAdd.map(a => fieldForWrite({ ...a, user_id: session.user.id, org_id: currentOrg?.id })))
+          .select("*, boundary_geojson");
+        if (error) { showToast("Import error: " + error.message); return; }
+        // Replace toAdd entries with the DB-assigned IDs
+        if (inserted) toAdd.splice(0, toAdd.length, ...inserted.map(x => ({ ...x, traits: x.traits || [] })));
+      }
+      for (const f of toUpdate) {
+        await supabase.from("fields")
+          .update(fieldForWrite(f)).eq("id", f.id).eq("org_id", currentOrg.id);
+      }
+      setFieldLibrary(prev => {
+        const map = new Map(prev.map(f => [f.id, f]));
+        toUpdate.forEach(f => map.set(f.id, f));
+        toAdd.forEach(f => map.set(f.id, f));
+        return Array.from(map.values());
+      });
+      setCsvStage("idle");
+      setCsvRows([]);
+      setCsvHeaders([]);
+      setCsvMergeGroups([]);
+      setCsvSelected(new Set());
+
+      // Auto-add any new crops from the import that aren't in the org crop list
+      const importedCrops = [...new Set(
+        [...toAdd, ...toUpdate].map(f => f.crop?.trim()).filter(Boolean)
+      )];
+      const newCrops = importedCrops.filter(c => !orgCrops.includes(c));
+      if (newCrops.length) await saveOrgCrops([...orgCrops, ...newCrops]);
+
+      showToast(`✓ ${addedCount} added, ${updatedCount} updated${skippedCount ? `, ${skippedCount} skipped` : ""}${newCrops.length ? ` · ${newCrops.length} new crop${newCrops.length>1?"s":""} added to your list` : ""}.`, "success");
+    } finally { setCsvImporting(false); }
+  };
+
+  const addManualField = async () => {
     if (!newField.name || !newField.acres) return alert("Field name and acres are required.");
-    const nextId = fieldLibrary.length ? Math.max(...fieldLibrary.map(f=>f.id)) + 1 : 1;
     const hasGMOTrait = (newField.traits || []).some(k => GRAIN_GMO_TRAITS.includes(k));
-    const autoTraits = (NON_GMO_CROPS.includes(newField.crop) || (newField.crop === "Grain" && !hasGMOTrait))
+    const autoTraits = (NON_GMO_CROPS.includes(newField.crop) || (GRAIN_SORGHUM_CROPS.includes(newField.crop) && !hasGMOTrait))
       ? ["non-gmo"]
       : (newField.traits || []);
-    const newFieldRec = { id: nextId, name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"", traits: autoTraits };
-    setFieldLibrary(fl => [...fl, newFieldRec]);
-    supabase.from("fields").upsert(fieldForWrite({ ...newFieldRec, user_id: session.user.id, org_id: currentOrg?.id })).then(({ error }) => {
-      if (error) showToast("Failed to save field: " + error.message);
-    });
+    // No id — sequence assigns it; insert with select to get assigned id back
+    const rec = { name: newField.name, acres: parseFloat(newField.acres), crop: newField.crop||"", traits: autoTraits };
+    const { data, error } = await supabase.from("fields")
+      .insert(fieldForWrite({ ...rec, user_id: session.user.id, org_id: currentOrg?.id }))
+      .select("*").single();
+    if (error) { showToast("Failed to save field: " + error.message); return; }
+    setFieldLibrary(fl => [...fl, { ...rec, id: data.id }]);
     setNewField({ name:"", acres:"", crop:"", traits:[] });
   };
   const deleteField = (id) => {
@@ -3913,7 +4180,7 @@ export default function App() {
 
               return (
                 <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-                  <div style={sectionTitle}>Import FarmMobile Boundaries</div>
+                  <div style={sectionTitle}>Import Field Boundaries</div>
 
                   {/* Stage 1: Upload */}
                   {fmStage === "upload" && (
@@ -3930,7 +4197,7 @@ export default function App() {
                         ) : (
                           <>
                             <div style={{ fontSize:28, marginBottom:6 }}>🗺</div>
-                            <div style={{ fontSize:13, fontWeight:600 }}>Drop FarmMobile .zip here or click to browse</div>
+                            <div style={{ fontSize:13, fontWeight:600 }}>Drop shapefile .zip here or click to browse</div>
                             <div style={{ fontSize:11, marginTop:4 }}>ZIP must contain .shp + .dbf files</div>
                           </>
                         )}
@@ -4061,7 +4328,7 @@ export default function App() {
                         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                           <thead>
                             <tr>
-                              {["FarmMobile Field","Farm","Crop Year","Status","Anaqua Farms Field","Boundary"].map(h => (
+                              {["Shapefile Field","Farm","Crop Year","Status","Your Field","Boundary"].map(h => (
                                 <th key={h} style={th}>{h}</th>
                               ))}
                             </tr>
@@ -4265,21 +4532,203 @@ export default function App() {
             })()}
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Upload Field List (CSV)</div>
-              <div style={{ fontSize:12, color:"#555", marginBottom:10, lineHeight:1.7 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Field Name, Acres, Crop</code> — first row is a header and will be skipped.<br/>
-                Example rows:<br/>
-                <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>North 40, 40.5</code><br/>
-                <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>South Pivot, 128.0</code>
-              </div>
-              <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                <button onClick={() => fieldFileRef.current.click()} style={{
-                  background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
-                  padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
-                }}>📂 Upload CSV</button>
-                <input ref={fieldFileRef} type="file" accept=".csv" onChange={handleFieldCSV} style={{ display:"none" }}/>
-                {fieldUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{fieldUpMsg}</span>}
-              </div>
+              <div style={sectionTitle}>Import Fields from CSV</div>
+
+              {csvStage === "idle" && (
+                <>
+                  <div style={{ fontSize:12, color:"#555", marginBottom:10, lineHeight:1.8 }}>
+                    Upload any CSV or Excel export — any number of columns, any order.<br/>
+                    <strong>Required:</strong> a column with field names.<br/>
+                    <strong>Optional:</strong> Acres, Crop, Lat, Long — all auto-detected.<br/>
+                    Numbers can include <code style={{ background:"#e6f5d0", padding:"1px 4px", borderRadius:3 }}>$</code>, commas, and <code style={{ background:"#e6f5d0", padding:"1px 4px", borderRadius:3 }}>%</code> — they'll be stripped automatically.<br/>
+                    <span style={{ color:"#888" }}>Excel users: File → Save As → CSV before uploading.</span>
+                  </div>
+                  <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                    <button onClick={() => fieldFileRef.current.click()} style={{
+                      background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
+                      padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
+                    }}>📂 Upload CSV</button>
+                    <input ref={fieldFileRef} type="file" accept=".csv,.txt" onChange={handleFieldCSV} style={{ display:"none" }}/>
+                    {fieldUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{fieldUpMsg}</span>}
+                  </div>
+                </>
+              )}
+
+              {csvStage === "mapping" && (
+                <div>
+                  <div style={{ fontSize:13, color:"#555", marginBottom:12 }}>
+                    <strong>{csvRows.length} rows found.</strong> Map each column to its data type. Only Field Name is required.
+                  </div>
+
+                  <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:10, marginBottom:14 }}>
+                    {[
+                      { key:"nameCol",  label:"Field Name", required:true  },
+                      { key:"acresCol", label:"Acres",                  required:false },
+                      { key:"cropCol",  label:"Crop",                   required:false },
+                      { key:"coordCol", label:"Combined Lat/Long",      required:false, hint:'e.g. "26.44, -97.90"' },
+                      { key:"latCol",   label:"Latitude (separate col)", required:false },
+                      { key:"lngCol",   label:"Longitude (separate col)",required:false },
+                    ].map(({ key, label, required, hint }) => (
+                      <div key={key}>
+                        <label style={{ ...labelStyle, fontSize:11 }}>
+                          {label}{required && <span style={{ color:"#c0392b" }}> *</span>}
+                          {hint && <span style={{ fontWeight:400, color:"#aaa", marginLeft:5, fontSize:10 }}>{hint}</span>}
+                        </label>
+                        <select value={csvColMap[key]}
+                          onChange={e => setCsvColMap(m => ({ ...m, [key]: e.target.value }))}
+                          style={{ ...inp, fontSize:12, width:"100%" }}>
+                          <option value="">— {required ? "select column" : "not used"} —</option>
+                          {csvHeaders.map(h => (
+                            <option key={h} value={h}>{h}
+                              {csvRows[0]?.[h] ? ` (e.g. "${String(csvRows[0][h]).slice(0,25)}")` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Crop name review — for values not in CROPS_LIST */}
+                  {csvColMap.cropCol && (() => {
+                    const rawCrops = [...new Set(
+                      csvRows.map(r => r[csvColMap.cropCol]?.trim()).filter(Boolean)
+                    )];
+                    const unknownCrops = rawCrops.filter(c => !CROPS_LIST.includes(c) && !orgCrops.includes(c));
+                    if (!unknownCrops.length) return null;
+                    return (
+                      <div style={{ background:"#fffbe8", border:"1.5px solid #e0c040", borderRadius:6, padding:"10px 14px", marginBottom:12 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:"#7a5000", marginBottom:8 }}>
+                          ⚠ {unknownCrops.length} crop name{unknownCrops.length > 1 ? "s" : ""} not in the standard list — map each one or add as custom.
+                        </div>
+                        {unknownCrops.map(raw => (
+                          <div key={raw} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+                            <code style={{ background:"#fff3cd", borderRadius:3, padding:"2px 6px", fontSize:12, color:"#856404", whiteSpace:"nowrap" }}>{raw}</code>
+                            <span style={{ fontSize:11, color:"#888" }}>→</span>
+                            <select
+                              value={csvCropMap[raw] ?? "__keep__"}
+                              onChange={e => setCsvCropMap(prev => ({ ...prev, [raw]: e.target.value === "__keep__" ? undefined : e.target.value }))}
+                              style={{ ...inp, fontSize:12, flex:1, minWidth:180, padding:"3px 6px" }}>
+                              <option value="__keep__">Add "{raw}" as a new custom crop</option>
+                              <optgroup label="Map to standard crop:">
+                                {CROPS_LIST.map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </optgroup>
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Preview with row selection for merging */}
+                  {csvColMap.nameCol && (() => {
+                    const mergedIndices = new Set(csvMergeGroups.flatMap(g => g.indices));
+                    const selNames = [...csvSelected].map(i => csvRows[i]?.[csvColMap.nameCol]?.trim()).filter(Boolean);
+                    const selAcres = [...csvSelected].reduce((s, i) => s + (parseNum(csvRows[i]?.[csvColMap.acresCol]) || 0), 0);
+                    return (
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                          <span style={{ fontSize:11, fontWeight:700, color:"#555" }}>
+                            Preview — {csvRows.length} rows ({csvSelected.size > 0 ? `${csvSelected.size} selected` : "check rows to merge"})
+                          </span>
+                          {csvSelected.size >= 2 && (
+                            <button onClick={() => {
+                              const indices = [...csvSelected];
+                              const name = csvRows[indices[0]]?.[csvColMap.nameCol]?.trim() || "";
+                              const acres = indices.reduce((s, i) => s + (parseNum(csvRows[i]?.[csvColMap.acresCol]) || 0), 0);
+                              setCsvMergeGroups(prev => [...prev, { name, indices, acres: Math.round(acres * 100) / 100 }]);
+                              setCsvSelected(new Set());
+                            }} style={{ background:"#1a4a8a", color:"#fff", border:"none", borderRadius:5, padding:"3px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>
+                              Merge {csvSelected.size} rows →
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Merged groups */}
+                        {csvMergeGroups.map((g, gi) => (
+                          <div key={gi} style={{ background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:5, padding:"6px 10px", marginBottom:6, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:11, color:"#1a3a6a", fontWeight:700 }}>Merged group {gi+1}:</span>
+                            <select value={g.name} onChange={e => setCsvMergeGroups(prev => prev.map((x,i) => i===gi ? {...x, name: e.target.value} : x))}
+                              style={{ ...inp, fontSize:11, padding:"2px 4px" }}>
+                              {g.indices.map(idx => {
+                                const n = csvRows[idx]?.[csvColMap.nameCol]?.trim();
+                                return n ? <option key={idx} value={n}>{n}</option> : null;
+                              })}
+                            </select>
+                            <span style={{ fontSize:11, color:"#555" }}>{g.acres.toFixed(1)} ac combined</span>
+                            <button onClick={() => setCsvMergeGroups(prev => prev.filter((_,i) => i!==gi))}
+                              style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:13, marginLeft:"auto" }}>×</button>
+                          </div>
+                        ))}
+
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...th, fontSize:10, width:24 }}></th>
+                                {["Field Name","Acres","Crop","Action"].map(h => (
+                                  <th key={h} style={{ ...th, fontSize:10 }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {csvRows.map((row, i) => {
+                                const isMerged = mergedIndices.has(i);
+                                const isSelected = csvSelected.has(i);
+                                const name = row[csvColMap.nameCol]?.trim();
+                                const acres = csvColMap.acresCol ? parseNum(row[csvColMap.acresCol]) : null;
+                                const crop  = csvColMap.cropCol  ? row[csvColMap.cropCol] : "";
+                                const exists = name && fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
+                                return (
+                                  <tr key={i} style={{ borderBottom:"1px solid #eef5e8", opacity: isMerged ? 0.35 : 1,
+                                    background: isSelected ? "#eef5ff" : "transparent" }}>
+                                    <td style={{ padding:"3px 4px" }}>
+                                      {!isMerged && (
+                                        <input type="checkbox" checked={isSelected}
+                                          onChange={e => setCsvSelected(prev => {
+                                            const s = new Set(prev);
+                                            e.target.checked ? s.add(i) : s.delete(i);
+                                            return s;
+                                          })} />
+                                      )}
+                                    </td>
+                                    <td style={td}>{name || <span style={{ color:"#aaa" }}>—</span>}</td>
+                                    <td style={td}>{acres?.toFixed(1) ?? "—"}</td>
+                                    <td style={td}>{crop || "—"}</td>
+                                    <td style={td}>
+                                      {isMerged ? <span style={{ fontSize:10, color:"#1a6bbf", fontWeight:700 }}>merged</span>
+                                      : !name ? <span style={{ color:"#c0392b", fontSize:10 }}>skip</span>
+                                      : exists ? <span style={{ background:"#fff3cd", color:"#856404", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>update</span>
+                                      : <span style={{ background:"#d4edda", color:"#155724", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>add</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    <button
+                      disabled={!csvColMap.nameCol || csvImporting}
+                      onClick={runCSVImport}
+                      style={{ background: csvColMap.nameCol ? "#2a5c0f" : "#ccc", color:"#fff", border:"none",
+                        borderRadius:6, padding:"9px 18px", cursor: csvColMap.nameCol ? "pointer" : "not-allowed",
+                        fontSize:13, fontWeight:700 }}>
+                      {csvImporting ? "Importing…" : `Import ${csvRows.length - new Set(csvMergeGroups.flatMap(g=>g.indices)).size + csvMergeGroups.length} rows`}
+                    </button>
+                    <button onClick={() => { setCsvStage("idle"); setCsvRows([]); setCsvHeaders([]); setCsvMergeGroups([]); setCsvSelected(new Set()); }}
+                      style={{ background:"none", border:"1px solid #ccc", borderRadius:6, padding:"9px 14px",
+                        cursor:"pointer", fontSize:12, color:"#666" }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
@@ -4319,9 +4768,9 @@ export default function App() {
                   </div>
                 </div>
               )}
-              {(NON_GMO_CROPS.includes(newField.crop) || (newField.crop === "Grain" && !(newField.traits||[]).some(k => GRAIN_GMO_TRAITS.includes(k)))) && (
+              {(NON_GMO_CROPS.includes(newField.crop) || (GRAIN_SORGHUM_CROPS.includes(newField.crop) && !(newField.traits||[]).some(k => GRAIN_GMO_TRAITS.includes(k)))) && (
                 <div style={{ marginTop:8, fontSize:12, color:"#7a5000", fontWeight:600 }}>
-                  {newField.crop === "Grain"
+                  {GRAIN_SORGHUM_CROPS.includes(newField.crop)
                     ? "⚠ Conventional sorghum — no herbicide tolerance selected. Grass herbicide applications will be flagged."
                     : "⚠ Non-GMO crop — grass herbicide applications will be flagged automatically."}
                 </div>
@@ -4393,10 +4842,57 @@ export default function App() {
                   </div>
                 );
               })()}
+              {/* Merge controls */}
+              {isOwner && fieldMergeIds.size >= 2 && (
+                <div style={{ background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:6, padding:"10px 14px", marginBottom:10 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#1a3a6a", marginBottom:8 }}>
+                    Merge {fieldMergeIds.size} fields — boundaries will be unioned, acres recalculated from geometry
+                  </div>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize:11 }}>Keep name:</label>
+                      <select value={fieldMergeKeepId || ""}
+                        onChange={e => {
+                          setFieldMergeKeepId(Number(e.target.value));
+                          const f = fieldLibrary.find(x => x.id === Number(e.target.value));
+                          if (f) setFieldMergeName(f.name);
+                        }}
+                        style={{ ...inp, fontSize:12, marginRight:6 }}>
+                        <option value="">— pick a field —</option>
+                        {[...fieldMergeIds].map(id => {
+                          const f = fieldLibrary.find(x => x.id === id);
+                          return f ? <option key={id} value={id}>{f.name}</option> : null;
+                        })}
+                      </select>
+                    </div>
+                    <div style={{ flex:1, minWidth:160 }}>
+                      <label style={{ ...labelStyle, fontSize:11 }}>Final name (edit if needed):</label>
+                      <input value={fieldMergeName} onChange={e => setFieldMergeName(e.target.value)}
+                        style={{ ...inp, fontSize:12 }} placeholder="Merged field name" />
+                    </div>
+                    <div style={{ display:"flex", gap:6, alignItems:"flex-end", paddingBottom:1 }}>
+                      <button onClick={runFieldMerge}
+                        disabled={!fieldMergeKeepId || !fieldMergeName.trim() || fieldMerging}
+                        style={{ background: fieldMergeKeepId && fieldMergeName.trim() ? "#1a4a8a" : "#ccc",
+                          color:"#fff", border:"none", borderRadius:5, padding:"6px 14px",
+                          cursor: fieldMergeKeepId ? "pointer" : "default", fontSize:12, fontWeight:700 }}>
+                        {fieldMerging ? "Merging…" : "Merge Fields"}
+                      </button>
+                      <button onClick={() => { setFieldMergeIds(new Set()); setFieldMergeName(""); setFieldMergeKeepId(null); }}
+                        style={{ background:"none", border:"1px solid #ccc", borderRadius:5, padding:"6px 10px",
+                          cursor:"pointer", fontSize:12, color:"#666" }}>Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
-                    <tr>{["Field Name","Crop","Acres","Traits","Boundary",""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
+                    <tr>
+                      {isOwner && <th style={th}></th>}
+                      {["Field Name","Crop","Acres","Traits","Boundary",""].map(h => <th key={h} style={th}>{h}</th>)}
+                    </tr>
                   </thead>
                   <tbody>
                     {fieldLibrary.filter(f => !fieldCropFilter || f.crop === fieldCropFilter).map(f => {
@@ -4450,7 +4946,7 @@ export default function App() {
                         );
                       }
                       const fHasGMO2 = (f.traits || []).some(k => GRAIN_GMO_TRAITS.includes(k));
-                      const fieldTraits = f.traits || ((NON_GMO_CROPS.includes(f.crop) || (f.crop === "Grain" && !fHasGMO2)) ? ["non-gmo"] : []);
+                      const fieldTraits = f.traits || ((NON_GMO_CROPS.includes(f.crop) || (GRAIN_SORGHUM_CROPS.includes(f.crop) && !fHasGMO2)) ? ["non-gmo"] : []);
                       const isCopying   = copyBoundaryTargetId === f.id;
                       const boundarySourceOptions = fieldLibrary.filter(s =>
                         s.id !== f.id &&
@@ -4460,6 +4956,16 @@ export default function App() {
                       return (
                         <React.Fragment key={f.id}>
                           <tr>
+                            {isOwner && (
+                              <td style={{ padding:"3px 4px" }}>
+                                <input type="checkbox" checked={fieldMergeIds.has(f.id)}
+                                  onChange={e => setFieldMergeIds(prev => {
+                                    const s = new Set(prev);
+                                    e.target.checked ? s.add(f.id) : s.delete(f.id);
+                                    return s;
+                                  })} />
+                              </td>
+                            )}
                             <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
                             <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
                             <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{parseFloat(f.acres).toFixed(2)}</td>
@@ -4976,28 +5482,46 @@ export default function App() {
               <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
                 <div style={{ ...sectionTitle, marginBottom:6 }}>Crops</div>
                 <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                  These appear as quick-select buttons on new tickets. Add any crop your operation grows.
+                  Check every crop your operation grows — these appear as quick-select buttons on new tickets.
                 </div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
-                  {orgCrops.map(crop => (
-                    <span key={crop} style={{ display:"flex", alignItems:"center", gap:4, background:"#e6f5d0", border:"1.5px solid #c8dbb0", borderRadius:5, padding:"4px 10px", fontSize:13, fontWeight:600, color:"#2a5c0f" }}>
-                      {crop}
-                      <button onClick={() => removeOrgCrop(crop)}
-                        style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:14, padding:"0 0 0 2px", lineHeight:1 }}>×</button>
-                    </span>
-                  ))}
-                  {orgCrops.length === 0 && (
-                    <span style={{ fontSize:12, color:"#aaa" }}>No crops added yet — add your first one below.</span>
-                  )}
+
+                {orgCrops.length > 0 && (
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:10 }}>
+                    {orgCrops.map(crop => (
+                      <span key={crop} style={{ display:"flex", alignItems:"center", gap:3, background:"#e6f5d0", border:"1.5px solid #c8dbb0", borderRadius:5, padding:"3px 8px", fontSize:12, fontWeight:600, color:"#2a5c0f" }}>
+                        {crop}
+                        <button onClick={() => removeOrgCrop(crop)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:13, padding:"0 0 0 2px", lineHeight:1 }}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ border:"1.5px solid #c8dbb0", borderRadius:6, overflow:"hidden", marginBottom:8 }}>
+                  <div style={{ padding:"6px 10px", background:"#f0f7e8", fontSize:11, fontWeight:700, color:"#2a5c0f", borderBottom:"1px solid #c8dbb0", display:"flex", justifyContent:"space-between" }}>
+                    <span>Select from list</span>
+                    <span style={{ fontWeight:400, color:"#888" }}>{CROPS_LIST.filter(c => orgCrops.includes(c)).length} / {CROPS_LIST.length} selected</span>
+                  </div>
+                  <div style={{ maxHeight:220, overflowY:"auto" }}>
+                    {CROPS_LIST.map(crop => {
+                      const active = orgCrops.includes(crop);
+                      return (
+                        <label key={crop} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 12px", cursor:"pointer",
+                          background: active ? "#f0f7e8" : "transparent", borderBottom:"1px solid #f5f5f5" }}>
+                          <input type="checkbox" checked={active}
+                            onChange={() => active ? removeOrgCrop(crop) : saveOrgCrops([...orgCrops, crop])}
+                            style={{ accentColor:"#2a5c0f", flexShrink:0 }} />
+                          <span style={{ fontSize:13, color: active ? "#2a5c0f" : "#333", fontWeight: active ? 600 : 400 }}>{crop}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
+
                 <div style={{ display:"flex", gap:8 }}>
-                  <input
-                    value={cropInput}
-                    onChange={e => setCropInput(e.target.value)}
+                  <input value={cropInput} onChange={e => setCropInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && addOrgCrop()}
-                    placeholder="e.g. Wheat, Soybeans, Sorghum…"
-                    style={{ ...inp, flex:1, fontSize:13 }}
-                  />
+                    placeholder="Add a crop not in the list above…"
+                    style={{ ...inp, flex:1, fontSize:13 }} />
                   <button onClick={addOrgCrop} disabled={!cropInput.trim()}
                     style={{ background: cropInput.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: cropInput.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
                     + Add
@@ -5214,6 +5738,64 @@ export default function App() {
                 }}>TDA Report</button>
               </div>
             </div>
+
+            {/* Danger Zone */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginTop:12, border:"1.5px solid #e0a0a0", background:"#fffafa" }}>
+                <div style={{ ...sectionTitle, color:"#c0392b", marginBottom:4 }}>⚠ Danger Zone</div>
+                <div style={{ fontSize:12, color:"#c0392b", marginBottom:14, fontWeight:600 }}>
+                  These actions permanently delete data and cannot be undone.
+                </div>
+
+                {[
+                  { key:"fields",    label:"Reset Field Library",    desc:"Deletes all fields and their boundaries for this org." },
+                  { key:"chemicals", label:"Reset Chemical Library",  desc:"Deletes all chemicals for this org." },
+                  { key:"account",   label:"Reset Entire Account",    desc:"Deletes all fields, chemicals, tickets, equipment, applicators, and pests for this org." },
+                ].map(({ key, label, desc }) => (
+                  <div key={key} style={{ marginBottom:12, paddingBottom:12, borderBottom:"1px solid #f0d0d0" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:13, color:"#333" }}>{label}</div>
+                        <div style={{ fontSize:12, color:"#888", marginTop:2 }}>{desc}</div>
+                      </div>
+                      <button
+                        onClick={() => { setResetAction(resetAction === key ? null : key); setResetConfirm(""); }}
+                        style={{ background:"none", border:"1.5px solid #e0a0a0", borderRadius:5, padding:"5px 12px",
+                          cursor:"pointer", fontSize:12, fontWeight:700, color:"#c0392b", whiteSpace:"nowrap", flexShrink:0 }}>
+                        {resetAction === key ? "Cancel" : "Reset…"}
+                      </button>
+                    </div>
+
+                    {resetAction === key && (
+                      <div style={{ marginTop:10, background:"#fff0f0", border:"1px solid #f0b0b0", borderRadius:6, padding:"10px 12px" }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:"#c0392b", marginBottom:8 }}>
+                          Type <strong>DELETE</strong> to confirm — this cannot be undone.
+                        </div>
+                        <div style={{ display:"flex", gap:8 }}>
+                          <input
+                            value={resetConfirm}
+                            onChange={e => setResetConfirm(e.target.value)}
+                            placeholder="Type DELETE"
+                            style={{ ...inp, flex:1, fontSize:13, borderColor: resetConfirm === "DELETE" ? "#c0392b" : "#c8dbb0" }}
+                          />
+                          <button
+                            onClick={executeReset}
+                            disabled={resetConfirm !== "DELETE" || resetWorking}
+                            style={{
+                              background: resetConfirm === "DELETE" ? "#c0392b" : "#ccc",
+                              color:"#fff", border:"none", borderRadius:5, padding:"8px 14px",
+                              cursor: resetConfirm === "DELETE" ? "pointer" : "default",
+                              fontSize:13, fontWeight:700, whiteSpace:"nowrap"
+                            }}>
+                            {resetWorking ? "Deleting…" : "Confirm Delete"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import ApplicatorMapView from "./ApplicatorMapView";
 
-const CROP_COLORS = { Cotton: "#FFE600", Corn: "#00D9FF" };
+const CROP_COLORS = { Cotton: "#FFE600", Corn: "#00D9FF", Soybean: "#7CFC00" };
 
 function cropChip(crop) {
   const bg    = CROP_COLORS[crop] || "#e6f5d0";
-  const color = crop === "Cotton" ? "#7a5f00" : crop === "Corn" ? "#005a7a" : "#2a5c0f";
+  const color = crop === "Cotton" ? "#7a5f00" : crop === "Corn" ? "#005a7a" : crop === "Soybean" ? "#2a6000" : "#2a5c0f";
   return <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 700, marginLeft: 6 }}>{crop}</span>;
 }
 
@@ -25,6 +25,13 @@ function fmtHHMM(t) {
 function nowHHMM() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// Local date in YYYY-MM-DD — avoids toISOString() which is UTC and
+// rolls the date forward if you're west of UTC late in the evening.
+function localDateYMD() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function degToCompass(deg) {
@@ -194,7 +201,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     const idx = schedule.findIndex(fs => fs.id === field.id);
     if (idx === -1) return;
     const now   = nowHHMM();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateYMD();
 
     // Save start time immediately — don't wait for weather
     const updated = schedule.map((fs, i) =>
