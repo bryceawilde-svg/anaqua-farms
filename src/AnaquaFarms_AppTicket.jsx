@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import { fmtAcres, fmtAcresShort, fmtTankVol, fmtGpa, fmtTemp, fmtWindSpeed, areaLabel, tankLabel, sprayRateLabel, windSpeedLabel, tempLabel, AC_TO_HA, GAL_TO_L } from "./utils/units";
 import AgResearchFeed from "./AgResearchFeed";
 import FieldMapPicker from "./FieldMapPicker";
 import BoundaryAssignMap from "./BoundaryAssignMap";
@@ -1280,6 +1281,7 @@ function normalizeTicket(tk) {
     licensedApplicantLicense: tk.licensed_applicant_license || tk.licensedApplicantLicense  || "",
     nonLicensedApplicant:     tk.non_licensed_applicant     || tk.nonLicensedApplicant      || "",
     team_view:                tk.team_view                  ?? false,
+    queue_status:             tk.queue_status               || "queued",
     totalAcres:               tk.total_acres                || tk.totalAcres                || "0",
     fullLoads:                tk.full_loads                 || tk.fullLoads                 || "—",
     partialAcres:             tk.partial_acres              || tk.partialAcres              || null,
@@ -1508,6 +1510,7 @@ export default function App() {
   const isPro      = userPlan === "pro" || currentOrg?.plan === "pro";
   const isOwner    = userRole === "owner";
   const isViewer   = userRole === "viewer" || userRole === "applicator";
+  const isMetric   = currentOrg?.unit_system === "metric";
 
   // Org crop list — falls back to crops already assigned to fields if org list is empty
   const orgCrops = React.useMemo(() => {
@@ -1989,9 +1992,26 @@ export default function App() {
   };
 
   const saveFieldSchedule = async (ticketId, updatedSchedule) => {
-    setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, fieldSchedule: updatedSchedule } : t));
+    // Auto-transition queue_status based on schedule state
+    const ticket = tickets.find(t => t.id === ticketId);
+    const currentStatus = ticket?.queue_status || "queued";
+    const anyStarted = updatedSchedule.some(fs => fs.actualTimeStart);
+    const allDone    = updatedSchedule.length > 0 && updatedSchedule.every(fs => fs.actualTimeEnd);
+
+    let statusUpdate = {};
+    if (allDone && currentStatus !== "completed") {
+      statusUpdate = { queue_status: "completed" };
+    } else if (anyStarted && currentStatus === "queued") {
+      statusUpdate = { queue_status: "in_progress" };
+    }
+
+    setTickets(prev => prev.map(t =>
+      t.id === ticketId
+        ? { ...t, fieldSchedule: updatedSchedule, ...statusUpdate }
+        : t
+    ));
     const { error } = await supabase.from("tickets")
-      .update({ field_schedule: updatedSchedule })
+      .update({ field_schedule: updatedSchedule, ...statusUpdate })
       .eq("id", ticketId);
     if (error) showToast("Failed to save field time: " + error.message);
   };
@@ -2754,7 +2774,7 @@ export default function App() {
                 )}
                 {!wxLoading && !wxError && form.windSpeed && (
                   <span style={{ fontSize:11, color:"#2a8a10", fontWeight:600 }}>
-                    ✓ {form.windSpeed} mph {form.windDir}, {form.airTemp}°F
+                    ✓ {fmtWindSpeed(form.windSpeed, isMetric)} {form.windDir}, {fmtTemp(form.airTemp, isMetric)}
                   </span>
                 )}
               </div>
@@ -3011,7 +3031,7 @@ export default function App() {
                     )}
                     {form.selectedFields.length > 0 && (
                       <span style={{ marginLeft:8, color:"#2a5c0f", fontWeight:400, fontSize:11 }}>
-                        — {form.selectedFields.length} selected · <strong>{totalAcresDisplay} total acres</strong>
+                        — {form.selectedFields.length} selected · <strong>{isMetric ? `${(parseFloat(totalAcresDisplay||0)*AC_TO_HA).toFixed(2)} ha` : `${totalAcresDisplay} ac`}</strong>
                       </span>
                     )}
                   </label>
@@ -3145,7 +3165,7 @@ export default function App() {
                             onMouseLeave={e => e.currentTarget.style.background="transparent"}
                           >
                             <span>{f.name}</span>
-                            <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{parseFloat(f.acres).toFixed(2)} ac</span>
+                            <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{fmtAcresShort(f.acres, isMetric)}</span>
                           </div>
                         ))}
                       </div>
@@ -3211,7 +3231,7 @@ export default function App() {
               )}
               <div style={{ display:"grid", gridTemplateColumns:rGrid(1, 4, isMobile), gap:10, marginBottom:12 }}>
                 <div>
-                  <label style={labelStyle}>Tank Size (gal)</label>
+                  <label style={labelStyle}>Tank Size ({tankLabel(isMetric)})</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
                       {tankPresets.map(size => (
@@ -3283,7 +3303,7 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Gal / Acre</label>
+                  <label style={labelStyle}>{sprayRateLabel(isMetric)}</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
                       {gpaPresets.map(gpa => (
@@ -3826,7 +3846,7 @@ export default function App() {
                         {pestStr && <span style={{ fontSize:11, color:"#888" }}>{pestStr}</span>}
                       </div>
                       <div style={{ fontSize:11, color:"#666", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                        {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"} · {t.totalAcres} ac · {t.fullLoads} load{t.fullLoads!=="1"?"s":""}
+                        {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"} · {isMetric ? `${(parseFloat(t.totalAcres||0)*AC_TO_HA).toFixed(1)} ha` : `${t.totalAcres} ac`} · {t.fullLoads} load{t.fullLoads!=="1"?"s":""}
                         {t.partialAcres ? ` + partial` : ""}
                       </div>
                     </div>
@@ -3851,12 +3871,12 @@ export default function App() {
                       {/* Summary row */}
                       <div style={{ display:"flex", gap:8, fontSize:12, color:"#555", flexWrap:"wrap", marginBottom:10 }}>
                         {[
-                          t.totalAcres        && `${t.totalAcres} ac`,
-                          t.windSpeed         && `${t.windSpeed} mph ${t.windDir || ""}`.trim(),
-                          t.airTemp           && `${t.airTemp}°F`,
-                          t.tankSize          && `${t.tankSize} gal`,
+                          t.totalAcres        && fmtAcres(t.totalAcres, isMetric),
+                          t.windSpeed         && `${fmtWindSpeed(t.windSpeed, isMetric)} ${t.windDir || ""}`.trim(),
+                          t.airTemp           && fmtTemp(t.airTemp, isMetric),
+                          t.tankSize          && fmtTankVol(t.tankSize, isMetric),
                           t.pressure          && `${t.pressure} PSI`,
-                          t.galPerAcre        && `${t.galPerAcre} gal/ac`,
+                          t.galPerAcre        && fmtGpa(t.galPerAcre, isMetric),
                           t.equipmentType,
                           t.licensedApplicant,
                         ].filter(Boolean).map((item, i) => (
@@ -3900,10 +3920,10 @@ export default function App() {
                                   )}
                                 </td>
                                 <td style={{ padding:"3px 0", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap" }}>
-                                  {w.windSpeed != null ? `${w.windSpeed} ${w.windDir||""}`.trim() : "—"}
+                                  {w.windSpeed != null ? `${fmtWindSpeed(w.windSpeed, isMetric)} ${w.windDir||""}`.trim() : "—"}
                                 </td>
                                 <td style={{ padding:"3px 0", textAlign:"right", fontSize:11, color:"#555" }}>
-                                  {w.airTemp != null ? `${w.airTemp}°F` : "—"}
+                                  {w.airTemp != null ? fmtTemp(w.airTemp, isMetric) : "—"}
                                 </td>
                               </tr>
                             );
@@ -4761,7 +4781,10 @@ export default function App() {
                 </div>
                 <div>
                   <label style={labelStyle}>Crop</label>
-                  <input value={newField.crop||""} onChange={e => setNewField(f=>({...f,crop:e.target.value,traits:[]}))} style={inp} placeholder="e.g. Cotton"/>
+                  <select value={newField.crop||""} onChange={e => setNewField(f=>({...f,crop:e.target.value,traits:[]}))} style={{ ...inp, fontFamily:"inherit" }}>
+                    <option value="">— select crop —</option>
+                    {orgCrops.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </div>
                 <button onClick={addManualField} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
@@ -4927,7 +4950,11 @@ export default function App() {
                                 </div>
                                 <div>
                                   <label style={{ ...labelStyle, fontSize:10 }}>Crop</label>
-                                  <input value={editCrop} onChange={e=>setEditFieldDraft(d=>({...d,crop:e.target.value,traits:[]}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                  <select value={editCrop} onChange={e=>setEditFieldDraft(d=>({...d,crop:e.target.value,traits:[]}))} style={{ ...inp, fontSize:12, padding:"3px 6px", fontFamily:"inherit" }}>
+                                    <option value="">— select crop —</option>
+                                    {orgCrops.map(c => <option key={c} value={c}>{c}</option>)}
+                                    {editCrop && !orgCrops.includes(editCrop) && <option value={editCrop}>{editCrop} (current)</option>}
+                                  </select>
                                 </div>
                                 <div>
                                   <label style={{ ...labelStyle, fontSize:10 }}>Acres</label>
@@ -4985,7 +5012,7 @@ export default function App() {
                             )}
                             <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
                             <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
-                            <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{parseFloat(f.acres).toFixed(2)}</td>
+                            <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{fmtAcresShort(f.acres, isMetric)}</td>
                             <td style={td}>
                               {fieldTraits.length > 0
                                 ? <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{fieldTraits.map(t => <span key={t} style={{ background:"#e8f0ff", color:"#1a3a7a", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{t}</span>)}</div>
@@ -5543,6 +5570,32 @@ export default function App() {
                     style={{ background: cropInput.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: cropInput.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
                     + Add
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Unit System */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitle, marginBottom:6 }}>Unit System</div>
+                <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+                  Sets the measurement system for all members of this org. Data is stored in imperial — metric is a display conversion.
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  {[["imperial","Imperial (US)  —  ac, gal, °F, mph"],["metric","Metric (SI)  —  ha, L, °C, km/h"]].map(([val, label]) => (
+                    <button key={val}
+                      onClick={async () => {
+                        const { error } = await supabase.from("organizations").update({ unit_system: val }).eq("id", currentOrg.id);
+                        if (error) showToast("Failed to update: " + error.message);
+                        else setCurrentOrg(prev => ({ ...prev, unit_system: val }));
+                      }}
+                      style={{ flex:1, padding:"10px 8px", border:"1.5px solid", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit",
+                        borderColor: currentOrg?.unit_system === val ? "#2a5c0f" : "#c8dbb0",
+                        background:  currentOrg?.unit_system === val ? "#2a5c0f" : "#f9fdf5",
+                        color:       currentOrg?.unit_system === val ? "#fff"    : "#4a7a20" }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
