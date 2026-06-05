@@ -1874,7 +1874,24 @@ export default function App() {
           partialAcres: calc.partialAcres > 0.01 ? calc.partialAcres.toFixed(1) : null,
         };
       }).filter(Boolean);
-    const fieldSchedule = buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour);
+    // Build new schedule, then restore actual times/weather for fields still on the ticket.
+    // Without this, editing a ticket (e.g. removing fields) wipes all recorded start/stop data.
+    const freshSchedule = buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour);
+    const existingSchedule = editingId
+      ? (tickets.find(t => t.id === editingId)?.fieldSchedule || [])
+      : [];
+    const fieldSchedule = freshSchedule.map(fs => {
+      const prev = existingSchedule.find(e => e.id === fs.id);
+      if (!prev) return fs;
+      return {
+        ...fs,
+        actualTimeStart:  prev.actualTimeStart  ?? fs.actualTimeStart,
+        actualTimeEnd:    prev.actualTimeEnd    ?? fs.actualTimeEnd,
+        actualDateStart:  prev.actualDateStart  ?? fs.actualDateStart,
+        actualDateEnd:    prev.actualDateEnd    ?? fs.actualDateEnd,
+        fieldWeather:     prev.fieldWeather     ?? fs.fieldWeather,
+      };
+    });
     const computedEnd   = fieldSchedule.length ? fieldSchedule[fieldSchedule.length - 1].timeEnd : form.timeEnd;
     const mainCalc = calcTotals({ ...form, totalAcres });
     const resolvedEquipType = form.equipmentType === "__other__" ? (form.equipmentTypeCustom || "") : form.equipmentType;
