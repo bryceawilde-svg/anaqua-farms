@@ -347,7 +347,13 @@ function resolveChemRow(r, chem, acreLoadsRaw, form, totalAcres) {
   return { effRate, isOzUnit, isDryOzUnit, roundQtr, calc };
 }
 
-function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
+function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetric) {
+  // Unit helpers (module-level import not available here — inline conversions)
+  const acDisp  = (ac) => isMetric ? `${(parseFloat(ac||0)*0.404686).toFixed(2)} ha` : `${parseFloat(ac||0).toFixed(2)} ac`;
+  const galDisp = (g)  => isMetric ? `${(parseFloat(g||0)*3.78541).toFixed(0)} L`    : `${g} gal`;
+  const gpaDisp = (g)  => isMetric ? `${(parseFloat(g||0)*3.78541/0.404686).toFixed(1)} L/ha` : `${g} gal/ac`;
+  const tmpDisp = (f)  => isMetric ? `${(((parseFloat(f)||0)-32)*5/9).toFixed(1)}°C` : `${f}°F`;
+  const wndDisp = (m)  => isMetric ? `${(parseFloat(m||0)*1.60934).toFixed(1)} km/h` : `${m} mph`;
   const { acreLoads, fullLoads, acreLoadsRaw, partialAcres } = calcTotals({ ...form, totalAcres });
   const hasPartial      = parseFloat(partialAcres) > 0.01;
   // Less acres than one full tank — only show the "this load" amount, no full-tank recipe
@@ -479,7 +485,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   const partialCard = hasPartial ? `
   <div style="border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;width:100%">
     <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;">
-      ⚠ LAST LOAD &mdash; ${parseFloat(partialAcres).toFixed(1)} ac
+      ⚠ LAST LOAD &mdash; ${acDisp(partialAcres)}
     </div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr>
@@ -500,17 +506,16 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   const tankSetupHtml = lessThanOneTank ? `
   <div class="tank-grid" style="grid-template-columns:repeat(4,1fr)">
     <div class="tank-item">
-      <label>Gal / Acre</label>
-      <div class="bigval">${form.galPerAcre||"—"}</div>
+      <label>${isMetric ? "L / ha" : "Gal / Acre"}</label>
+      <div class="bigval">${isMetric ? gpaDisp(form.galPerAcre) : (form.galPerAcre||"—")}</div>
     </div>
     <div class="tank-item">
-      <label>Total Acres</label>
-      <div class="bigval">${parseFloat(totalAcres).toFixed(1)}</div>
-      <div class="sub">acres this application</div>
+      <label>${isMetric ? "Total Area" : "Total Acres"}</label>
+      <div class="bigval">${acDisp(totalAcres)}</div>
     </div>
     <div class="tank-item">
       <label>Fill Tank To</label>
-      <div class="bigval" style="color:#c05000">${thisLoadTankGal}<span style="font-size:12px;font-weight:400"> gal</span></div>
+      <div class="bigval" style="color:#c05000">${galDisp(thisLoadTankGal)}</div>
       <div class="sub" style="color:#c05000">do not fill completely</div>
     </div>
     <div class="tank-item">
@@ -521,21 +526,21 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   <div class="tank-grid" style="grid-template-columns:repeat(5,1fr)">
     <div class="tank-item">
       <label>Tank Size</label>
-      <div class="bigval">${form.tankSize||"—"}<span style="font-size:12px;font-weight:400"> gal</span></div>
+      <div class="bigval">${galDisp(form.tankSize)}</div>
     </div>
     <div class="tank-item">
-      <label>Gal / Acre</label>
-      <div class="bigval">${form.galPerAcre||"—"}</div>
+      <label>${isMetric ? "L / ha" : "Gal / Acre"}</label>
+      <div class="bigval">${isMetric ? gpaDisp(form.galPerAcre) : (form.galPerAcre||"—")}</div>
     </div>
     <div class="tank-item">
-      <label>Acres / Load</label>
+      <label>${isMetric ? "ha / Load" : "Acres / Load"}</label>
       <div class="bigval">${acreLoads}</div>
     </div>
     <div class="tank-item">
       <label># of Loads</label>
       <div class="bigval">${fullLoads}</div>
       <div class="sub">full load${fullLoads!=="1"?"s":""}</div>
-      ${hasPartial ? `<div class="tank-partial-tag">+ 1 partial (${parseFloat(partialAcres).toFixed(1)} ac)</div>` : ""}
+      ${hasPartial ? `<div class="tank-partial-tag">+ 1 partial (${acDisp(partialAcres)})</div>` : ""}
     </div>
     <div class="tank-item">
       <label>Pressure</label>
@@ -586,7 +591,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
       ${walesRows}
       <tr style="background:#e6f5d0;">
         <td style="padding:7px 8px;text-align:center;vertical-align:middle;"><div style="background:#2a5c0f;color:#fff;font-size:14px;font-weight:900;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">✓</div></td>
-        <td style="padding:7px 8px;vertical-align:middle;"><div style="font-size:10px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.05em;">Fill to ${lessThanOneTank ? thisLoadTankGal : (form.tankSize||"—")} gal</td>
+        <td style="padding:7px 8px;vertical-align:middle;"><div style="font-size:10px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.05em;">Fill to ${galDisp(lessThanOneTank ? thisLoadTankGal : (form.tankSize||"0"))}</td>
       </tr>
     </tbody>
   </table>` : "";
@@ -594,12 +599,12 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   // Chem section heading and content depend on scenario
   const chemSectionHtml = lessThanOneTank ? `
   <div style="width:75%;margin:0 auto;">
-  <h3>Chemical Mix &mdash; This Load (${parseFloat(totalAcres).toFixed(1)} ac &mdash; ${thisLoadTankGal} gal)</h3>
+  <h3>Chemical Mix &mdash; This Load (${acDisp(totalAcres)} &mdash; ${galDisp(thisLoadTankGal)})</h3>
   <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>
   </div>` : `
   <div style="display:flex;gap:10px;align-items:flex-start;">
     <div style="flex:3;min-width:0;">
-      <h3>Chemical Mix &mdash; Full Tank (${form.tankSize||"—"} gal)</h3>
+      <h3>Chemical Mix &mdash; Full Tank (${galDisp(form.tankSize)})</h3>
       <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
     </div>
     ${hasPartial ? `<div style="flex:1;min-width:0;">${partialCard}</div>` : ""}
@@ -744,7 +749,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
     const COLS = 3;
     const chunkCount = Math.ceil(fields.length / (PER_COL * COLS)) || 1;
     let html = `<div style="margin-bottom:6px;">
-      <div style="font-size:8px;font-weight:900;color:#fff;background:#2a5c0f;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;display:inline-block;">Field List &mdash; ${totalAcres.toFixed(2)} ac</div>`;
+      <div style="font-size:8px;font-weight:900;color:#fff;background:#2a5c0f;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;display:inline-block;">Field List &mdash; ${acDisp(totalAcres)}</div>`;
     for (let chunk = 0; chunk < chunkCount; chunk++) {
       const start = chunk * PER_COL * COLS;
       const rowFields = fields.slice(start, start + PER_COL * COLS);
@@ -830,12 +835,17 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName) {
   if (!w) URL.revokeObjectURL(url);
 }
 
-function downloadCSV(tickets, orgName) {
+function downloadCSV(tickets, orgName, isMetric) {
   if (!tickets.length) return;
+  const areaH  = isMetric ? "ha"    : "ac";
+  const windH  = isMetric ? "km/h"  : "mph";
+  const tempH  = isMetric ? "C"     : "F";
+  const tankH  = isMetric ? "L"     : "gal";
+  const spdH   = isMetric ? "L/ha"  : "gal/ac";
   const header = [
-    "App Date","Actual Start","Actual Stop","Location/Field","Acres","Crop/Site","Target Pest",
-    "Field Wind Speed (mph)","Field Wind Dir","Field Air Temp (F)",
-    "Tank Size (gal)","Pressure (PSI)","Gal/Acre","Acre Loads","Full Loads","Partial Load (ac)",
+    "App Date","Actual Start","Actual Stop",`Location/Field`,`Area (${areaH})`,"Crop/Site","Target Pest",
+    `Field Wind Speed (${windH})`,"Field Wind Dir",`Field Air Temp (${tempH})`,
+    `Tank Size (${tankH})`,"Pressure (PSI)",spdH,"Acre Loads","Full Loads",`Partial Load (${areaH})`,
     "Equipment","Licensed Applicator","Non-Licensed Applicator",
     "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
   ].join(",");
@@ -2743,7 +2753,8 @@ export default function App() {
               chemicals,
               parseFloat(tk.totalAcres) || 0,
               tk.fieldSchedule || buildFieldSchedule(tk.selectedFields || [], tk.timeStart),
-              currentOrg?.name
+              currentOrg?.name,
+              isMetric
             )}
           />
         )}
@@ -2806,7 +2817,7 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label style={cl}>Wind (mph)</label>
+                  <label style={cl}>Wind ({windSpeedLabel(isMetric)})</label>
                   <input type="number" value={form.windSpeed} onChange={e => set("windSpeed",e.target.value)} style={ci} placeholder="8" min="0"/>
                 </div>
                 <div>
@@ -2817,7 +2828,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label style={cl}>Air Temp (°F)</label>
+                  <label style={cl}>Air Temp ({tempLabel(isMetric)})</label>
                   <input type="number" value={form.airTemp} onChange={e => set("airTemp",e.target.value)} style={ci} placeholder="85" min="0"/>
                 </div>
               </div>
@@ -3179,7 +3190,7 @@ export default function App() {
               {form.selectedFields.length > 0 && form.timeStart && (
                 <div style={{ marginBottom:14, background:"#e6f5d0", borderRadius:6, padding:"8px 12px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                   <div style={{ fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.08em" }}>
-                    FIELD SCHEDULE <span style={{ fontWeight:400, color:"#6aaa40" }}>@ {acresPerHour} ac/hr</span>
+                    FIELD SCHEDULE <span style={{ fontWeight:400, color:"#6aaa40" }}>@ {isMetric ? `${(acresPerHour * 0.404686).toFixed(1)} ha/hr` : `${acresPerHour} ac/hr`}</span>
                   </div>
                   <div style={{ fontSize:11, color:"#6aaa40" }}>
                     Est. finish: <strong style={{ color:"#2a5c0f" }}>
@@ -3206,8 +3217,8 @@ export default function App() {
                 <div style={{ background:"#f5fff0", border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", marginBottom:12 }}>
                   <div style={{ fontSize:11, fontWeight:700, color:"#2a5c0f", marginBottom:8 }}>Customize preset buttons</div>
                   {[
-                    { label:"Tank Size (gal)", presets: tankPresets, setPresets: setTankPresets, key:"bl_tankPresets" },
-                    { label:"Pressure (PSI)",  presets: psiPresets,  setPresets: setPsiPresets,  key:"bl_psiPresets"  },
+                    { label:`Tank Size (${tankLabel(isMetric)})`, presets: tankPresets, setPresets: setTankPresets, key:"bl_tankPresets" },
+                    { label:"Pressure (PSI)",                    presets: psiPresets,  setPresets: setPsiPresets,  key:"bl_psiPresets"  },
                     { label:"Gal / Acre",      presets: gpaPresets,  setPresets: setGpaPresets,  key:"bl_gpaPresets"  },
                   ].map(({ label, presets, setPresets, key }) => (
                     <div key={key} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
@@ -3334,7 +3345,7 @@ export default function App() {
                     {manualGpa && (
                       <input type="number" value={form.galPerAcre}
                         onChange={e => set("galPerAcre", e.target.value)}
-                        style={inp} placeholder="Enter gal/acre" min="0" step="0.01" autoFocus/>
+                        style={inp} placeholder={isMetric ? "Enter L/ha" : "Enter gal/acre"} min="0" step="0.01" autoFocus/>
                     )}
                   </div>
                 </div>
@@ -3744,7 +3755,7 @@ export default function App() {
                 <button onClick={async () => {
                   const sched = buildFieldSchedule(form.selectedFields, form.timeStart);
                   const ticketNumber = await saveTicket();
-                  if (ticketNumber != null) printTicket({ ...form, ticketNumber }, chemicals, totalAcres, sched, currentOrg?.name);
+                  if (ticketNumber != null) printTicket({ ...form, ticketNumber }, chemicals, totalAcres, sched, currentOrg?.name, isMetric);
                 }} disabled={isSaving} style={{
                   background: isSaving ? "#999" : "linear-gradient(135deg,#1a4a8a,#0e2a5c)",
                   color:"#fff", border:"none", borderRadius:7, padding:"11px 22px",
@@ -3993,7 +4004,8 @@ export default function App() {
                             chemicals,
                             parseFloat(t.totalAcres) || 0,
                             t.fieldSchedule || buildFieldSchedule(t.selectedFields || [], t.timeStart),
-                            currentOrg?.name
+                            currentOrg?.name,
+                            isMetric
                           );
                         }} style={{
                           background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)", color:"#fff", border:"none", borderRadius:5,
@@ -5313,9 +5325,20 @@ export default function App() {
                 <div>
                   <label style={labelStyle}>Unit</label>
                   <select value={newChem.unit||"oz"} onChange={e => setNewChem(c=>({...c,unit:e.target.value}))} style={sel}>
-                    <option value="oz">Oz (liquid)</option>
-                    <option value="dry oz">Dry Oz</option>
-                    <option value="lb">Lb</option>
+                    <optgroup label="Imperial">
+                      <option value="oz">Oz (liquid fl oz)</option>
+                      <option value="dry oz">Dry Oz</option>
+                      <option value="lb">Lb</option>
+                      <option value="gal">Gal</option>
+                      <option value="pt">Pt</option>
+                      <option value="qt">Qt</option>
+                    </optgroup>
+                    <optgroup label="Metric">
+                      <option value="mL">mL</option>
+                      <option value="L">L</option>
+                      <option value="g">g</option>
+                      <option value="kg">kg</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>
@@ -5390,9 +5413,20 @@ export default function App() {
                                 <div>
                                   <label style={{ ...labelStyle, fontSize:10 }}>Unit</label>
                                   <select value={editChemDraft.unit||"oz"} onChange={e=>setEditChemDraft(d=>({...d,unit:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
-                                    <option value="oz">oz (liquid)</option>
-                                    <option value="dry oz">dry oz</option>
-                                    <option value="lb">lb</option>
+                                    <optgroup label="Imperial">
+                                      <option value="oz">oz (liquid)</option>
+                                      <option value="dry oz">dry oz</option>
+                                      <option value="lb">lb</option>
+                                      <option value="gal">gal</option>
+                                      <option value="pt">pt</option>
+                                      <option value="qt">qt</option>
+                                    </optgroup>
+                                    <optgroup label="Metric">
+                                      <option value="mL">mL</option>
+                                      <option value="L">L</option>
+                                      <option value="g">g</option>
+                                      <option value="kg">kg</option>
+                                    </optgroup>
                                   </select>
                                 </div>
                                 <div>
@@ -5788,7 +5822,7 @@ export default function App() {
                   title="Report to date"/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button onClick={() => downloadCSV(tickets, currentOrg?.name)} disabled={!tickets.length} style={{
+                <button onClick={() => downloadCSV(tickets, currentOrg?.name, isMetric)} disabled={!tickets.length} style={{
                   flex:1, background: tickets.length ? "#2a5c0f" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
                   cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
