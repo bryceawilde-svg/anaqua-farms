@@ -1115,6 +1115,16 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
     effectiveRate = rateFromGalPerTank(chem.galPerTank, acreLoadsRaw, isDryUnit);
   }
 
+  // For the oz/ac label in gal/tank mode: if this is a partial-only load (totalAcres <
+  // one full tank), back-calc from the actual acres being sprayed so the displayed
+  // rate reflects what's going on the ground, not what a full tank would yield.
+  const ta = parseFloat(totalAcres) || 0;
+  const galtankLabelAcres = (inputMode === "galtank" && chem.galPerTank && ta > 0 && acreLoadsRaw > 0 && ta < acreLoadsRaw)
+    ? ta : acreLoadsRaw;
+  const galtankLabelRate = (inputMode === "galtank" && chem.galPerTank)
+    ? rateFromGalPerTank(chem.galPerTank, galtankLabelAcres, isDryUnit)
+    : effectiveRate;
+
   // When rounding is active: round the full-tank oz up to nearest ¼ gal,
   // then back-calculate a new effectiveRate from that rounded amount
   let roundedOzPerTank = null;
@@ -1203,8 +1213,8 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
           </div>
           <div style={{ flexShrink:0 }}>
             <div style={{ fontSize:10, color:"#555" }}>{inputMode === "rate" ? `${baseUnit}/ac` : galtankLabel}</div>
-            {inputMode === "galtank" && effectiveRate && (
-              <div style={{ fontSize:9, color:"#6aaa30" }}>={parseFloat(effectiveRate).toFixed(2)} {baseUnit}/ac</div>
+            {inputMode === "galtank" && galtankLabelRate && (
+              <div style={{ fontSize:9, color:"#6aaa30" }}>={parseFloat(galtankLabelRate).toFixed(2)} {baseUnit}/ac</div>
             )}
           </div>
         </div>
