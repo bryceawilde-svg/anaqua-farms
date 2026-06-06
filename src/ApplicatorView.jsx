@@ -253,7 +253,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     const idx = schedule.findIndex(fs => fs.id === field.id);
     if (idx === -1) return;
     const now      = nowHHMM();
-    const today    = new Date().toISOString().slice(0, 10); // YYYY-MM-DD of actual stop
+    const today    = localDateYMD(); // local date — avoids UTC rollover after 7 PM Central
     const entry    = schedule[idx];
     const start    = entry.actualTimeStart || estimateStart(now, field.acres, acresPerHour);
     const updated  = schedule.map((fs, i) =>
