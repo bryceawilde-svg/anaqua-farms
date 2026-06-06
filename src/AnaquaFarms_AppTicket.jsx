@@ -1364,6 +1364,7 @@ export default function App() {
   const [tdaTo,         setTdaTo]         = useState("");
   const [logFieldSearch, setLogFieldSearch] = useState("");
   const [logChemSearch,  setLogChemSearch]  = useState("");
+  const [showComplete,   setShowComplete]   = useState(false);
   const [dbLoading,     setDbLoading]     = useState(true);
 
   // ── Form state
@@ -3798,6 +3799,13 @@ export default function App() {
                 const chemMatch  = !cq || (t.chemicals||[]).some(c => c.name.toLowerCase().includes(cq));
                 return fieldMatch && chemMatch;
               });
+              const getTicketStatus = (t) => {
+                const sched = t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour||75);
+                if (!sched.length) return "planned";
+                if (sched.every(fs => fs.actualTimeEnd)) return "complete";
+                if (sched.some(fs => fs.actualTimeStart)) return "in_progress";
+                return "planned";
+              };
               return (
                 <>
                   {/* Search bar */}
@@ -3834,7 +3842,13 @@ export default function App() {
                     <div style={{ textAlign:"center", padding:40, color:"#999", fontSize:13 }}>
                       No tickets match your search.
                     </div>
-                  ) : filtered.map(t => {
+                  ) : (() => {
+                    const STATUS_BORDER = { in_progress:"#d97706", planned:"#9ca3af", complete:"#16a34a" };
+                    const STATUS_LABEL  = { in_progress:"In Progress", planned:"Planned", complete:"Complete" };
+                    const STATUS_COLOR  = { in_progress:"#92400e", planned:"#6b7280", complete:"#166534" };
+                    const groups = { in_progress:[], planned:[], complete:[] };
+                    filtered.forEach(t => groups[getTicketStatus(t)].push(t));
+                    const renderCard = (t, leftColor) => {
               const isOpen = expandedTicket === t.id;
               const ticketNum = String(t.ticketNumber || "?").padStart(3, "0");
               const pestStr   = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest||"");
@@ -3842,6 +3856,7 @@ export default function App() {
                 <div key={t.id} style={{
                   background:"#fff",
                   border: `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
+                  borderLeft: `4px solid ${leftColor}`,
                   outline: t.team_view ? `3px solid #1a6bbf` : "none",
                   borderRadius:8, marginBottom: isMobile ? 8 : 10,
                   boxShadow: isOpen ? "0 2px 12px rgba(42,92,15,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
@@ -4051,7 +4066,30 @@ export default function App() {
                   )}
                 </div>
               );
-            })}
+                    };
+                    return (
+                      <>
+                        {["in_progress","planned","complete"].map(status => {
+                          const ts = groups[status];
+                          if (!ts.length) return null;
+                          const isComplete = status === "complete";
+                          return (
+                            <div key={status} style={{ marginTop: status !== "in_progress" ? 14 : 0 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, fontSize:11, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:STATUS_COLOR[status] }}>
+                                {STATUS_LABEL[status]}
+                                {isComplete && (
+                                  <button onClick={() => setShowComplete(v => !v)} style={{ background:"none", border:"none", cursor:"pointer", color:STATUS_COLOR[status], fontSize:11, fontWeight:700, padding:0 }}>
+                                    {showComplete ? "▾" : "▸"} {ts.length}
+                                  </button>
+                                )}
+                              </div>
+                              {(!isComplete || showComplete) && ts.map(t => renderCard(t, STATUS_BORDER[status]))}
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
                 </>
               );
             })()}
