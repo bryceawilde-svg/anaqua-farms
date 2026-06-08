@@ -473,79 +473,51 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
           : fmtTankAmount(calc.partialPerTankRaw, chem.unit);
         const lbOzSub = isDryOzUnit ? fmtDryOzAsLbOz(calc.partialPerTankRaw) : null;
         return `<tr>
-          <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;border-bottom:1px solid #ddd">${chem.name}</td>
-          <td style="padding:3px 6px;font-size:13px;font-weight:900;color:#222;text-align:right;border-bottom:1px solid #ddd">
+          <td style="padding:3px 6px;font-size:9px;color:#111;border-bottom:1px solid #f0c090">${chem.name}</td>
+          <td style="padding:3px 6px;font-size:9px;color:#111;text-align:right;border-bottom:1px solid #f0c090;white-space:nowrap">
             ${amt}
-            ${lbOzSub ? `<div style="font-size:9px;font-weight:400;color:#888">${lbOzSub}</div>` : ""}
-            ${jug2_5gal && partJugs ? `<div style="font-size:9px;font-weight:700;color:#7a3a9a">${partJugs}</div>` : ""}
+            ${lbOzSub ? `<div style="font-size:7.5px;color:#888">${lbOzSub}</div>` : ""}
+            ${jug2_5gal && partJugs ? `<div style="font-size:7.5px;font-weight:700;color:#7a3a9a">${partJugs}</div>` : ""}
           </td>
         </tr>`;
       }).join("")
     : "";
   const partialCard = hasPartial ? `
-  <div style="border:1px solid #bbb;border-radius:4px;margin-top:8px;overflow:hidden;font-size:11px;width:100%">
-    <div style="background:#eee;color:#333;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;">
-      ⚠ LAST LOAD &mdash; ${acDisp(partialAcres)}
-    </div>
-    <table style="width:100%;border-collapse:collapse;">
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:8px;font-weight:900;color:#fff;background:#c05000;padding:2px 7px;border-radius:3px 3px 0 0;text-transform:uppercase;letter-spacing:.06em;">Last Load &mdash; ${acDisp(partialAcres)}</div>
+    <table style="border-collapse:collapse;width:100%;border:1.5px solid #f0c090;border-top:none;">
       <thead><tr>
-        <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:left;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Product</th>
-        <th style="padding:3px 6px;font-size:9px;background:#f5f5f5;color:#555;text-align:right;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;">Amount</th>
+        <th style="padding:3px 6px;font-size:8px;color:#c05000;background:#fff5ee;text-transform:uppercase;text-align:left;">Product</th>
+        <th style="padding:3px 6px;font-size:8px;color:#c05000;background:#fff5ee;text-transform:uppercase;text-align:right;white-space:nowrap;">Amount</th>
       </tr></thead>
       <tbody>
         ${partialChemCompact}
-        <tr style="background:#eef6ff">
-          <td style="padding:4px 6px;font-size:11px;font-weight:700;color:#1a3a6a;border-top:1px solid #ccc;">Water</td>
-          <td style="padding:4px 6px;font-size:13px;font-weight:900;color:#1a3a6a;text-align:right;border-top:1px solid #ccc;">Fill to ${partialTankGal} gal</td>
+        <tr style="background:#eef6ff;">
+          <td style="padding:3px 6px;font-size:9px;color:#1a3a6a;border-top:1px solid #dde;">Water</td>
+          <td style="padding:3px 6px;text-align:right;font-size:9px;color:#1a3a6a;border-top:1px solid #dde;white-space:nowrap;">Fill to ${galDisp(partialTankGal)}</td>
         </tr>
       </tbody>
     </table>
   </div>` : "";
 
-  // Tank Setup section: when < 1 full tank, show actual fill amount instead of # of loads
-  const tankSetupHtml = lessThanOneTank ? `
-  <div class="tank-grid" style="grid-template-columns:repeat(4,1fr)">
-    <div class="tank-item">
-      <label>${isMetric ? "L / ha" : "Gal / Acre"}</label>
-      <div class="bigval">${isMetric ? gpaDisp(form.galPerAcre) : (form.galPerAcre||"—")}</div>
-    </div>
-    <div class="tank-item">
-      <label>${isMetric ? "Total Area" : "Total Acres"}</label>
-      <div class="bigval">${acDisp(totalAcres)}</div>
-    </div>
-    <div class="tank-item">
-      <label>Fill Tank To</label>
-      <div class="bigval" style="color:#c05000">${galDisp(thisLoadTankGal)}</div>
-      <div class="sub" style="color:#c05000">do not fill completely</div>
-    </div>
-    <div class="tank-item">
-      <label>Pressure</label>
-      <div class="bigval">${form.pressure||"—"}<span style="font-size:12px;font-weight:400"> PSI</span></div>
-    </div>
-  </div>` : `
-  <div class="tank-grid" style="grid-template-columns:repeat(5,1fr)">
-    <div class="tank-item">
-      <label>Tank Size</label>
-      <div class="bigval">${galDisp(form.tankSize)}</div>
-    </div>
-    <div class="tank-item">
-      <label>${isMetric ? "L / ha" : "Gal / Acre"}</label>
-      <div class="bigval">${isMetric ? gpaDisp(form.galPerAcre) : (form.galPerAcre||"—")}</div>
-    </div>
-    <div class="tank-item">
-      <label>${isMetric ? "ha / Load" : "Acres / Load"}</label>
-      <div class="bigval">${acreLoads}</div>
-    </div>
-    <div class="tank-item">
-      <label># of Loads</label>
-      <div class="bigval">${fullLoads}</div>
-      <div class="sub">full load${fullLoads!=="1"?"s":""}</div>
-      ${hasPartial ? `<div class="tank-partial-tag">+ 1 partial (${acDisp(partialAcres)})</div>` : ""}
-    </div>
-    <div class="tank-item">
-      <label>Pressure</label>
-      <div class="bigval">${form.pressure||"—"}<span style="font-size:12px;font-weight:400"> PSI</span></div>
-    </div>
+  // Tank Setup section: compact card (~1/3 width), sits beside the chemical mix table
+  const tdS = `padding:3px 8px;border-bottom:1px solid #eef5e8;white-space:nowrap;`;
+  const tankSetupHtml = `<div style="border:1px solid #c8dbb0;border-radius:4px;overflow:hidden;">
+    <div style="background:#2a5c0f;color:#fff;font-size:8px;font-weight:900;padding:2px 8px;letter-spacing:.06em;text-transform:uppercase;">Tank Setup</div>
+    <table style="font-size:11px;font-weight:700;border-collapse:collapse;width:100%;">
+      ${lessThanOneTank ? `
+      <tr><td style="${tdS}color:#555;">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdS}text-align:right;color:#111;">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
+      <tr><td style="${tdS}color:#555;">${isMetric?"Total Area":"Total Acres"}</td><td style="${tdS}text-align:right;color:#111;">${acDisp(totalAcres)}</td></tr>
+      <tr><td style="${tdS}color:#555;">Fill Tank To</td><td style="${tdS}text-align:right;color:#c05000;">${galDisp(thisLoadTankGal)}</td></tr>
+      <tr><td style="padding:3px 8px;white-space:nowrap;color:#555;">Pressure</td><td style="padding:3px 8px;text-align:right;white-space:nowrap;color:#111;">${form.pressure||"—"} PSI</td></tr>
+      ` : `
+      <tr><td style="${tdS}color:#555;">Tank Size</td><td style="${tdS}text-align:right;color:#111;">${galDisp(form.tankSize)}</td></tr>
+      <tr><td style="${tdS}color:#555;">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdS}text-align:right;color:#111;">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
+      <tr><td style="${tdS}color:#555;">${isMetric?"ha / Load":"Acres / Load"}</td><td style="${tdS}text-align:right;color:#111;">${acreLoads}</td></tr>
+      <tr><td style="${tdS}color:#555;"># of Loads</td><td style="${tdS}text-align:right;color:#111;">${fullLoads} full${hasPartial?` <span style="color:#c05000;">+ partial</span>`:""}</td></tr>
+      <tr><td style="padding:3px 8px;white-space:nowrap;color:#555;">Pressure</td><td style="padding:3px 8px;text-align:right;white-space:nowrap;color:#111;">${form.pressure||"—"} PSI</td></tr>
+      `}
+    </table>
   </div>`;
 
   // WALES Mixing Order
@@ -598,16 +570,19 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
 
   // Chem section heading and content depend on scenario
   const chemSectionHtml = lessThanOneTank ? `
-  <div style="width:75%;margin:0 auto;">
-  <h3>Chemical Mix &mdash; This Load (${acDisp(totalAcres)} &mdash; ${galDisp(thisLoadTankGal)})</h3>
-  <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>
+  <div style="display:flex;gap:10px;align-items:flex-start;">
+    <div style="flex:3;min-width:0;">
+      <h3>Chemical Mix &mdash; This Load (${acDisp(totalAcres)} &mdash; ${galDisp(thisLoadTankGal)})</h3>
+      <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>
+    </div>
+    <div style="flex:1;min-width:0;">${tankSetupHtml}</div>
   </div>` : `
   <div style="display:flex;gap:10px;align-items:flex-start;">
     <div style="flex:3;min-width:0;">
       <h3>Chemical Mix &mdash; Full Tank (${galDisp(form.tankSize)})</h3>
       <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
     </div>
-    ${hasPartial ? `<div style="flex:1;min-width:0;">${partialCard}</div>` : ""}
+    <div style="flex:1;min-width:0;">${tankSetupHtml}</div>
   </div>`;
 
   const html = `<!DOCTYPE html>
@@ -738,9 +713,6 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     ${form.flushCleanout ? `<div style="background:#e8f4ff;border:1.5px solid #1a6a8a;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:900;color:#0e3a5c;">🚿 FLUSH REQUIRED</div>` : ""}
   </div>` : ""}
 
-  <h3>Tank Setup</h3>
-  ${tankSetupHtml}
-
   ${chemSectionHtml}
 
   ${(() => {
@@ -810,13 +782,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
         }).join("")}</tbody>
       </table>
     </div>` : `<div style="flex:1;"></div>`}
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;border:1px solid #c8dbb0;border-radius:5px;background:#f9fdf5;gap:10px;">
-      <div style="text-align:right;">
-        <div style="font-size:9px;font-weight:900;color:#2a5c0f;text-transform:uppercase;letter-spacing:.06em;">REI Re-Entry Report</div>
-        <div style="font-size:8px;color:#555;margin-top:2px;">Scan to view earliest re-entry<br/>times for all chemicals applied</div>
-      </div>
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://drive.google.com/drive/folders/1dM5v_307Px_bh7FqgHUlCKokMvrwh75O?usp=sharing')}" width="80" height="80" style="display:block;border:2px solid #2a5c0f;border-radius:4px;"/>
-    </div>
+    ${hasPartial ? partialCard : ""}
   </div>
 
   ${form.notes ? `<div class="notes-row"><label>Notes</label>${form.notes}</div>` : ""}
