@@ -434,16 +434,18 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
         Fill tank ½ full — begin agitation
       </td>
     </tr>`;
+    const rowTints = { A:"#f3faf0",L:"#f3faf0",E:"#fdf5f0",S:"#f0f5fa",WDG:"#f5f0fa",WP:"#faf0f0",D:"#f5f5f0" };
     return water + sorted.map(({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }, i) => {
       const cc = circleColors2[chem.formType] || "#555";
+      const rowBg = rowTints[chem.formType] || "#fff";
       const rateLabel = parseFloat(effRate||0).toFixed(2) + " " + chem.unit + "/ac"
         + (roundQtr && isOzUnit ? " ↑¼gal" : "");
       const lbOzLine = lbOzFn ? lbOzFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }) : null;
       const jugLine  = jugFn  ? jugFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }) : null;
-      return `<tr>
-        <td style="text-align:center;padding:7px 4px"><div style="background:${cc};color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
-        <td style="padding:7px 8px;font-weight:700;font-size:12px">${chem.name}<div style="font-size:9px;font-weight:400;color:#aaa;margin-top:1px">${rateLabel}</div></td>
-        <td style="padding:7px 8px;text-align:right;font-size:18px;font-weight:900">
+      return `<tr style="background:${rowBg}">
+        <td style="text-align:center;padding:8px 4px;border-bottom:1px solid #dde;border-left:3px solid ${cc}"><div style="background:${cc};color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;">${i+2}</div></td>
+        <td style="padding:8px 10px;font-weight:700;font-size:12px;border-bottom:1px solid #dde">${chem.name}<div style="font-size:9px;font-weight:400;color:#aaa;margin-top:1px">${rateLabel}</div></td>
+        <td style="padding:8px 10px;text-align:right;font-size:20px;font-weight:900;border-bottom:1px solid #dde">
           ${amtFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest })}
           ${lbOzLine ? `<div style="font-size:10px;font-weight:400;color:#888;margin-top:1px">${lbOzLine}</div>` : ""}
           ${jugLine  ? `<div style="font-size:10px;font-weight:700;color:#7a3a9a;margin-top:1px">${jugLine}</div>` : ""}
@@ -467,12 +469,12 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
 
   const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
   const partialChemCompact = hasPartial
-    ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, partJugs }) => {
+    ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, partJugs }, pi) => {
         const amt = roundQtr && isOzUnit
           ? (fmtOzAsDecimalGal(calc.partialPerTankRaw) || "—")
           : fmtTankAmount(calc.partialPerTankRaw, chem.unit);
         const lbOzSub = isDryOzUnit ? fmtDryOzAsLbOz(calc.partialPerTankRaw) : null;
-        return `<tr>
+        return `<tr${pi%2===1?' style="background:#fff8f4;"':''}>
           <td style="padding:3px 6px;font-size:9px;color:#111;border-bottom:1px solid #f0c090">${chem.name}</td>
           <td style="padding:3px 6px;font-size:9px;color:#111;text-align:right;border-bottom:1px solid #f0c090;white-space:nowrap">
             ${amt}
@@ -501,21 +503,23 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   </div>` : "";
 
   // Tank Setup section: compact card (~1/3 width), sits beside the chemical mix table
-  const tdS = `padding:3px 8px;border-bottom:1px solid #eef5e8;white-space:nowrap;`;
-  const tankSetupHtml = `<div style="border:1px solid #c8dbb0;border-radius:4px;overflow:hidden;">
-    <div style="background:#2a5c0f;color:#fff;font-size:8px;font-weight:900;padding:2px 8px;letter-spacing:.06em;text-transform:uppercase;">Tank Setup</div>
-    <table style="font-size:11px;font-weight:700;border-collapse:collapse;width:100%;">
+  const tdS  = `padding:4px 8px;border-bottom:1px solid #eef5e8;white-space:nowrap;`;
+  const tdSZ = `padding:4px 8px;white-space:nowrap;`;
+  const tintA = `background:#f3faf0;`;
+  const tankSetupHtml = `<div style="border:1px solid #c8dbb0;overflow:hidden;">
+    <div style="background:#2a5c0f;color:#fff;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;">Tank Setup</div>
+    <table style="font-size:11px;font-weight:700;border-collapse:collapse;width:100%;border-top:none;">
       ${lessThanOneTank ? `
-      <tr><td style="${tdS}color:#555;">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdS}text-align:right;color:#111;">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
+      <tr style="${tintA}"><td style="${tdS}color:#555;">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdS}text-align:right;color:#111;">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
       <tr><td style="${tdS}color:#555;">${isMetric?"Total Area":"Total Acres"}</td><td style="${tdS}text-align:right;color:#111;">${acDisp(totalAcres)}</td></tr>
-      <tr><td style="${tdS}color:#555;">Fill Tank To</td><td style="${tdS}text-align:right;color:#c05000;">${galDisp(thisLoadTankGal)}</td></tr>
-      <tr><td style="padding:3px 8px;white-space:nowrap;color:#555;">Pressure</td><td style="padding:3px 8px;text-align:right;white-space:nowrap;color:#111;">${form.pressure||"—"} PSI</td></tr>
+      <tr style="${tintA}"><td style="${tdS}color:#555;">Fill Tank To</td><td style="${tdS}text-align:right;color:#c05000;">${galDisp(thisLoadTankGal)}</td></tr>
+      <tr><td style="${tdSZ}color:#555;">Pressure</td><td style="${tdSZ}text-align:right;color:#111;">${form.pressure||"—"} PSI</td></tr>
       ` : `
-      <tr><td style="${tdS}color:#555;">Tank Size</td><td style="${tdS}text-align:right;color:#111;">${galDisp(form.tankSize)}</td></tr>
+      <tr style="${tintA}"><td style="${tdS}color:#555;">Tank Size</td><td style="${tdS}text-align:right;color:#111;">${galDisp(form.tankSize)}</td></tr>
       <tr><td style="${tdS}color:#555;">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdS}text-align:right;color:#111;">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
-      <tr><td style="${tdS}color:#555;">${isMetric?"ha / Load":"Acres / Load"}</td><td style="${tdS}text-align:right;color:#111;">${acreLoads}</td></tr>
+      <tr style="${tintA}"><td style="${tdS}color:#555;">${isMetric?"ha / Load":"Acres / Load"}</td><td style="${tdS}text-align:right;color:#111;">${acreLoads}</td></tr>
       <tr><td style="${tdS}color:#555;"># of Loads</td><td style="${tdS}text-align:right;color:#111;">${fullLoads} full${hasPartial?` <span style="color:#c05000;">+ partial</span>`:""}</td></tr>
-      <tr><td style="padding:3px 8px;white-space:nowrap;color:#555;">Pressure</td><td style="padding:3px 8px;text-align:right;white-space:nowrap;color:#111;">${form.pressure||"—"} PSI</td></tr>
+      <tr style="${tintA}"><td style="${tdSZ}color:#555;">Pressure</td><td style="${tdSZ}text-align:right;color:#111;">${form.pressure||"—"} PSI</td></tr>
       `}
     </table>
   </div>`;
@@ -570,19 +574,19 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
 
   // Chem section heading and content depend on scenario
   const chemSectionHtml = lessThanOneTank ? `
-  <div style="display:flex;gap:10px;align-items:flex-start;">
-    <div style="flex:3;min-width:0;">
-      <h3>Chemical Mix &mdash; This Load (${acDisp(totalAcres)} &mdash; ${galDisp(thisLoadTankGal)})</h3>
+  <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">
+    <div style="flex:3;min-width:0;border-top:3px solid #2a5c0f;border-radius:3px 3px 0 0;">
+      <h3 style="font-size:9px;display:block;border-radius:0;width:100%;">Chemical Mix &mdash; This Load (${acDisp(totalAcres)} &mdash; ${galDisp(thisLoadTankGal)})</h3>
       <table><thead>${colHdr(true)}</thead><tbody>${thisLoadChemRows}</tbody></table>
     </div>
-    <div style="flex:1;min-width:0;">${tankSetupHtml}</div>
+    <div style="flex:1;min-width:0;border-top:3px solid #2a5c0f;border-radius:3px 3px 0 0;">${tankSetupHtml}</div>
   </div>` : `
-  <div style="display:flex;gap:10px;align-items:flex-start;">
-    <div style="flex:3;min-width:0;">
-      <h3>Chemical Mix &mdash; Full Tank (${galDisp(form.tankSize)})</h3>
+  <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">
+    <div style="flex:3;min-width:0;border-top:3px solid #2a5c0f;border-radius:3px 3px 0 0;">
+      <h3 style="font-size:9px;display:block;border-radius:0;width:100%;">Chemical Mix &mdash; Full Tank (${galDisp(form.tankSize)})</h3>
       <table><thead>${colHdr(false)}</thead><tbody>${fullChemRows}</tbody></table>
     </div>
-    <div style="flex:1;min-width:0;">${tankSetupHtml}</div>
+    <div style="flex:1;min-width:0;border-top:3px solid #2a5c0f;border-radius:3px 3px 0 0;">${tankSetupHtml}</div>
   </div>`;
 
   const html = `<!DOCTYPE html>
@@ -592,7 +596,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
 <title>${orgName || "BoomLog"} – Application Ticket</title>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:Arial,sans-serif; font-size:9.5px; color:#111; background:#fff; }
+  body { font-family:system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif; font-size:9.5px; color:#111; background:#fff; }
   .page { padding:10px 14px; max-width:700px; margin:0 auto; }
 
   .header { display:flex; justify-content:space-between; align-items:center;
@@ -742,7 +746,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
               const nameCell = mapsUrl
                 ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color:#2a5c0f;text-decoration:none;">${globalIdx+1}. ${f.name} 📍</a>`
                 : `${globalIdx+1}. ${f.name}`;
-              return `<tr style="border-top:1px solid #eef5e8;">
+              return `<tr style="border-top:1px solid #eef5e8;${j%2===1?'background:#f8fcf4;':''}">
                 <td style="padding:2px 5px;">${nameCell}</td>
                 <td style="padding:2px 5px;text-align:right;">${parseFloat(f.acres).toFixed(1)}</td>
               </tr>`;
@@ -764,14 +768,14 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
           <th style="padding:3px 6px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:left;">Product</th>
           <th style="padding:3px 6px;font-size:8px;color:#1a3a6a;background:#e8f0ff;text-transform:uppercase;text-align:right;white-space:nowrap;">Total</th>
         </tr></thead>
-        <tbody>${resolvedChems.map(r => {
+        <tbody>${resolvedChems.map((r, ri) => {
           const allLoadsOz = r.calc.totalPerTankRaw * (parseInt(fullLoads)||0) + (hasPartial ? r.calc.partialPerTankRaw : 0);
           const fmt = r.roundQtr && r.isOzUnit
             ? (fmtOzAsDecimalGal(allLoadsOz) || "—")
             : fmtTankAmount(allLoadsOz, r.chem.unit);
           const lbOzSub = r.isDryOzUnit ? fmtDryOzAsLbOz(allLoadsOz) : null;
           const jugSub  = r.chem.containerSize ? fmtContainerCount(allLoadsOz, r.chem) : (r.jug2_5gal ? fmtJugCount(allLoadsOz) : null);
-          return `<tr>
+          return `<tr${ri%2===1?' style="background:#f4f7ff;"':''}>
             <td style="padding:3px 6px;font-size:9px;color:#111;">${r.chem.name}</td>
             <td style="padding:3px 6px;text-align:right;font-size:9px;color:#111;white-space:nowrap;">
               ${fmt}
