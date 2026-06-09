@@ -503,23 +503,26 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   </div>` : "";
 
   // Tank Setup section: compact card (~1/3 width), sits beside the chemical mix table
-  const tdS  = `padding:4px 8px;border-bottom:1px solid #eef5e8;white-space:nowrap;`;
-  const tdSZ = `padding:4px 8px;white-space:nowrap;`;
+  // tdL = label cell (nowrap so labels stay on one line), tdV = value cell (wraps freely)
+  const tdL  = `padding:4px 8px;border-bottom:1px solid #eef5e8;white-space:nowrap;color:#555;`;
+  const tdV  = `padding:4px 8px;border-bottom:1px solid #eef5e8;text-align:right;color:#111;`;
+  const tdLZ = `padding:4px 8px;white-space:nowrap;color:#555;`;
+  const tdVZ = `padding:4px 8px;text-align:right;color:#111;`;
   const tintA = `background:#f3faf0;`;
-  const tankSetupHtml = `<div style="border:1px solid #c8dbb0;overflow:hidden;">
+  const tankSetupHtml = `<div style="border:1px solid #c8dbb0;">
     <div style="background:#2a5c0f;color:#fff;font-size:9px;font-weight:900;padding:3px 8px;letter-spacing:.06em;text-transform:uppercase;">Tank Setup</div>
-    <table style="font-size:11px;font-weight:700;border-collapse:collapse;width:100%;border-top:none;">
+    <table style="font-size:11px;font-weight:700;border-collapse:collapse;width:100%;">
       ${lessThanOneTank ? `
-      <tr style="${tintA}"><td style="${tdS}color:#555;">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdS}text-align:right;color:#111;">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
-      <tr><td style="${tdS}color:#555;">${isMetric?"Total Area":"Total Acres"}</td><td style="${tdS}text-align:right;color:#111;">${acDisp(totalAcres)}</td></tr>
-      <tr style="${tintA}"><td style="${tdS}color:#555;">Fill Tank To</td><td style="${tdS}text-align:right;color:#c05000;">${galDisp(thisLoadTankGal)}</td></tr>
-      <tr><td style="${tdSZ}color:#555;">Pressure</td><td style="${tdSZ}text-align:right;color:#111;">${form.pressure||"—"} PSI</td></tr>
+      <tr style="${tintA}"><td style="${tdL}">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdV}">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
+      <tr><td style="${tdL}">${isMetric?"Total Area":"Total Acres"}</td><td style="${tdV}">${acDisp(totalAcres)}</td></tr>
+      <tr style="${tintA}"><td style="${tdL}">Fill Tank To</td><td style="${tdV}color:#c05000;">${galDisp(thisLoadTankGal)}</td></tr>
+      <tr><td style="${tdLZ}">Pressure</td><td style="${tdVZ}">${form.pressure||"—"} PSI</td></tr>
       ` : `
-      <tr style="${tintA}"><td style="${tdS}color:#555;">Tank Size</td><td style="${tdS}text-align:right;color:#111;">${galDisp(form.tankSize)}</td></tr>
-      <tr><td style="${tdS}color:#555;">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdS}text-align:right;color:#111;">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
-      <tr style="${tintA}"><td style="${tdS}color:#555;">${isMetric?"ha / Load":"Acres / Load"}</td><td style="${tdS}text-align:right;color:#111;">${acreLoads}</td></tr>
-      <tr><td style="${tdS}color:#555;"># of Loads</td><td style="${tdS}text-align:right;color:#111;">${fullLoads} full${hasPartial?` <span style="color:#c05000;">+ partial</span>`:""}</td></tr>
-      <tr style="${tintA}"><td style="${tdSZ}color:#555;">Pressure</td><td style="${tdSZ}text-align:right;color:#111;">${form.pressure||"—"} PSI</td></tr>
+      <tr style="${tintA}"><td style="${tdL}">Tank Size</td><td style="${tdV}">${galDisp(form.tankSize)}</td></tr>
+      <tr><td style="${tdL}">${isMetric?"L / ha":"Gal / Acre"}</td><td style="${tdV}">${isMetric?gpaDisp(form.galPerAcre):(form.galPerAcre||"—")}</td></tr>
+      <tr style="${tintA}"><td style="${tdL}">${isMetric?"ha / Load":"Acres / Load"}</td><td style="${tdV}">${acreLoads}</td></tr>
+      <tr><td style="${tdL}"># of Loads</td><td style="${tdV}">${fullLoads} full${hasPartial?` <span style="color:#c05000;">+ partial</span>`:""}</td></tr>
+      <tr style="${tintA}"><td style="${tdLZ}">Pressure</td><td style="${tdVZ}">${form.pressure||"—"} PSI</td></tr>
       `}
     </table>
   </div>`;
