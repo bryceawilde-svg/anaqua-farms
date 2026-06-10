@@ -391,7 +391,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
       ? `https://maps.google.com/?q=${f.centroid_lat},${f.centroid_lng}&z=15`
       : null;
     const nameCell = mapsUrl
-      ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color:#2a5c0f;text-decoration:none;">${i+1}. ${f.name} 📍</a>`
+      ? `<a href="${mapsUrl}" style="color:#1a6fbe;text-decoration:underline;">${i+1}. ${f.name} 📍</a>`
       : `${i+1}. ${f.name}`;
     return `
     <tr>
@@ -698,6 +698,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     body { font-size:9px; }
     .page { padding:6px 10px; }
     @page { margin:6mm 8mm; size:letter; }
+    a[href] { color:#1a6fbe !important; text-decoration:underline !important; }
   }
 </style>
 </head>
@@ -746,7 +747,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
               const mapsUrl = f.centroid_lat && f.centroid_lng
                 ? `https://maps.google.com/?q=${f.centroid_lat},${f.centroid_lng}&z=15` : null;
               const nameCell = mapsUrl
-                ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color:#2a5c0f;text-decoration:none;">${globalIdx+1}. ${f.name} 📍</a>`
+                ? `<a href="${mapsUrl}" style="color:#1a6fbe;text-decoration:underline;">${globalIdx+1}. ${f.name} 📍</a>`
                 : `${globalIdx+1}. ${f.name}`;
               return `<tr style="border-top:1px solid #eef5e8;${j%2===1?'background:#f8fcf4;':''}">
                 <td style="padding:2px 5px;">${nameCell}</td>
