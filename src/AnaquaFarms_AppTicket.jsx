@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { fmtAcres, fmtAcresShort, fmtTankVol, fmtGpa, fmtTemp, fmtWindSpeed, areaLabel, tankLabel, sprayRateLabel, windSpeedLabel, tempLabel, AC_TO_HA, GAL_TO_L } from "./utils/units";
-import AgResearchFeed from "./AgResearchFeed";
 import FieldMapPicker from "./FieldMapPicker";
 import BoundaryAssignMap from "./BoundaryAssignMap";
 import ApplicatorView from "./ApplicatorView";
@@ -870,7 +869,7 @@ function downloadTDAReport(tickets, orgName) {
         const pest = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest || "—");
         return `
       <tr>
-        <td>${t.date}</td>
+        <td>${fs.actualDateEnd || fs.actualDateStart || ""}</td>
         <td class="nowrap">${fmtTime(fs.actualTimeStart || fs.timeStart)}<br/><span class="sub">to ${fmtTime(fs.actualTimeEnd || fs.timeEnd)}</span></td>
         <td><strong>${fs.name}</strong></td>
         <td>${parseFloat(fs.acres).toFixed(2)} ac</td>
@@ -1701,15 +1700,7 @@ export default function App() {
   };
 
   const addChemRow    = (chemId) => {
-    let lastRate = "";
-    if (chemId) {
-      for (const tk of tickets) {
-        const rows = tk.chem_rows || tk.chemRows || [];
-        const row = rows.find(r => r.chemId === chemId && r.ratePerAcre);
-        if (row) { lastRate = row.ratePerAcre; break; }
-      }
-    }
-    setForm(f => ({ ...f, chemRows: [...f.chemRows, { id: crypto.randomUUID(), chemId: chemId||'', ratePerAcre: lastRate, inputMode:"rate", galPerTank:"" }] }));
+    setForm(f => ({ ...f, chemRows: [...f.chemRows, { id: crypto.randomUUID(), chemId: chemId||'', ratePerAcre: "", inputMode:"rate", galPerTank:"" }] }));
   };
   const removeChemRow = (id)       => setForm(f => ({ ...f, chemRows: f.chemRows.filter(r => r.id !== id) }));
   const updateChemRow = (id, k, v) => setForm(f => ({ ...f, chemRows: f.chemRows.map(r => r.id===id ? {...r,[k]:v} : r) }));
@@ -1974,9 +1965,14 @@ export default function App() {
   };
 
   const saveActualTime = async (ticket, fieldIdx, key, value) => {
-    const updatedSchedule = (ticket.fieldSchedule || []).map((fs, i) =>
-      i === fieldIdx ? { ...fs, [key]: value } : fs
-    );
+    const updatedSchedule = (ticket.fieldSchedule || []).map((fs, i) => {
+      if (i !== fieldIdx) return fs;
+      if (key.startsWith("fieldWeather.")) {
+        const subKey = key.slice("fieldWeather.".length);
+        return { ...fs, fieldWeather: { ...(fs.fieldWeather || {}), [subKey]: value } };
+      }
+      return { ...fs, [key]: value };
+    });
     setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, fieldSchedule: updatedSchedule } : t));
     const { error } = await supabase.from("tickets")
       .update({ field_schedule: updatedSchedule })
@@ -2139,6 +2135,7 @@ export default function App() {
   const [fieldMergeName,setFieldMergeName]= useState("");
   const [fieldMergeKeepId,setFieldMergeKeepId] = useState(null);
   const [fieldMerging,  setFieldMerging]  = useState(false);
+  const [fieldMergeMode,setFieldMergeMode]= useState(false);
   const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"", traits:[] });
   const [editingFieldId,       setEditingFieldId]       = useState(null);
   const [editFieldDraft,       setEditFieldDraft]       = useState({});
@@ -2663,6 +2660,22 @@ export default function App() {
     <div style={{ minHeight:"100vh", background:"#f0f7e8", fontFamily:"'Georgia','Times New Roman',serif" }}>
 
       {/* Toast */}
+      {view === "log" && (
+        <button
+          onClick={() => { setForm(f => ({ ...f, date: new Date().toISOString().slice(0,10) })); setEditingId(null); setView("form"); }}
+          title="New Ticket"
+          style={{
+            position:"fixed", bottom:90, right:20, zIndex:1000,
+            width:48, height:48, borderRadius:"50%",
+            background:"linear-gradient(135deg,#2a6610,#3a8a1a)",
+            color:"#fff", border:"none", cursor:"pointer",
+            fontSize:32, fontWeight:300, lineHeight:1,
+            boxShadow:"0 4px 16px rgba(0,0,0,0.25)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+          }}
+        >+</button>
+      )}
+
       {toast && (
         <div style={{
           position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:9999,
@@ -2694,24 +2707,21 @@ export default function App() {
         <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
           {(isViewer
             ? [["applicator","📋 Applications"]]
-            : [["applicator","📱 Applicator"],["log","📋 Saved"],["form","🌱 Ticket"],["chemMgr","🧪 Chems"],["research","📚 Research"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]]
+            : [["applicator","📱 Applicator"],["log","📋 Saved"],["chemMgr","🧪 Chems"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]]
           ).map(([v,l]) => {
-            const locked = v === "research" && !isPro;
             return (
-              <button key={v} onClick={() => !locked && setView(v)}
-                title={locked ? "Pro plan required" : undefined}
+              <button key={v} onClick={() => setView(v)}
                 style={{
                   padding: isMobile ? "8px 12px" : "8px 16px",
-                  border:"none", cursor: locked ? "not-allowed" : "pointer",
+                  border:"none", cursor: "pointer",
                   fontSize: isMobile ? 12 : 13,
                   fontWeight:700,
                   borderRadius:"6px 6px 0 0", fontFamily:"inherit",
                   background: view===v ? "#f0f7e8" : "rgba(255,255,255,0.12)",
-                  color: locked ? "rgba(216,240,184,0.4)" : (view===v ? "#2a5c0f" : "#d8f0b8"),
+                  color: view===v ? "#2a5c0f" : "#d8f0b8",
                   borderBottom: view===v ? "3px solid #4aaa1a" : "3px solid transparent",
                   whiteSpace:"nowrap", flexShrink:0,
-                  opacity: locked ? 0.5 : 1,
-                }}>{l}{locked ? " 🔒" : ""}</button>
+                }}>{l}</button>
             );
           })}
         </div>
@@ -3735,16 +3745,6 @@ export default function App() {
                   cursor: isSaving ? "not-allowed" : "pointer", fontSize:15, fontWeight:700,
                   boxShadow:"0 2px 8px rgba(30,90,8,0.2)", flex:1
                 }}>{isSaving ? "Saving…" : (editingId ? "✏ Update Ticket" : "💾 Save Ticket")}</button>
-                <button onClick={async () => {
-                  const sched = buildFieldSchedule(form.selectedFields, form.timeStart);
-                  const ticketNumber = await saveTicket();
-                  if (ticketNumber != null) printTicket({ ...form, ticketNumber }, chemicals, totalAcres, sched, currentOrg?.name, isMetric);
-                }} disabled={isSaving} style={{
-                  background: isSaving ? "#999" : "linear-gradient(135deg,#1a4a8a,#0e2a5c)",
-                  color:"#fff", border:"none", borderRadius:7, padding:"11px 22px",
-                  cursor: isSaving ? "not-allowed" : "pointer", fontSize:15, fontWeight:700,
-                  boxShadow:"0 2px 8px rgba(14,42,92,0.25)", whiteSpace:"nowrap"
-                }}>🖨 Save & Print</button>
                 <button onClick={() => { setForm(blank()); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setEditingId(null); }} style={{
                   background:"#f0f7e8", color:"#555", border:"1.5px solid #c8dbb0",
                   borderRadius:7, padding:"11px 20px", cursor:"pointer", fontSize:14
@@ -3834,17 +3834,22 @@ export default function App() {
                       flexShrink:0
                     }}>#{ticketNum}</div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
-                        <span style={{ fontWeight:700, color:"#111", fontSize:14 }}>{t.date}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                         {t.crop && <span style={{ fontSize:12, color:"#2a5c0f", fontWeight:600 }}>{t.crop}</span>}
-                        {pestStr && <span style={{ fontSize:11, color:"#888" }}>{pestStr}</span>}
+                        {(() => {
+                          const sched = t.fieldSchedule || [];
+                          const anyDate = sched.some(fs => fs.actualDateEnd);
+                          const allDates = sched.length > 0 && sched.every(fs => fs.actualDateEnd);
+                          if (allDates) return <span style={{ fontSize:10, fontWeight:700, background:"#d4edda", color:"#1a6b2f", borderRadius:4, padding:"1px 6px" }}>Completed</span>;
+                          if (anyDate)  return <span style={{ fontSize:10, fontWeight:700, background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 6px" }}>In Progress</span>;
+                          return null;
+                        })()}
                       </div>
                       <div style={{ fontSize:11, color:"#666", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                        {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"} · {isMetric ? `${(parseFloat(t.totalAcres||0)*AC_TO_HA).toFixed(1)} ha` : `${t.totalAcres} ac`} · {t.fullLoads} load{t.fullLoads!=="1"?"s":""}
-                        {t.partialAcres ? ` + partial` : ""}
+                        {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"}
                       </div>
                     </div>
-                    {isOwner && (
+                    {isOwner && !((() => { const s = t.fieldSchedule||[]; return s.length > 0 && s.every(fs => fs.actualDateEnd); })()) && (
                       <button
                         onClick={e => { e.stopPropagation(); toggleTeamView(t.id, t.team_view); }}
                         title={t.team_view ? "Remove from queue" : "Add to queue"}
@@ -3866,16 +3871,18 @@ export default function App() {
                       <div style={{ display:"flex", gap:8, fontSize:12, color:"#555", flexWrap:"wrap", marginBottom:10 }}>
                         {[
                           t.totalAcres        && fmtAcres(t.totalAcres, isMetric),
-                          t.windSpeed         && `${fmtWindSpeed(t.windSpeed, isMetric)} ${t.windDir || ""}`.trim(),
-                          t.airTemp           && fmtTemp(t.airTemp, isMetric),
-                          t.tankSize          && fmtTankVol(t.tankSize, isMetric),
-                          t.pressure          && `${t.pressure} PSI`,
                           t.galPerAcre        && fmtGpa(t.galPerAcre, isMetric),
                           t.equipmentType,
                           t.licensedApplicant,
                         ].filter(Boolean).map((item, i) => (
                           <span key={i} style={{ background:"#f0f7e8", borderRadius:4, padding:"2px 7px", whiteSpace:"nowrap" }}>{item}</span>
                         ))}
+                        {(() => {
+                          const sched = t.fieldSchedule || [];
+                          const remAcres = sched.filter(fs => !fs.actualDateEnd).reduce((sum, fs) => sum + (parseFloat(fs.acres) || 0), 0);
+                          if (!sched.length || remAcres <= 0) return null;
+                          return <span style={{ background:"#fff3cd", color:"#856404", borderRadius:4, padding:"2px 7px", whiteSpace:"nowrap", fontWeight:700 }}>{isMetric ? `${(remAcres * 0.404686).toFixed(1)} ha` : `${remAcres.toFixed(1)} ac`} remaining</span>;
+                        })()}
                       </div>
 
                       {/* Field schedule */}
@@ -3887,37 +3894,61 @@ export default function App() {
                         </thead>
                         <tbody>
                           {(t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
-                            const editingEnd = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualTimeEnd";
+                            const editingDate = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualDateEnd";
+                            const editingWind = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.windSpeed";
+                            const editingTemp = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.airTemp";
                             const w = fs.fieldWeather || {};
                             return (
                               <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
                                 <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
                                 <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
                                 <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }}
-                                  onClick={() => !editingEnd && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualTimeEnd" })}>
-                                  {editingEnd ? (
-                                    <input type="time" autoFocus defaultValue={fs.actualTimeEnd||""}
-                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:90 }}
-                                      onBlur={e => { saveActualTime(t, i, "actualTimeEnd", e.target.value); setEditingActualTime(null); }}
-                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualTimeEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                                  onClick={() => !editingDate && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualDateEnd" })}>
+                                  {editingDate ? (
+                                    <input type="date" autoFocus defaultValue={fs.actualDateEnd||""}
+                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:110 }}
+                                      onBlur={e => { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); }}
+                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                                     />
-                                  ) : fs.actualTimeEnd ? (
-                                    <span style={{ color:"#1a6b2f", fontWeight:600 }}>
-                                      <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"#2a5c0f", marginRight:3, verticalAlign:"middle" }}/>
-                                      {(() => {
-                                        const d = fs.actualDateEnd || t.date;
-                                        return d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" }) : "—";
-                                      })()}
+                                  ) : fs.actualDateEnd ? (
+                                    <span style={{ color:"#555" }}>
+                                      {new Date(fs.actualDateEnd + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" })}
                                     </span>
                                   ) : (
                                     <span style={{ color:"#bbb", fontSize:11 }}>—</span>
                                   )}
                                 </td>
-                                <td style={{ padding:"3px 0", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap" }}>
-                                  {w.windSpeed != null ? `${fmtWindSpeed(w.windSpeed, isMetric)} ${w.windDir||""}`.trim() : "—"}
+                                <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap", cursor:"pointer" }}
+                                  onClick={() => !editingWind && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.windSpeed" })}>
+                                  {editingWind ? (
+                                    <div style={{ display:"flex", gap:3, justifyContent:"flex-end" }}>
+                                      <input type="number" autoFocus defaultValue={w.windSpeed??""} min="0"
+                                        style={{ ...inp, padding:"1px 4px", fontSize:11, width:46 }}
+                                        onBlur={e => { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
+                                        onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                                      />
+                                      <select defaultValue={w.windDir||""}
+                                        style={{ ...inp, padding:"1px 2px", fontSize:11, width:46 }}
+                                        onChange={e => saveActualTime(t, i, "fieldWeather.windDir", e.target.value || null)}>
+                                        <option value="">—</option>
+                                        {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
+                                      </select>
+                                    </div>
+                                  ) : w.windSpeed != null ? (
+                                    `${isMetric ? (w.windSpeed * 1.60934).toFixed(1) : w.windSpeed}${w.windDir ? ` ${w.windDir}` : ""}`
+                                  ) : "—"}
                                 </td>
-                                <td style={{ padding:"3px 0", textAlign:"right", fontSize:11, color:"#555" }}>
-                                  {w.airTemp != null ? fmtTemp(w.airTemp, isMetric) : "—"}
+                                <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", cursor:"pointer" }}
+                                  onClick={() => !editingTemp && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.airTemp" })}>
+                                  {editingTemp ? (
+                                    <input type="number" autoFocus defaultValue={w.airTemp??""} min="0"
+                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:50 }}
+                                      onBlur={e => { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
+                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                                    />
+                                  ) : w.airTemp != null ? (
+                                    isMetric ? ((w.airTemp - 32) * 5/9).toFixed(1) : w.airTemp
+                                  ) : "—"}
                                 </td>
                               </tr>
                             );
@@ -3929,7 +3960,7 @@ export default function App() {
                       {t.chemicals.length > 0 && (
                         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                           <thead>
-                            <tr>{["Chemical","Rate/Acre","Unit","EPA #","REI"].map(h => (
+                            <tr>{["Chemical","Rate/Acre","Unit"].map(h => (
                               <th key={h} style={{ ...th, fontSize:10, padding:"4px 6px" }}>{h}</th>
                             ))}</tr>
                           </thead>
@@ -3939,8 +3970,6 @@ export default function App() {
                                 <td style={td}>{c.name}</td>
                                 <td style={td}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</td>
                                 <td style={td}>{c.unit}</td>
-                                <td style={td}>{c.epa}</td>
-                                <td style={td}>{c.rei}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -4859,8 +4888,12 @@ export default function App() {
             })()}
 
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>
-                Field Library — {fieldLibrary.length} fields · {fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0).toFixed(1)} total acres
+              <div style={{ ...sectionTitle, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span>Field Library — {fieldLibrary.length} fields · {fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0).toFixed(1)} total acres</span>
+                {isOwner && <button onClick={() => { setFieldMergeMode(m => !m); setFieldMergeIds(new Set()); setFieldMergeName(""); setFieldMergeKeepId(null); }}
+                  style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1.5px solid #1a6bbf", background: fieldMergeMode ? "#1a6bbf" : "#fff", color: fieldMergeMode ? "#fff" : "#1a6bbf", cursor:"pointer" }}>
+                  ⊕ Merge
+                </button>}
               </div>
               {(() => {
                 const cropOptions = [...new Set(fieldLibrary.map(f => f.crop).filter(Boolean))].sort();
@@ -4878,7 +4911,7 @@ export default function App() {
                 );
               })()}
               {/* Merge controls */}
-              {isOwner && fieldMergeIds.size >= 2 && (
+              {isOwner && fieldMergeMode && fieldMergeIds.size >= 2 && (
                 <div style={{ background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:6, padding:"10px 14px", marginBottom:10 }}>
                   <div style={{ fontSize:12, fontWeight:700, color:"#1a3a6a", marginBottom:8 }}>
                     Merge {fieldMergeIds.size} fields — boundaries will be unioned, acres recalculated from geometry
@@ -4925,7 +4958,7 @@ export default function App() {
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
                     <tr>
-                      {isOwner && <th style={th}></th>}
+                      {isOwner && fieldMergeMode && <th style={th}></th>}
                       {["Field Name","Crop","Acres","Traits","Boundary",""].map(h => <th key={h} style={th}>{h}</th>)}
                     </tr>
                   </thead>
@@ -4995,7 +5028,7 @@ export default function App() {
                       return (
                         <React.Fragment key={f.id}>
                           <tr>
-                            {isOwner && (
+                            {isOwner && fieldMergeMode && (
                               <td style={{ padding:"3px 4px" }}>
                                 <input type="checkbox" checked={fieldMergeIds.has(f.id)}
                                   onChange={e => setFieldMergeIds(prev => {
@@ -5007,7 +5040,7 @@ export default function App() {
                             )}
                             <td style={{ ...td, fontWeight:600 }}>{f.name}</td>
                             <td style={td}>{f.crop ? <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 6px",fontWeight:700,fontSize:11 }}>{f.crop}</span> : <span style={{color:"#ccc"}}>—</span>}</td>
-                            <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{fmtAcresShort(f.acres, isMetric)}</td>
+                            <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{isMetric ? (parseFloat(f.acres||0)*0.404686).toFixed(1) : parseFloat(f.acres||0).toFixed(1)}</td>
                             <td style={td}>
                               {fieldTraits.length > 0
                                 ? <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{fieldTraits.map(t => <span key={t} style={{ background:"#e8f0ff", color:"#1a3a7a", borderRadius:3, padding:"1px 5px", fontSize:10, fontWeight:700 }}>{t}</span>)}</div>
@@ -5251,12 +5284,6 @@ export default function App() {
         )}
 
         {/* ══ CHEMICAL MANAGER ═══════════════════════════════════════════════════ */}
-        {/* ══ AG RESEARCH FEED ══════════════════════════════════════════════════ */}
-        {view === "research" && (
-          <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-            <AgResearchFeed />
-          </div>
-        )}
 
         {view === "chemMgr" && (
           <div>
@@ -5812,8 +5839,11 @@ export default function App() {
                 }}>CSV</button>
                 <button onClick={() => {
                   const filtered = tickets.filter(t => {
-                    if (tdaFrom && t.date < tdaFrom) return false;
-                    if (tdaTo   && t.date > tdaTo)   return false;
+                    const fs = t.fieldSchedule || [];
+                    const appDate = fs.find(s => s.actualDateEnd)?.actualDateEnd
+                                 || fs.find(s => s.actualDateStart)?.actualDateStart;
+                    if (tdaFrom && appDate < tdaFrom) return false;
+                    if (tdaTo   && appDate > tdaTo)   return false;
                     return true;
                   });
                   if (!filtered.length) return alert("No tickets in selected date range.");

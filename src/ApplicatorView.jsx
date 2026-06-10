@@ -1,12 +1,9 @@
 import { useState } from "react";
 import ApplicatorMapView from "./ApplicatorMapView";
 
-const CROP_COLORS = { Cotton: "#FFE600", Corn: "#00D9FF", Soybean: "#7CFC00" };
 
 function cropChip(crop) {
-  const bg    = CROP_COLORS[crop] || "#e6f5d0";
-  const color = crop === "Cotton" ? "#7a5f00" : crop === "Corn" ? "#005a7a" : crop === "Soybean" ? "#2a6000" : "#2a5c0f";
-  return <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 700, marginLeft: 6 }}>{crop}</span>;
+  return <span style={{ color: "#555", fontSize: 12, fontWeight: 700, marginLeft: 6 }}>{crop}</span>;
 }
 
 function fmtDate(d) {
@@ -134,13 +131,8 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                   <span style={{ fontWeight: 900, fontSize: 18, color: "#1a4a0a", fontFamily: "monospace" }}>
                     #{String(t.ticketNumber || t.ticket_number || "").padStart(3, "0")}
                   </span>
-                  {t.crop && (() => {
-                    const bg    = CROP_COLORS[t.crop] || "#e6f5d0";
-                    const color = t.crop === "Cotton" ? "#7a5f00" : t.crop === "Corn" ? "#005a7a" : t.crop === "Soybean" ? "#2a6000" : "#2a5c0f";
-                    return <span style={{ background: bg, color, borderRadius: 5, padding: "2px 10px", fontSize: 18, fontWeight: 800 }}>{t.crop}</span>;
-                  })()}
+                  {t.crop && <span style={{ color: "#555", fontSize: 18, fontWeight: 800 }}>{t.crop}</span>}
                   <span style={{ background: statusBadge.bg, color: statusBadge.color, borderRadius: 4, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{statusBadge.label}</span>
-                  {doneCount > 0 && <span style={{ fontSize: 12, color: "#2a5c0f", fontWeight: 700 }}>{doneCount}/{total} done</span>}
                 </div>
               </div>
               {isOwner && (
@@ -286,13 +278,32 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       <div style={{ padding: "10px 16px 8px", borderBottom: "1px solid #e8f5e0", display: "flex", alignItems: "center", gap: 10 }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, color: "#1a4a0a" }}>
-            #{ticketNum} — {fmtDate(t.date)}{t.crop && cropChip(t.crop)}
+            #{ticketNum}{t.crop && cropChip(t.crop)}
           </div>
           <div style={{ fontSize: 12, color: "#888" }}>
-            {pendingFields.length} remaining · {completedFields.length} done · {parseFloat(t.totalAcres || t.total_acres || 0).toFixed(1)} ac total
+            {pendingFields.length} field{pendingFields.length !== 1 ? "s" : ""} remaining · {pendingFields.reduce((sum, f) => sum + (parseFloat(f.acres) || 0), 0).toFixed(1)} ac
           </div>
         </div>
       </div>
+
+      {/* Machine settings */}
+      {(t.galPerAcre || t.gal_per_acre || t.pressure || t.tankSize || t.tank_size) && (
+        <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
+          <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>MACHINE SETTINGS</div>
+          <div style={{ padding: "10px 14px", display: "flex", gap: 24, flexWrap: "wrap" }}>
+            {[
+              ["Gal/Acre",   t.galPerAcre   || t.gal_per_acre],
+              ["Pressure",   t.pressure     ? `${t.pressure} PSI` : null],
+              ["Tank Size",  t.tankSize     || t.tank_size ? `${t.tankSize || t.tank_size} gal` : null],
+            ].filter(([,v]) => v).map(([label, val]) => (
+              <div key={label}>
+                <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a" }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Map */}
       <div style={{ margin: "10px 12px 0" }}>
@@ -449,25 +460,6 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Machine settings */}
-      {(t.galPerAcre || t.gal_per_acre || t.pressure || t.tankSize || t.tank_size) && (
-        <div style={{ margin: "10px 12px 0", borderRadius: 8, border: "1.5px solid #c8dbb0", overflow: "hidden", background: "#fff" }}>
-          <div style={{ padding: "8px 14px", background: "#f0f7e8", borderBottom: "1px solid #c8dbb0", fontSize: 12, fontWeight: 800, color: "#2a5c0f", letterSpacing: "0.06em" }}>MACHINE SETTINGS</div>
-          <div style={{ padding: "10px 14px", display: "flex", gap: 24, flexWrap: "wrap" }}>
-            {[
-              ["Gal/Acre",   t.galPerAcre   || t.gal_per_acre],
-              ["Pressure",   t.pressure     ? `${t.pressure} PSI` : null],
-              ["Tank Size",  t.tankSize     || t.tank_size ? `${t.tankSize || t.tank_size} gal` : null],
-            ].filter(([,v]) => v).map(([label, val]) => (
-              <div key={label}>
-                <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a" }}>{val}</div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
