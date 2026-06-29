@@ -2974,31 +2974,33 @@ export default function App() {
                 </div>
               </div>
               </>); })()}
+            </div>
 
-              {/* Crop / Site — button presets above fields */}
-              <div style={{ marginBottom:12 }}>
-                <label style={labelT}>Crop / Site</label>
+            {/* Crop / Site — its own card */}
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, marginBottom:10 } : sectionTitleT}>Crop / Site</div>
+              <div style={{ marginBottom:0 }}>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                   {[...new Set([...orgCrops, ...fieldLibrary.map(f=>f.crop).filter(Boolean)])].filter(Boolean).sort().map(crop => (
                     <button key={crop} type="button"
                       onClick={() => set("crop", crop)}
                       style={{
                         flex:"1 1 auto", padding:"10px 8px", border:"1.5px solid",
-                        borderColor: form.crop===crop ? "#2a5c0f" : "#c8dbb0",
                         borderRadius:6, cursor:"pointer", fontSize:14, fontWeight:700,
-                        fontFamily:"inherit",
-                        background: form.crop===crop ? "#2a5c0f" : "#f9fdf5",
-                        color:      form.crop===crop ? "#fff"    : "#3a6b1a",
-                        transition:"all 0.12s"
+                        fontFamily:"inherit", transition:"all 0.12s",
+                        ...pillBtn(form.crop===crop),
                       }}
                     >{crop}</button>
                   ))}
                 </div>
               </div>
+            </div>
 
-              {/* Target Pest / Weed / Disease */}
-              <div style={{ marginBottom:14 }}>
-                <label style={labelT}>Target Pest / Weed / Disease</label>
+            {/* Target Pest / Weed / Disease — its own card */}
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, marginBottom:2 } : sectionTitleT}>Target Pest / Weed / Disease</div>
+              {isMobile && <div style={{ fontSize:11.5, color:theme.mut, marginBottom:11 }}>Recent — tap to toggle</div>}
+              <div style={{ marginBottom:0 }}>
                 {(() => {
                   // Last 6 unique pests used across ticket history
                   const seen = new Set();
@@ -3025,10 +3027,8 @@ export default function App() {
                             style={{
                               padding:"5px 11px", border:"1.5px solid", borderRadius:20,
                               cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"inherit",
-                              borderColor: on ? "#2a5c0f" : "#c8dbb0",
-                              background:  on ? "#2a5c0f" : "#f9fdf5",
-                              color:       on ? "#fff"    : "#555",
-                              transition:"all 0.12s"
+                              transition:"all 0.12s",
+                              ...pillBtn(on),
                             }}
                           >{opt}</button>
                         );
@@ -3138,12 +3138,23 @@ export default function App() {
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Field Picker */}
+            {/* Fields — its own card */}
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={{ marginBottom:14 }}>
                 {/* Label row with toggle */}
+                {isMobile && (
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:11 }}>
+                    <div style={{ fontSize:14, fontWeight:800, color:theme.ink }}>Fields</div>
+                    <div style={{ fontSize:12, color:theme.mut }}>
+                      <span style={{ fontWeight:700, color:theme.onGreen, fontFamily:"'Space Grotesk',monospace" }}>{form.selectedFields.length}</span> ·{" "}
+                      <span style={{ fontWeight:700, color:theme.onGreen, fontFamily:"'Space Grotesk',monospace" }}>{isMetric ? `${(parseFloat(totalAcresDisplay||0)*AC_TO_HA).toFixed(2)} ha` : `${totalAcresDisplay} ac`}</span>
+                    </div>
+                  </div>
+                )}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-                  <label style={{ ...labelT, marginBottom:0 }}>
+                  <label style={{ ...labelT, marginBottom:0, display: isMobile ? "none" : "block" }}>
                     Fields
                     {form.crop && (
                       <span style={{ marginLeft:6, background:"#e6f5d0", color:"#2a5c0f", borderRadius:3, padding:"1px 6px", fontSize:11, fontWeight:700 }}>
@@ -3309,10 +3320,15 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
 
-              <div style={{ marginBottom:12 }}>
-                <label style={labelT}>Notes</label>
-                <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
+            {/* Notes — its own card */}
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={{ marginBottom: isMobile ? 0 : 12 }}>
+                <label style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, display:"block", marginBottom:11 } : labelT}>Notes</label>
+                <input value={form.notes} onChange={e => set("notes",e.target.value)} style={isMobile
+                  ? { width:"100%", minHeight:74, border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"11px 12px", fontSize:14, color:theme.ink, background:theme.input, fontFamily:"inherit" }
+                  : inp} placeholder="Optional…"/>
               </div>
             </div>
 
