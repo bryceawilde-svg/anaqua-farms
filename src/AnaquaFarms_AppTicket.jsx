@@ -1429,8 +1429,11 @@ export default function App() {
   // Mobile-themed card/section/label chrome — falls back to the original desktop
   // styles untouched when not on mobile, so this is a no-op for the desktop layout.
   const cardT = isMobile ? {
-    background: theme.card, border: `1px solid ${theme.line}`, borderRadius:18,
-    padding:15, marginBottom:16, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)",
+    background: theme.card, border: `1.5px solid ${theme.line}`, borderRadius:18,
+    padding:15, marginBottom:18,
+    boxShadow: darkMode
+      ? "0 8px 22px -8px rgba(0,0,0,0.55)"
+      : "0 8px 20px -8px rgba(20,40,26,0.28)",
   } : card;
   const sectionTitleT = isMobile ? {
     fontSize:14, fontWeight:800, color: theme.ink, marginBottom:12,

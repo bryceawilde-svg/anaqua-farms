@@ -22,7 +22,7 @@ const LIGHT_BASE = {
 };
 
 const DARK_BASE = {
-  canvas: "#0f1512", card: "#19221d", line: "#2b362e", inputLine: "#313d35", divider: "#26312a",
+  canvas: "#0c100d", card: "#1d2820", line: "#37463c", inputLine: "#37463c", divider: "#2c3a31",
   fill: "#232e27", fill2: "#1f2a23", input: "#1d2722",
   ink: "#eef3ee", ink2: "#aebcb2", mut: "#7e8d83",
   blue: "#5fb6cf", tintBlue: "#15303a", amber: "#e3ab43", tintAmber: "#33290f",
