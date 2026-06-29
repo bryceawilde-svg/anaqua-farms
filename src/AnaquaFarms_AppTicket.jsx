@@ -2816,7 +2816,7 @@ export default function App() {
 
       {/* Header */}
       {isMobile ? (
-        <div style={{ position:"sticky", top:0, zIndex:50, background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ position:"sticky", top:0, zIndex:50, background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap" }}>
           <div>
             <div style={{ fontSize:23, fontWeight:800, letterSpacing:"-0.01em" }}>
               {view === "form" ? (editingId ? "Edit Ticket" : "New Ticket")
@@ -2842,6 +2842,24 @@ export default function App() {
               Cancel
             </button>
           ) : null}
+          {/* Library sub-nav — lives in the header, right under the "Library" title */}
+          {["fieldMgr","equipMgr","chemMgr"].includes(view) && (
+            <div style={{ display:"flex", gap:6, width:"100%", marginTop:12 }}>
+              {[["chemMgr","Chems","chems"],["fieldMgr","Fields","fields"],["equipMgr","Equip","equip"],["equipMgr","People","people"]].map(([v,l,tab]) => {
+                const active = tab === "chems" ? view === "chemMgr"
+                  : tab === "fields" ? view === "fieldMgr"
+                  : view === "equipMgr" && libTab === tab;
+                return (
+                  <button key={tab} onClick={() => { setView(v); setLibTab(tab); }} style={{
+                    flex:1, padding:"7px 0", border:"none", borderRadius:9, cursor:"pointer",
+                    fontSize:12.5, fontWeight:700,
+                    background: active ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.14)",
+                    color:      active ? theme.header           : "#fff",
+                  }}>{l}</button>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : (
       <div style={{ background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)", padding: isMobile ? "12px 14px 0" : "18px 28px 0", boxShadow:"0 3px 16px rgba(0,0,0,0.18)" }}>
@@ -2880,25 +2898,6 @@ export default function App() {
       )}
 
       <div style={{ maxWidth:880, margin:"0 auto", padding: isMobile ? "12px 10px 80px" : "24px 16px 40px" }}>
-
-        {/* Library sub-nav — mobile only, since the top tabs are hidden on mobile */}
-        {isMobile && ["fieldMgr","equipMgr","chemMgr"].includes(view) && (
-          <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-            {[["chemMgr","Chems","chems"],["fieldMgr","Fields","fields"],["equipMgr","Equip","equip"],["equipMgr","People","people"]].map(([v,l,tab]) => {
-              const active = tab === "chems" ? view === "chemMgr"
-                : tab === "fields" ? view === "fieldMgr"
-                : view === "equipMgr" && libTab === tab;
-              return (
-                <button key={tab} onClick={() => { setView(v); setLibTab(tab); }} style={{
-                  flex:1, padding:"9px 0", border:"none", borderRadius:11, cursor:"pointer",
-                  fontSize:13, fontWeight:700,
-                  background: active ? theme.header : theme.fill,
-                  color:      active ? "#fff"        : theme.ink2,
-                }}>{l}</button>
-              );
-            })}
-          </div>
-        )}
 
         {/* ══ APPLICATOR VIEW ══════════════════════════════════════════════════════ */}
         {view === "applicator" && (
