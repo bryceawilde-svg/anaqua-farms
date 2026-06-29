@@ -6,6 +6,7 @@ import BoundaryAssignMap from "./BoundaryAssignMap";
 import ApplicatorView from "./ApplicatorView";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
+import { buildTheme, ACCENTS } from "./utils/theme";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 // Full reference crop list — used as the org crop library default.
@@ -1338,6 +1339,11 @@ export default function App() {
   const [logFieldSearch, setLogFieldSearch] = useState("");
   const [logChemSearch,  setLogChemSearch]  = useState("");
   const [dbLoading,     setDbLoading]     = useState(true);
+  const [darkMode,      setDarkMode]      = useState(() => localStorage.getItem("boomlog_dark") === "1");
+  const [accent,        setAccent]        = useState(() => localStorage.getItem("boomlog_accent") || ACCENTS[0]);
+  useEffect(() => { localStorage.setItem("boomlog_dark", darkMode ? "1" : "0"); }, [darkMode]);
+  useEffect(() => { localStorage.setItem("boomlog_accent", accent); }, [accent]);
+  const theme = buildTheme(darkMode, accent);
 
   // ── Form state
   const blank = () => ({
@@ -2657,11 +2663,15 @@ export default function App() {
       <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading…</div>
     </div>
   );
-  return (
-    <div style={{ minHeight:"100vh", background:"#f0f7e8", fontFamily:"'Georgia','Times New Roman',serif" }}>
+  const navTabs = isViewer
+    ? [["applicator","📋 Applications"]]
+    : [["applicator","📱 Applicator"],["log","📋 Saved"],["chemMgr","🧪 Chems"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]];
 
-      {/* Toast */}
-      {view === "log" && (
+  return (
+    <div style={{ minHeight:"100vh", background: isMobile ? theme.canvas : "#f0f7e8", fontFamily:"'Hanken Grotesk',system-ui,sans-serif", paddingBottom: isMobile ? 78 : 0 }}>
+
+      {/* Floating "+" — desktop only; mobile uses the bottom nav's center button */}
+      {!isMobile && view === "log" && (
         <button
           onClick={() => { setForm(f => ({ ...f, date: new Date().toISOString().slice(0,10) })); setEditingId(null); setView("form"); }}
           title="New Ticket"
@@ -2704,12 +2714,9 @@ export default function App() {
             }}>Sign Out</button>
           </div>
         </div>
-        {/* Tab nav: scrollable row on mobile */}
-        <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:isMobile?8:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
-          {(isViewer
-            ? [["applicator","📋 Applications"]]
-            : [["applicator","📱 Applicator"],["log","📋 Saved"],["chemMgr","🧪 Chems"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]]
-          ).map(([v,l]) => {
+        {/* Tab nav: desktop only — mobile uses the bottom nav bar instead */}
+        {!isMobile && <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
+          {navTabs.map(([v,l]) => {
             return (
               <button key={v} onClick={() => setView(v)}
                 style={{
@@ -2725,7 +2732,7 @@ export default function App() {
                 }}>{l}</button>
             );
           })}
-        </div>
+        </div>}
       </div>
 
       <div style={{ maxWidth:880, margin:"0 auto", padding: isMobile ? "12px 10px 80px" : "24px 16px 40px" }}>
@@ -5566,6 +5573,32 @@ export default function App() {
               ))}
             </div>
 
+            {/* Appearance */}
+            <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+              <div style={{ ...sectionTitle, marginBottom:10 }}>Appearance</div>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:"#333" }}>Dark mode</span>
+                <button onClick={() => setDarkMode(d => !d)} style={{
+                  width:46, height:26, borderRadius:13, border:"none", cursor:"pointer", position:"relative",
+                  background: darkMode ? theme.green : "#ccc", transition:"background 0.15s",
+                }}>
+                  <span style={{
+                    position:"absolute", top:2, left: darkMode ? 22 : 2, width:22, height:22, borderRadius:"50%",
+                    background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.3)", transition:"left 0.15s",
+                  }} />
+                </button>
+              </div>
+              <div style={{ fontSize:13, fontWeight:600, color:"#333", marginBottom:8 }}>Accent color</div>
+              <div style={{ display:"flex", gap:8 }}>
+                {ACCENTS.map(c => (
+                  <button key={c} onClick={() => setAccent(c)} title={c} style={{
+                    width:30, height:30, borderRadius:"50%", background:c, cursor:"pointer",
+                    border: accent === c ? "3px solid #333" : "1.5px solid #ddd",
+                  }} />
+                ))}
+              </div>
+            </div>
+
             {/* Crops */}
             {isOwner && (
               <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
@@ -6061,6 +6094,58 @@ export default function App() {
               AI can make mistakes. Verify important information.
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Bottom nav — mobile only, replaces the top tab bar */}
+      {isMobile && !isViewer && (
+        <div style={{
+          position:"fixed", left:0, right:0, bottom:0, zIndex:900,
+          background: theme.card, borderTop:`1px solid ${theme.inputLine}`,
+          padding:"8px 10px 18px", display:"flex", alignItems:"flex-start",
+          boxShadow:"0 -2px 14px rgba(20,40,26,0.12)",
+        }}>
+          {[
+            ["log","Tickets","🎫"],
+            ["applicator","Cab","🚜"],
+          ].map(([v,label,icon]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              flex:1, background:"none", border:"none", cursor:"pointer",
+              display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"6px 0",
+              color: view===v ? theme.green : theme.navOff, fontSize:10, fontWeight:700,
+            }}>
+              <span style={{ fontSize:20, lineHeight:1 }}>{icon}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+          <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
+            <button
+              onClick={() => { setForm(blank()); setEditingId(null); setView("form"); }}
+              title="New Ticket"
+              style={{
+                marginTop:-22, width:58, height:58, borderRadius:20,
+                background: theme.header, border:`4px solid ${theme.card}`, color:"#fff",
+                display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer",
+                fontSize:28, fontWeight:300, lineHeight:1,
+                boxShadow:"0 10px 22px -6px rgba(14,92,50,0.6)",
+              }}
+            >+</button>
+          </div>
+          {[
+            ["fieldMgr","Library","📚"],
+            ["team","Account","👤"],
+          ].map(([v,label,icon]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              flex:1, background:"none", border:"none", cursor:"pointer",
+              display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"6px 0",
+              color: ["fieldMgr","equipMgr","chemMgr"].includes(view) && v==="fieldMgr" ? theme.green
+                   : view===v ? theme.green : theme.navOff,
+              fontSize:10, fontWeight:700,
+            }}>
+              <span style={{ fontSize:20, lineHeight:1 }}>{icon}</span>
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       )}
 
