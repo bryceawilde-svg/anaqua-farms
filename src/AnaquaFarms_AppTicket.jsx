@@ -5913,7 +5913,7 @@ export default function App() {
                     <span>Select from list</span>
                     <span style={{ fontWeight:400, color:"#888" }}>{CROPS_LIST.filter(c => orgCrops.includes(c)).length} / {CROPS_LIST.length} selected</span>
                   </div>
-                  <div style={{ maxHeight:220, overflowY:"auto" }}>
+                  <div style={isMobile ? {} : { maxHeight:220, overflowY:"auto" }}>
                     {CROPS_LIST.map(crop => {
                       const active = orgCrops.includes(crop);
                       return (
