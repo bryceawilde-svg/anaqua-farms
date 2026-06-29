@@ -13,7 +13,7 @@ function mix(a, b, t) {
 }
 
 const LIGHT_BASE = {
-  canvas: "#d2dcc6", card: "#ffffff", line: "#b9c7ab", inputLine: "#d3ddc6", divider: "#eef1ec",
+  canvas: "#e4e9df", card: "#ffffff", line: "#dbe1d6", inputLine: "#e6e9e2", divider: "#eef1ec",
   fill: "#f1f4ee", fill2: "#eef1ec", input: "#fbfcfa",
   ink: "#16211b", ink2: "#54635a", mut: "#94a399",
   blue: "#1f6f8b", tintBlue: "#e6f1f4", amber: "#b9810f", tintAmber: "#faf1da",
@@ -22,7 +22,7 @@ const LIGHT_BASE = {
 };
 
 const DARK_BASE = {
-  canvas: "#0c100d", card: "#1d2820", line: "#37463c", inputLine: "#37463c", divider: "#2c3a31",
+  canvas: "#0f1512", card: "#19221d", line: "#2b362e", inputLine: "#313d35", divider: "#26312a",
   fill: "#232e27", fill2: "#1f2a23", input: "#1d2722",
   ink: "#eef3ee", ink2: "#aebcb2", mut: "#7e8d83",
   blue: "#5fb6cf", tintBlue: "#15303a", amber: "#e3ab43", tintAmber: "#33290f",

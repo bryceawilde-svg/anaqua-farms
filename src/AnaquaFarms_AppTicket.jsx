@@ -2810,6 +2810,22 @@ export default function App() {
       )}
 
       {/* Header */}
+      {isMobile && view === "form" ? (
+        <div style={{ background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:23, fontWeight:800, letterSpacing:"-0.01em" }}>{editingId ? "Edit Ticket" : "New Ticket"}</div>
+            <div style={{ fontSize:12, color: theme.headerSub, marginTop:1 }}>
+              {editingId
+                ? `Editing · No. ${String(tickets.find(t=>t.id===editingId)?.ticketNumber || "").padStart(3,"0")}`
+                : `Draft · No. ${String((Math.max(0, ...tickets.map(t=>t.ticketNumber||0)) + 1)).padStart(3,"0")}`}
+            </div>
+          </div>
+          <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); }}
+            style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", borderRadius:11, cursor:"pointer" }}>
+            Cancel
+          </button>
+        </div>
+      ) : (
       <div style={{ background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)", padding: isMobile ? "12px 14px 0" : "18px 28px 0", boxShadow:"0 3px 16px rgba(0,0,0,0.18)" }}>
         <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:6 }}>
           <div>
@@ -2843,6 +2859,7 @@ export default function App() {
           })}
         </div>}
       </div>
+      )}
 
       <div style={{ maxWidth:880, margin:"0 auto", padding: isMobile ? "12px 10px 80px" : "24px 16px 40px" }}>
 
@@ -3866,7 +3883,7 @@ export default function App() {
 
 
             <div style={{ display:"flex", gap:10, flexDirection:"column", marginTop:16 }}>
-              {editingId && (
+              {!isMobile && editingId && (
                 <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"6px 12px", fontSize:12, color:"#7a5800", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:6 }}>
                   <span>✏ Editing saved ticket — Save will update the existing record.</span>
                   <div style={{ display:"flex", gap:8 }}>
@@ -3890,18 +3907,43 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ display:"flex", gap:isMobile ? 8 : 12, marginTop:16 }}>
-                <button onClick={saveTicket} disabled={isSaving} style={{
-                  background: isSaving ? "#999" : (editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)"),
-                  color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
-                  cursor: isSaving ? "not-allowed" : "pointer", fontSize:15, fontWeight:700,
-                  boxShadow:"0 2px 8px rgba(30,90,8,0.2)", flex:1
-                }}>{isSaving ? "Saving…" : (editingId ? "✏ Update Ticket" : "💾 Save Ticket")}</button>
-                <button onClick={() => { setForm(blank()); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setEditingId(null); }} style={{
-                  background:"#f0f7e8", color:"#555", border:"1.5px solid #c8dbb0",
-                  borderRadius:7, padding:"11px 20px", cursor:"pointer", fontSize:14
-                }}>Clear</button>
+              <div style={isMobile ? { display:"flex", flexDirection:"column", gap:10, marginTop:16 } : { display:"flex", gap:12, marginTop:16 }}>
+                {isMobile ? (
+                  <button onClick={saveTicket} disabled={isSaving} style={{
+                    width:"100%", background: theme.header, color:"#fff", border:"none", borderRadius:15,
+                    padding:16, fontSize:16, fontWeight:800, cursor: isSaving ? "not-allowed" : "pointer",
+                    boxShadow:"0 8px 18px -6px rgba(14,92,50,0.5)",
+                  }}>{isSaving ? "Saving…" : (editingId ? "Save changes" : "Save ticket")}</button>
+                ) : (
+                  <>
+                    <button onClick={saveTicket} disabled={isSaving} style={{
+                      background: isSaving ? "#999" : (editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)"),
+                      color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
+                      cursor: isSaving ? "not-allowed" : "pointer", fontSize:15, fontWeight:700,
+                      boxShadow:"0 2px 8px rgba(30,90,8,0.2)", flex:1
+                    }}>{isSaving ? "Saving…" : (editingId ? "✏ Update Ticket" : "💾 Save Ticket")}</button>
+                    <button onClick={() => { setForm(blank()); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setEditingId(null); }} style={{
+                      background:"#f0f7e8", color:"#555", border:"1.5px solid #c8dbb0",
+                      borderRadius:7, padding:"11px 20px", cursor:"pointer", fontSize:14
+                    }}>Clear</button>
+                  </>
+                )}
               </div>
+
+              {isMobile && editingId && (
+                <button onClick={async () => {
+                  if (!window.confirm("Delete this ticket? This cannot be undone.")) return;
+                  const { error } = await supabase.from("tickets").delete().eq("id", editingId);
+                  if (error) { showToast("Failed to delete ticket: " + error.message); return; }
+                  setTickets(t => t.filter(x => x.id !== editingId));
+                  setForm(blank()); setEditingId(null); setManualTank(false);
+                  setView("log");
+                }} style={{
+                  width:"100%", marginTop:10, padding:14, borderRadius:14, border:`1.5px solid ${theme.inputLine}`,
+                  background: theme.card, color:"#c0432f", fontSize:14, fontWeight:700, cursor:"pointer",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:7,
+                }}>🗑 Delete ticket</button>
+              )}
             </div>
           </div>
         )}
