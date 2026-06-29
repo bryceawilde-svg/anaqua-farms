@@ -13,7 +13,7 @@ function mix(a, b, t) {
 }
 
 const LIGHT_BASE = {
-  canvas: "#e4e9df", card: "#ffffff", line: "#dbe1d6", inputLine: "#e6e9e2", divider: "#eef1ec",
+  canvas: "#d2dcc6", card: "#ffffff", line: "#b9c7ab", inputLine: "#d3ddc6", divider: "#eef1ec",
   fill: "#f1f4ee", fill2: "#eef1ec", input: "#fbfcfa",
   ink: "#16211b", ink2: "#54635a", mut: "#94a399",
   blue: "#1f6f8b", tintBlue: "#e6f1f4", amber: "#b9810f", tintAmber: "#faf1da",
