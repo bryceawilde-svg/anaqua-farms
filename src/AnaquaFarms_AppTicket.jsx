@@ -1439,9 +1439,11 @@ export default function App() {
     fontSize:14, fontWeight:800, color: theme.ink, marginBottom:12,
   } : sectionTitle;
   const pillBtn = (active) => isMobile ? {
-    borderColor: active ? theme.green : theme.inputLine,
-    background:  active ? theme.green : theme.input,
-    color:       active ? "#fff"       : theme.ink2,
+    borderWidth: active ? 2 : 1.5,
+    borderColor: active ? theme.green : "transparent",
+    background:  active ? theme.card  : theme.fill,
+    color:       active ? theme.green : theme.ink2,
+    borderRadius: 10,
   } : {
     borderColor: active ? "#2a5c0f" : "#c8dbb0",
     background:  active ? "#2a5c0f" : "#f9fdf5",
