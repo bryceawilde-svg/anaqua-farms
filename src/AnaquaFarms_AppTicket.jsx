@@ -2836,10 +2836,6 @@ export default function App() {
               style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", borderRadius:11, cursor:"pointer" }}>
               Cancel
             </button>
-          ) : view === "log" ? (
-            <div style={{ width:38, height:38, borderRadius:12, background:"rgba(255,255,255,0.14)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            </div>
           ) : null}
         </div>
       ) : (
