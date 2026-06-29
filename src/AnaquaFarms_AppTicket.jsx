@@ -3073,7 +3073,7 @@ export default function App() {
                     style={{ padding:"6px 14px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}
                   >+ Add</button>
                 </div>
-                {(form.targetPest||[]).length > 0 && (
+                {!isMobile && (form.targetPest||[]).length > 0 && (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
                     {(form.targetPest||[]).map(p => (
                       <span key={p} style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#2a5c0f", color:"#fff", borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700 }}>
@@ -3084,7 +3084,7 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {(form.targetPest||[]).length > 0 && isPro && (
+                {!isMobile && (form.targetPest||[]).length > 0 && isPro && (
                   <div style={{ marginTop:8 }}>
                     <button
                       disabled={aiSuggestLoading}
