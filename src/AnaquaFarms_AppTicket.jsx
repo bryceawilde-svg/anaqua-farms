@@ -4025,22 +4025,27 @@ export default function App() {
 
                       {/* Chemicals */}
                       {t.chemicals.length > 0 && (
-                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
-                          <thead>
-                            <tr>{["Chemical","Rate/Acre","Unit"].map(h => (
-                              <th key={h} style={{ ...th, fontSize:10, padding:"4px 6px" }}>{h}</th>
-                            ))}</tr>
-                          </thead>
-                          <tbody>
-                            {t.chemicals.map((c,i) => (
-                              <tr key={i}>
-                                <td style={td}>{c.name}</td>
-                                <td style={td}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</td>
-                                <td style={td}>{c.unit}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <>
+                          {isMobile && <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:5 }}>TANK MIX</div>}
+                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
+                            <thead>
+                              <tr>{["Chemical","Rate/Acre","Unit"].map(h => (
+                                <th key={h} style={isMobile
+                                  ? { padding:"4px 0", background:"transparent", color: theme.mut, fontSize:10, fontWeight:700, textAlign:"left", letterSpacing:"0.04em", borderBottom:`1px solid ${theme.divider}` }
+                                  : { ...th, fontSize:10, padding:"4px 6px" }}>{h}</th>
+                              ))}</tr>
+                            </thead>
+                            <tbody>
+                              {t.chemicals.map((c,i) => (
+                                <tr key={i}>
+                                  <td style={isMobile ? { padding:"6px 0", borderBottom:`1px solid ${theme.divider}`, color: theme.ink, fontWeight:600 } : td}>{c.name}</td>
+                                  <td style={isMobile ? { padding:"6px 0", borderBottom:`1px solid ${theme.divider}`, color: theme.ink2, fontFamily:"'Space Grotesk',monospace" } : td}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</td>
+                                  <td style={isMobile ? { padding:"6px 0", borderBottom:`1px solid ${theme.divider}`, color: theme.ink2 } : td}>{c.unit}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
                       )}
 
                       {t.notes && (
