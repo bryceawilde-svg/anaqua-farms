@@ -5860,6 +5860,101 @@ export default function App() {
 
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitleT}>Chemical Library ({chemicals.length})</div>
+              {isMobile ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                  {chemicals.map(c => {
+                    const isEditing = editingChemId === c.id;
+                    if (isEditing) {
+                      const draftIsDryOrLb = chemContainerIsLb(editChemDraft);
+                      return (
+                        <div key={c.id} style={{ border:`1.5px solid ${theme.green}`, borderRadius:14, padding:"12px 13px", background: theme.card }}>
+                          <div style={{ display:"flex", flexDirection:"column", gap:9, marginBottom:10 }}>
+                            <div>
+                              <label style={{ ...labelT, fontSize:10 }}>Chemical Name</label>
+                              <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={inp} />
+                            </div>
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
+                              <div>
+                                <label style={{ ...labelT, fontSize:10 }}>EPA #</label>
+                                <input value={editChemDraft.epa||""} onChange={e=>setEditChemDraft(d=>({...d,epa:e.target.value}))} style={inp} />
+                              </div>
+                              <div>
+                                <label style={{ ...labelT, fontSize:10 }}>REI</label>
+                                <input value={editChemDraft.rei||""} onChange={e=>setEditChemDraft(d=>({...d,rei:e.target.value}))} style={inp} />
+                              </div>
+                            </div>
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
+                              <div>
+                                <label style={{ ...labelT, fontSize:10 }}>Unit</label>
+                                <select value={editChemDraft.unit||"oz"} onChange={e=>setEditChemDraft(d=>({...d,unit:e.target.value}))} style={{ ...inp, fontFamily:"inherit" }}>
+                                  <optgroup label="Imperial">
+                                    <option value="oz">oz (liquid)</option>
+                                    <option value="dry oz">dry oz</option>
+                                    <option value="lb">lb</option>
+                                    <option value="gal">gal</option>
+                                    <option value="pt">pt</option>
+                                    <option value="qt">qt</option>
+                                  </optgroup>
+                                  <optgroup label="Metric">
+                                    <option value="mL">mL</option>
+                                    <option value="L">L</option>
+                                    <option value="g">g</option>
+                                    <option value="kg">kg</option>
+                                  </optgroup>
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ ...labelT, fontSize:10 }}>Form. Type</label>
+                                <select value={editChemDraft.formType||"L"} onChange={e=>setEditChemDraft(d=>({...d,formType:e.target.value}))} style={{ ...inp, fontFamily:"inherit" }}>
+                                  <option value="L">L</option>
+                                  <option value="E">E</option>
+                                  <option value="S">S</option>
+                                  <option value="WDG">WDG</option>
+                                  <option value="WP">WP</option>
+                                  <option value="D">D</option>
+                                  <option value="A">A</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <label style={{ ...labelT, fontSize:10 }}>Container ({draftIsDryOrLb ? "lb" : "gal"})</label>
+                              <input type="number" min="0" step="0.01" value={editChemDraft.containerSize||""} onChange={e=>setEditChemDraft(d=>({...d,containerSize:e.target.value}))} style={inp} placeholder="blank=tote" />
+                            </div>
+                          </div>
+                          <div style={{ display:"flex", gap:8 }}>
+                            <button onClick={() => setEditingChemId(null)} style={{ flex:1, padding:10, borderRadius:10, border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.ink2, fontWeight:700, fontSize:13, cursor:"pointer" }}>Cancel</button>
+                            <button onClick={saveChemEdit} style={{ flex:1, padding:10, borderRadius:10, border:"none", background: theme.green, color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>Save</button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    const csVal = parseFloat(c.containerSize);
+                    const isDryOrLb = chemContainerIsLb(c);
+                    return (
+                      <div key={c.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
+                        <span style={{ width:34, height:34, borderRadius:10, background: theme.tintBlue, color: theme.blue, fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{c.formType||"—"}</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{c.name}</div>
+                          <div style={{ fontSize:11.5, color: theme.mut, fontFamily:"'Space Grotesk',monospace" }}>EPA {c.epa}</div>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontSize:11, color: theme.mut }}>REI</div>
+                          <div style={{ fontSize:13, fontWeight:700, color: theme.ink2 }}>{c.rei}</div>
+                        </div>
+                        {isOwner && (
+                          <div style={{ display:"flex", gap:8, marginLeft:4 }}>
+                            <button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:14 }}>✏</button>
+                            <button onClick={() => deleteChem(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {chemicals.length === 0 && (
+                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No chemicals added yet.</div>
+                  )}
+                </div>
+              ) : (
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
@@ -5962,6 +6057,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
 
             {/* Pest Library */}
