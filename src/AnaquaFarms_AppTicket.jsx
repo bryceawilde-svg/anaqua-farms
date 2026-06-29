@@ -2876,6 +2876,20 @@ export default function App() {
 
       <div style={{ maxWidth:880, margin:"0 auto", padding: isMobile ? "12px 10px 80px" : "24px 16px 40px" }}>
 
+        {/* Library sub-nav — mobile only, since the top tabs are hidden on mobile */}
+        {isMobile && ["fieldMgr","equipMgr","chemMgr"].includes(view) && (
+          <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+            {[["chemMgr","Chems"],["fieldMgr","Fields"],["equipMgr","Equip"]].map(([v,l]) => (
+              <button key={v} onClick={() => setView(v)} style={{
+                flex:1, padding:"9px 0", border:"none", borderRadius:11, cursor:"pointer",
+                fontSize:13, fontWeight:700,
+                background: view===v ? theme.header : theme.fill,
+                color:      view===v ? "#fff"        : theme.ink2,
+              }}>{l}</button>
+            ))}
+          </div>
+        )}
+
         {/* ══ APPLICATOR VIEW ══════════════════════════════════════════════════════ */}
         {view === "applicator" && (
           <ApplicatorView
