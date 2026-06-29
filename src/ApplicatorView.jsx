@@ -73,7 +73,15 @@ function ensureSchedule(ticket, enrichedFields) {
   }));
 }
 
-export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue, farmLat, farmLng, onRefresh }) {
+const LIGHT_FALLBACK = {
+  card:"#fff", line:"#c8dbb0", ink:"#1a1a1a", ink2:"#555", mut:"#aaa",
+  green:"#2a5c0f", header:"#2a5c0f", onGreen:"#2a5c0f", tintGreen:"#f0f7e8",
+  divider:"#eef5e8", fill:"#f5f5f5", fill2:"#eee", amber:"#c07000", tintAmber:"#fffbe6",
+  navOff:"#999", inputLine:"#c8dbb0",
+};
+
+export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue, farmLat, farmLng, onRefresh, isMobile, theme }) {
+  const t_ = theme || LIGHT_FALLBACK;
   const [selectedTicket,    setSelectedTicket]    = useState(null);
   const [focusFieldId,      setFocusFieldId]      = useState(null);
   const [completedExpanded, setCompletedExpanded] = useState(false);
@@ -89,6 +97,96 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
 
   // ── Ticket list ──────────────────────────────────────────────────────────
   if (!selectedTicket) {
+    if (isMobile) {
+      const active = tickets.filter(t => t.queue_status !== "completed");
+      const done   = tickets.filter(t => t.queue_status === "completed");
+      return (
+        <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 24 }}>
+          <div style={{ padding: "2px 4px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 12, color: t_.mut }}>{active.length} ticket{active.length !== 1 ? "s" : ""} queued · tap a ticket to spray</div>
+            <button
+              onClick={async () => { setSyncing(true); await onRefresh?.(); setSyncing(false); }}
+              disabled={syncing}
+              title="Sync latest data"
+              style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color: t_.green }}
+            >⟳</button>
+          </div>
+
+          {tickets.length === 0 && (
+            <div style={{ textAlign:"center", padding:"48px 24px", color: t_.mut }}>
+              <div style={{ fontSize:14, fontWeight:700, color: t_.ink2, marginBottom:4 }}>Queue is empty</div>
+              <div style={{ fontSize:12.5 }}>Open a ticket and tap <span style={{ fontWeight:700, color: t_.onGreen }}>Add to cab queue</span> to send it here.</div>
+            </div>
+          )}
+
+          <div style={{ display:"flex", flexDirection:"column", gap:13 }}>
+            {active.map(t => {
+              const sched     = t.fieldSchedule || [];
+              const doneCount = sched.filter(fs => fs.actualTimeEnd).length;
+              const total     = (t.selectedFields || []).length;
+              const remAcres  = (t.selectedFields||[]).filter(f => !sched.find(fs=>fs.id===f.id)?.actualTimeEnd).reduce((s,f)=>s+(parseFloat(f.acres)||0),0);
+              const status       = t.queue_status || "queued";
+              const statusBadge  = status === "in_progress"
+                ? { label:"● In Progress", bg: t_.tintGreen, color: t_.onGreen }
+                : { label:"○ Queued",      bg: t_.fill,      color: t_.ink2 };
+              const mixStr = (t.chemicals||[]).filter(c=>c.name).map(c=>c.name).join(", ") || "No products";
+              return (
+                <div key={t.id}
+                  onClick={() => { setSelectedTicket(t); setFocusFieldId(null); setCompletedExpanded(false); }}
+                  style={{ background: t_.card, borderRadius:16, padding:"14px 15px", border:`1px solid ${t_.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", cursor:"pointer" }}
+                >
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:9 }}>
+                    <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:17, fontWeight:700, color: t_.onGreen }}>
+                      No.{String(t.ticketNumber || t.ticket_number || "").padStart(3, "0")}
+                    </span>
+                    <span style={{ fontSize:16, fontWeight:800, color: t_.ink }}>{t.crop}</span>
+                    <span style={{ background: statusBadge.bg, color: statusBadge.color, borderRadius:6, padding:"2px 7px", fontSize:10.5, fontWeight:700 }}>{statusBadge.label}</span>
+                    {isOwner && (
+                      <button onClick={(e) => { e.stopPropagation(); onToggleQueue && onToggleQueue(t.id, false); }}
+                        title="Remove from queue"
+                        style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", color: t_.mut, fontSize:18, lineHeight:1 }}>×</button>
+                    )}
+                  </div>
+                  <div style={{ fontSize:12.5, color: t_.mut, marginBottom:11, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{mixStr}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ flex:1, height:7, background: t_.fill2, borderRadius:999, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width: `${total ? Math.round(doneCount/total*100) : 0}%`, background: t_.green, borderRadius:999 }} />
+                    </div>
+                    <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:12, fontWeight:700, color: t_.ink2 }}>{doneCount}/{total}</span>
+                  </div>
+                  <div style={{ fontSize:11.5, color: t_.mut, marginTop:7 }}>{total - doneCount} field{total-doneCount!==1?"s":""} · {remAcres.toFixed(1)} ac left</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {done.length > 0 && (
+            <div style={{ marginTop:13 }}>
+              <button onClick={() => setCompletedExpanded(e => !e)}
+                style={{ width:"100%", padding:"10px 14px", background: t_.fill, border:"none", borderRadius: completedExpanded ? "12px 12px 0 0" : 12, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:12, fontWeight:700, color: t_.ink2 }}>
+                <span>✓ Completed ({done.length})</span>
+                <span>{completedExpanded ? "▲" : "▼"}</span>
+              </button>
+              {completedExpanded && done.map(t => (
+                <div key={t.id}
+                  style={{ borderTop:`1px solid ${t_.divider}`, background: t_.card, padding:"10px 14px", cursor:"pointer", display:"flex", alignItems:"center", gap:8, opacity:0.75 }}
+                  onClick={() => { setSelectedTicket(t); setFocusFieldId(null); setCompletedExpanded(false); }}>
+                  <span style={{ fontWeight:800, fontSize:14, color: t_.ink2, fontFamily:"'Space Grotesk',monospace" }}>
+                    #{String(t.ticketNumber || t.ticket_number || "").padStart(3, "0")}
+                  </span>
+                  {t.crop && <span style={{ fontSize:13, color: t_.mut }}>{t.crop}</span>}
+                  <span style={{ marginLeft:"auto", fontSize:11, color: t_.mut }}>{(t.selectedFields||[]).length} fields</span>
+                  {isOwner && (
+                    <button onClick={(e) => { e.stopPropagation(); onToggleQueue && onToggleQueue(t.id, false); }}
+                      style={{ background:"none", border:"none", cursor:"pointer", fontSize:14, color: t_.mut }}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
     return (
       <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
         <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #e8f5e0", display: "flex", alignItems: "center", gap: 10 }}>

@@ -2779,6 +2779,8 @@ export default function App() {
               currentOrg?.name,
               isMetric
             )}
+            isMobile={isMobile}
+            theme={theme}
           />
         )}
 
