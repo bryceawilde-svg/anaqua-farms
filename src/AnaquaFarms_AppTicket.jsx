@@ -3358,9 +3358,13 @@ export default function App() {
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={{ marginBottom: isMobile ? 0 : 12 }}>
                 <label style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, display:"block", marginBottom:11 } : labelT}>Notes</label>
-                <input value={form.notes} onChange={e => set("notes",e.target.value)} style={isMobile
-                  ? { width:"100%", minHeight:74, border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"11px 12px", fontSize:14, color:theme.ink, background:theme.input, fontFamily:"inherit" }
-                  : inp} placeholder="Optional…"/>
+                {isMobile ? (
+                  <textarea value={form.notes} onChange={e => set("notes",e.target.value)} placeholder="Optional…"
+                    style={{ width:"100%", minHeight:74, boxSizing:"border-box", resize:"vertical", border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"11px 12px", fontSize:14, color:theme.ink, background:theme.input, fontFamily:"inherit", lineHeight:1.45 }}
+                  />
+                ) : (
+                  <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
+                )}
               </div>
             </div>
 
