@@ -3784,7 +3784,10 @@ export default function App() {
                   {/* Search bar */}
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
                     <div style={{ position:"relative" }}>
-                      <span style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#aaa", pointerEvents:"none" }}>🌾</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={theme.mut} strokeWidth="2.2" strokeLinecap="round"
+                        style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                        <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
+                      </svg>
                       <input
                         value={logFieldSearch}
                         onChange={e => setLogFieldSearch(e.target.value)}
@@ -3793,7 +3796,10 @@ export default function App() {
                       />
                     </div>
                     <div style={{ position:"relative" }}>
-                      <span style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#aaa", pointerEvents:"none" }}>🧪</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={theme.mut} strokeWidth="2.2" strokeLinecap="round"
+                        style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                        <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
+                      </svg>
                       <input
                         value={logChemSearch}
                         onChange={e => setLogChemSearch(e.target.value)}
@@ -3819,20 +3825,64 @@ export default function App() {
               const isOpen = expandedTicket === t.id;
               const ticketNum = String(t.ticketNumber || "?").padStart(3, "0");
               const pestStr   = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest||"");
+              const sched      = t.fieldSchedule || [];
+              const anyDate    = sched.some(fs => fs.actualDateEnd);
+              const allDates   = sched.length > 0 && sched.every(fs => fs.actualDateEnd);
+              const statusPill = allDates
+                ? { label:"Completed",   bg: theme.tintGreen, color: theme.onGreen }
+                : anyDate
+                ? { label:"In progress", bg: theme.tintAmber, color: theme.amber }
+                : null;
               return (
-                <div key={t.id} style={{
+                <div key={t.id} style={isMobile ? {
+                  background: theme.card,
+                  border: `1px solid ${isOpen ? theme.green : theme.line}`,
+                  outline: t.team_view ? `2px solid ${theme.blue}` : "none",
+                  borderRadius:14, marginBottom:8,
+                  boxShadow: isOpen ? "0 6px 18px -9px rgba(20,40,26,0.22)" : "0 6px 18px -9px rgba(20,40,26,0.16)",
+                  overflow:"hidden", transition:"box-shadow 0.15s"
+                } : {
                   background:"#fff",
                   border: `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
                   outline: t.team_view ? `3px solid #1a6bbf` : "none",
-                  borderRadius:8, marginBottom: isMobile ? 8 : 10,
+                  borderRadius:8, marginBottom:10,
                   boxShadow: isOpen ? "0 2px 12px rgba(42,92,15,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
                   overflow:"hidden", transition:"box-shadow 0.15s"
                 }}>
 
                   {/* ── Collapsed row — always visible, tap to toggle */}
+                  {isMobile ? (
+                    <div onClick={() => setExpandedTicket(isOpen ? null : t.id)}
+                      style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", cursor:"pointer", userSelect:"none" }}>
+                      <div style={{
+                        flexShrink:0, width:36, height:36, borderRadius:10, background: theme.tintGreen,
+                        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                      }}>
+                        <div style={{ fontSize:6.5, fontWeight:700, color: theme.navOff, letterSpacing:"0.06em", lineHeight:1 }}>NO.</div>
+                        <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:13, fontWeight:700, color: theme.onGreen, lineHeight:1.05 }}>{ticketNum}</div>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{t.crop || "Ticket"}</span>
+                          {t.team_view && (
+                            <span style={{ display:"inline-flex", alignItems:"center", gap:3, background: theme.tintGreen, color: theme.onGreen, borderRadius:6, padding:"2px 6px", fontSize:9.5, fontWeight:800, whiteSpace:"nowrap" }}>● CAB</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize:11.5, color: theme.mut, marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"}
+                        </div>
+                      </div>
+                      <div style={{ flexShrink:0, display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4, minWidth:70 }}>
+                        <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:13, fontWeight:700, color: theme.ink }}>
+                          {t.totalAcres ? fmtAcresShort(t.totalAcres, isMetric) : ""}
+                        </div>
+                        {statusPill && <span style={{ background: statusPill.bg, color: statusPill.color, borderRadius:6, padding:"2px 7px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{statusPill.label}</span>}
+                      </div>
+                    </div>
+                  ) : (
                   <div onClick={() => setExpandedTicket(isOpen ? null : t.id)}
                     style={{
-                      display:"flex", alignItems:"center", gap:10, padding: isMobile ? "10px 12px" : "12px 16px",
+                      display:"flex", alignItems:"center", gap:10, padding:"12px 16px",
                       cursor:"pointer", userSelect:"none",
                       background: isOpen ? "#f0f7e8" : "#fff"
                     }}>
@@ -3844,20 +3894,14 @@ export default function App() {
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                         {t.crop && <span style={{ fontSize:12, color:"#2a5c0f", fontWeight:600 }}>{t.crop}</span>}
-                        {(() => {
-                          const sched = t.fieldSchedule || [];
-                          const anyDate = sched.some(fs => fs.actualDateEnd);
-                          const allDates = sched.length > 0 && sched.every(fs => fs.actualDateEnd);
-                          if (allDates) return <span style={{ fontSize:10, fontWeight:700, background:"#d4edda", color:"#1a6b2f", borderRadius:4, padding:"1px 6px" }}>Completed</span>;
-                          if (anyDate)  return <span style={{ fontSize:10, fontWeight:700, background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 6px" }}>In Progress</span>;
-                          return null;
-                        })()}
+                        {allDates && <span style={{ fontSize:10, fontWeight:700, background:"#d4edda", color:"#1a6b2f", borderRadius:4, padding:"1px 6px" }}>Completed</span>}
+                        {!allDates && anyDate && <span style={{ fontSize:10, fontWeight:700, background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 6px" }}>In Progress</span>}
                       </div>
                       <div style={{ fontSize:11, color:"#666", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                         {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"}
                       </div>
                     </div>
-                    {isOwner && !((() => { const s = t.fieldSchedule||[]; return s.length > 0 && s.every(fs => fs.actualDateEnd); })()) && (
+                    {isOwner && !allDates && (
                       <button
                         onClick={e => { e.stopPropagation(); toggleTeamView(t.id, t.team_view); }}
                         title={t.team_view ? "Remove from queue" : "Add to queue"}
@@ -3870,34 +3914,48 @@ export default function App() {
                       >{t.team_view ? "✓" : "+"}</button>
                     )}
                   </div>
+                  )}
 
                   {/* ── Expanded detail */}
                   {isOpen && (
-                    <div style={{ padding: isMobile ? "10px 12px" : "14px 16px", borderTop:"1.5px solid #eef5e8" }}>
+                    <div style={isMobile
+                      ? { padding:"12px 14px 14px", borderTop:`1px solid ${theme.divider}` }
+                      : { padding:"14px 16px", borderTop:"1.5px solid #eef5e8" }}>
+                      {isMobile && isOwner && !allDates && (
+                        <button
+                          onClick={() => toggleTeamView(t.id, t.team_view)}
+                          style={{
+                            width:"100%", padding:11, borderRadius:11, border:"none", cursor:"pointer",
+                            marginBottom:11, fontSize:13, fontWeight:700,
+                            background: t.team_view ? theme.tintGreen : theme.header,
+                            color: t.team_view ? theme.onGreen : "#fff",
+                          }}
+                        >{t.team_view ? "✓ In cab queue" : "+ Add to cab queue"}</button>
+                      )}
 
                       {/* Summary row */}
-                      <div style={{ display:"flex", gap:8, fontSize:12, color:"#555", flexWrap:"wrap", marginBottom:10 }}>
+                      <div style={{ display:"flex", gap:8, fontSize:12, color: isMobile ? theme.ink2 : "#555", flexWrap:"wrap", marginBottom:isMobile?12:10 }}>
                         {[
                           t.totalAcres        && fmtAcres(t.totalAcres, isMetric),
                           t.galPerAcre        && fmtGpa(t.galPerAcre, isMetric),
                           t.equipmentType,
                           t.licensedApplicant,
                         ].filter(Boolean).map((item, i) => (
-                          <span key={i} style={{ background:"#f0f7e8", borderRadius:4, padding:"2px 7px", whiteSpace:"nowrap" }}>{item}</span>
+                          <span key={i} style={{ background: isMobile ? theme.fill : "#f0f7e8", color: isMobile ? theme.ink2 : "#555", borderRadius: isMobile?7:4, padding: isMobile?"4px 9px":"2px 7px", whiteSpace:"nowrap", fontWeight: isMobile?600:400 }}>{item}</span>
                         ))}
                         {(() => {
-                          const sched = t.fieldSchedule || [];
                           const remAcres = sched.filter(fs => !fs.actualDateEnd).reduce((sum, fs) => sum + (parseFloat(fs.acres) || 0), 0);
                           if (!sched.length || remAcres <= 0) return null;
-                          return <span style={{ background:"#fff3cd", color:"#856404", borderRadius:4, padding:"2px 7px", whiteSpace:"nowrap", fontWeight:700 }}>{isMetric ? `${(remAcres * 0.404686).toFixed(1)} ha` : `${remAcres.toFixed(1)} ac`} remaining</span>;
+                          return <span style={{ background: isMobile ? theme.tintAmber : "#fff3cd", color: theme.amber, borderRadius: isMobile?7:4, padding: isMobile?"4px 9px":"2px 7px", whiteSpace:"nowrap", fontWeight:700 }}>{isMetric ? `${(remAcres * 0.404686).toFixed(1)} ha` : `${remAcres.toFixed(1)} ac`} remaining</span>;
                         })()}
                       </div>
 
                       {/* Field schedule */}
+                      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:5, display: isMobile ? "block" : "none" }}>FIELD SCHEDULE</div>
                       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                         <thead>
                           <tr>{["Field","Acres","App. Date","Wind","Temp"].map(h => (
-                            <th key={h} style={{ textAlign: h==="Field"?"left":"right", color:"#4a7a20", fontSize:10, fontWeight:700, paddingBottom:3, borderBottom:"1px solid #c8dbb0" }}>{h}</th>
+                            <th key={h} style={{ textAlign: h==="Field"?"left":"right", color: isMobile ? theme.mut : "#4a7a20", fontSize: isMobile?8.5:10, fontWeight:700, paddingBottom:3, borderBottom: isMobile ? "none" : "1px solid #c8dbb0" }}>{h}</th>
                           ))}</tr>
                         </thead>
                         <tbody>
@@ -3906,10 +3964,11 @@ export default function App() {
                             const editingWind = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.windSpeed";
                             const editingTemp = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.airTemp";
                             const w = fs.fieldWeather || {};
+                            const rowDim = isMobile && !fs.actualDateEnd ? 0.5 : 1;
                             return (
-                              <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
-                                <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
-                                <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
+                              <tr key={fs.id || i} style={{ borderBottom: isMobile ? `1px solid ${theme.divider}` : "1px solid #eef5e8", opacity: rowDim }}>
+                                <td style={{ padding:"3px 0", fontWeight:600, color: isMobile ? theme.ink : "#2a5c0f" }}>{i+1}. {fs.name}</td>
+                                <td style={{ padding:"3px 0", textAlign:"right", color: isMobile ? theme.ink2 : "#555", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
                                 <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }}
                                   onClick={() => !editingDate && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualDateEnd" })}>
                                   {editingDate ? (
@@ -3984,10 +4043,17 @@ export default function App() {
                         </table>
                       )}
 
-                      {t.notes && <div style={{ fontSize:12, color:"#666", marginBottom:10 }}>Notes: {t.notes}</div>}
+                      {t.notes && (
+                        <div style={isMobile ? {
+                          fontSize:13, color: theme.ink2, lineHeight:1.45, background: theme.fill,
+                          borderRadius:10, padding:"9px 11px", marginBottom:14,
+                        } : { fontSize:12, color:"#666", marginBottom:10 }}>
+                          {isMobile ? t.notes : `Notes: ${t.notes}`}
+                        </div>
+                      )}
 
                       {/* Actions */}
-                      <div style={{ display:"flex", justifyContent:"flex-start", gap:8, flexWrap:"wrap" }}>
+                      <div style={isMobile ? { display:"flex", gap:8 } : { display:"flex", justifyContent:"flex-start", gap:8, flexWrap:"wrap" }}>
                         <button onClick={() => {
                           setForm({
                             ...blank(),
@@ -4014,10 +4080,13 @@ export default function App() {
                           setEditingId(null);
                           setExpandedTicket(null);
                           setView("form");
-                        }} style={{
+                        }} style={isMobile ? {
+                          flex:1, padding:11, borderRadius:11, border:`1.5px solid ${theme.inputLine}`,
+                          background: theme.card, color: theme.onGreen, fontSize:13, fontWeight:700, cursor:"pointer",
+                        } : {
                           background:"#e8f5dc", color:"#2a5c0f", border:"1.5px solid #c8dbb0", borderRadius:5,
                           padding:"7px 14px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                        }}>Copy Mix</button>
+                        }}>Copy mix</button>
                         <button onClick={() => {
                           printTicket(
                             t,
@@ -4027,7 +4096,10 @@ export default function App() {
                             currentOrg?.name,
                             isMetric
                           );
-                        }} style={{
+                        }} style={isMobile ? {
+                          flex:1, padding:11, borderRadius:11, border:"none", cursor:"pointer",
+                          background: theme.btnDark, color:"#fff", fontSize:13, fontWeight:700,
+                        } : {
                           background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                         }}>Print</button>
@@ -4052,7 +4124,10 @@ export default function App() {
                           setManualGpa(false);
                           setExpandedTicket(null);
                           setView("form");
-                        }} style={{
+                        }} style={isMobile ? {
+                          flex:1, padding:11, borderRadius:11, border:`1.5px solid ${theme.inputLine}`,
+                          background: theme.card, color: theme.ink, fontSize:13, fontWeight:700, cursor:"pointer",
+                        } : {
                           background:"#2a5c0f", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700
                         }}>Edit</button>
@@ -6102,19 +6177,19 @@ export default function App() {
         <div style={{
           position:"fixed", left:0, right:0, bottom:0, zIndex:900,
           background: theme.card, borderTop:`1px solid ${theme.inputLine}`,
-          padding:"8px 10px 18px", display:"flex", alignItems:"flex-start",
+          padding:"8px 10px 22px", display:"flex", alignItems:"flex-start",
           boxShadow:"0 -2px 14px rgba(20,40,26,0.12)",
         }}>
           {[
-            ["log","Tickets","🎫"],
-            ["applicator","Cab","🚜"],
-          ].map(([v,label,icon]) => (
+            ["log", "Tickets", <path key="p" d="M8 8h8M8 12h8M8 16h5" />, <rect key="r" x="4" y="3" width="16" height="18" rx="2" />],
+            ["applicator", "Cab", <path key="p" d="M3 16V6h11v10M14 9h4l3 3v4h-7" />, <><circle key="c1" cx="7" cy="18" r="2" /><circle key="c2" cx="17.5" cy="18" r="2" /></>],
+          ].map(([v,label,inner,outer]) => (
             <button key={v} onClick={() => setView(v)} style={{
               flex:1, background:"none", border:"none", cursor:"pointer",
-              display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"6px 0",
+              display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"6px 0",
               color: view===v ? theme.green : theme.navOff, fontSize:10, fontWeight:700,
             }}>
-              <span style={{ fontSize:20, lineHeight:1 }}>{icon}</span>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{outer}{inner}</svg>
               <span>{label}</span>
             </button>
           ))}
@@ -6126,26 +6201,38 @@ export default function App() {
                 marginTop:-22, width:58, height:58, borderRadius:20,
                 background: theme.header, border:`4px solid ${theme.card}`, color:"#fff",
                 display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer",
-                fontSize:28, fontWeight:300, lineHeight:1,
                 boxShadow:"0 10px 22px -6px rgba(14,92,50,0.6)",
               }}
-            >+</button>
+            >
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
           </div>
           {[
-            ["fieldMgr","Library","📚"],
-            ["team","Account","👤"],
-          ].map(([v,label,icon]) => (
-            <button key={v} onClick={() => setView(v)} style={{
-              flex:1, background:"none", border:"none", cursor:"pointer",
-              display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"6px 0",
-              color: ["fieldMgr","equipMgr","chemMgr"].includes(view) && v==="fieldMgr" ? theme.green
-                   : view===v ? theme.green : theme.navOff,
-              fontSize:10, fontWeight:700,
-            }}>
-              <span style={{ fontSize:20, lineHeight:1 }}>{icon}</span>
-              <span>{label}</span>
-            </button>
-          ))}
+            ["fieldMgr", "Library", "fieldMgr"],
+            ["team", "Account", "team"],
+          ].map(([v,label,activeKey]) => {
+            const active = activeKey === "fieldMgr"
+              ? ["fieldMgr","equipMgr","chemMgr"].includes(view)
+              : view === activeKey;
+            return (
+              <button key={v} onClick={() => setView(v)} style={{
+                flex:1, background:"none", border:"none", cursor:"pointer",
+                display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"6px 0",
+                color: active ? theme.green : theme.navOff, fontSize:10, fontWeight:700,
+              }}>
+                {v === "fieldMgr" ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+                  </svg>
+                )}
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
