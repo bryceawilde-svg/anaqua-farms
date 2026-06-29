@@ -5538,6 +5538,34 @@ export default function App() {
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
               </div>}
+              {isMobile ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                  {equipment.map(eq => (
+                    <div key={eq.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
+                      <span style={{ width:34, height:34, borderRadius:10, background: theme.fill, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={theme.ink2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1V21a2 2 0 11-4 0v-.1A1.6 1.6 0 005 19.4l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H1a2 2 0 110-4h.1A1.6 1.6 0 002.6 5l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V1a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H23a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>
+                      </span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{eq.name}</div>
+                        <div style={{ fontSize:11.5, color: theme.mut }}>Sprayer / tractor</div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.onGreen }}>{eq.acresPerHour || 75}</div>
+                        <div style={{ fontSize:10.5, color: theme.mut }}>ac/hr</div>
+                      </div>
+                      {isOwner && <button onClick={() => {
+                        setEquipment(e=>e.filter(x=>x.id!==eq.id));
+                        supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => {
+                          if (error) showToast("Failed to delete equipment: " + error.message);
+                        });
+                      }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18, marginLeft:4 }}>×</button>}
+                    </div>
+                  ))}
+                  {equipment.length === 0 && (
+                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No equipment added yet.</div>
+                  )}
+                </div>
+              ) : (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Equipment Name</th>
@@ -5566,6 +5594,7 @@ export default function App() {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
 
             {/* Licensed Applicators */}
@@ -5591,6 +5620,30 @@ export default function App() {
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
               </div>}
+              {isMobile ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                  {licensed.map(op => (
+                    <div key={op.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
+                      <span style={{ width:38, height:38, borderRadius:11, background: theme.header, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13, fontWeight:800 }}>
+                        {op.name.split(" ").map(p=>p[0]).slice(0,2).join("").toUpperCase()}
+                      </span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{op.name}</div>
+                        <div style={{ fontSize:11.5, color: theme.mut }}>Licensed applicator</div>
+                      </div>
+                      {isOwner && <button onClick={() => {
+                        setLicensed(ops=>ops.filter(x=>x.id!==op.id));
+                        supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => {
+                          if (error) showToast("Failed to delete applicator: " + error.message);
+                        });
+                      }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18 }}>×</button>}
+                    </div>
+                  ))}
+                  {licensed.length === 0 && (
+                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No licensed applicators added yet.</div>
+                  )}
+                </div>
+              ) : (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
@@ -5617,6 +5670,7 @@ export default function App() {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
 
             {/* Non-Licensed Applicators */}
@@ -5642,6 +5696,30 @@ export default function App() {
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
               </div>}
+              {isMobile ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                  {nonLicensed.map(p => (
+                    <div key={p.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
+                      <span style={{ width:38, height:38, borderRadius:11, background: theme.fill, color: theme.ink2, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13, fontWeight:800 }}>
+                        {p.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}
+                      </span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{p.name}</div>
+                        <div style={{ fontSize:11.5, color: theme.mut }}>Non-licensed</div>
+                      </div>
+                      {isOwner && <button onClick={() => {
+                        setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
+                        supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
+                          if (error) showToast("Failed to delete applicator: " + error.message);
+                        });
+                      }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18 }}>×</button>}
+                    </div>
+                  ))}
+                  {nonLicensed.length === 0 && (
+                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No non-licensed applicators added yet.</div>
+                  )}
+                </div>
+              ) : (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
@@ -5668,6 +5746,7 @@ export default function App() {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
           </div>
         )}
