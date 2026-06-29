@@ -5259,6 +5259,89 @@ export default function App() {
                 </div>
               )}
 
+              {isMobile ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                  {fieldLibrary.filter(f => !fieldCropFilter || f.crop === fieldCropFilter).map(f => {
+                    const isEditing = editingFieldId === f.id;
+                    const editCrop = editFieldDraft.crop || "";
+                    const editTraits = editFieldDraft.traits || [];
+                    const fHasGMO2 = (f.traits || []).some(k => GRAIN_GMO_TRAITS.includes(k));
+                    const fieldTraits = f.traits || ((NON_GMO_CROPS.includes(f.crop) || (GRAIN_SORGHUM_CROPS.includes(f.crop) && !fHasGMO2)) ? ["non-gmo"] : []);
+                    if (isEditing) {
+                      return (
+                        <div key={f.id} style={{ border:`1.5px solid ${theme.green}`, borderRadius:14, padding:"12px 13px", background: theme.card }}>
+                          <div style={{ display:"flex", flexDirection:"column", gap:9, marginBottom:10 }}>
+                            <div>
+                              <label style={{ ...labelT, fontSize:10 }}>Field Name</label>
+                              <input value={editFieldDraft.name||""} onChange={e=>setEditFieldDraft(d=>({...d,name:e.target.value}))} style={inp} />
+                            </div>
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
+                              <div>
+                                <label style={{ ...labelT, fontSize:10 }}>Crop</label>
+                                <select value={editCrop} onChange={e=>setEditFieldDraft(d=>({...d,crop:e.target.value,traits:[]}))} style={{ ...inp, fontFamily:"inherit" }}>
+                                  <option value="">— select crop —</option>
+                                  {orgCrops.map(c => <option key={c} value={c}>{c}</option>)}
+                                  {editCrop && !orgCrops.includes(editCrop) && <option value={editCrop}>{editCrop} (current)</option>}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ ...labelT, fontSize:10 }}>Acres</label>
+                                <input type="number" value={editFieldDraft.acres||""} onChange={e=>setEditFieldDraft(d=>({...d,acres:e.target.value}))} style={inp} min="0" step="0.1" />
+                              </div>
+                            </div>
+                          </div>
+                          {CROP_TRAITS[editCrop] && (
+                            <div style={{ marginBottom:10 }}>
+                              <div style={{ fontSize:10, fontWeight:700, color: theme.mut, marginBottom:5 }}>Herbicide Tolerances</div>
+                              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                                {CROP_TRAITS[editCrop].map(t => (
+                                  <label key={t.key} style={{ display:"flex", alignItems:"center", gap:4, fontSize:11.5, cursor:"pointer",
+                                    background: editTraits.includes(t.key) ? theme.tintBlue : theme.fill,
+                                    border: `1px solid ${editTraits.includes(t.key) ? theme.blue : "transparent"}`,
+                                    borderRadius:7, padding:"4px 9px" }}>
+                                    <input type="checkbox" checked={editTraits.includes(t.key)}
+                                      onChange={e => setEditFieldDraft(d => ({ ...d, traits: e.target.checked ? [...editTraits, t.key] : editTraits.filter(x=>x!==t.key) }))} />
+                                    {t.label}
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ display:"flex", gap:8 }}>
+                            <button onClick={() => setEditingFieldId(null)} style={{ flex:1, padding:10, borderRadius:10, border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.ink2, fontWeight:700, fontSize:13, cursor:"pointer" }}>Cancel</button>
+                            <button onClick={saveFieldEdit} style={{ flex:1, padding:10, borderRadius:10, border:"none", background: theme.green, color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>Save</button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={f.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"flex-start", gap:12 }}>
+                        <span style={{ width:34, height:34, borderRadius:10, background: theme.tintGreen, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={theme.onGreen} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 20h18M5 20V9l7-5 7 5v11"/><path d="M9 20v-5h6v5"/></svg>
+                        </span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{f.name}</div>
+                          <div style={{ fontSize:11.5, color: theme.mut, marginBottom:6 }}>{f.crop || "No crop set"}</div>
+                          {fieldTraits.length > 0 && (
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                              {fieldTraits.map(t => <span key={t} style={{ background: theme.tintBlue, color: theme.blue, borderRadius:6, padding:"3px 8px", fontSize:10.5, fontWeight:700, whiteSpace:"nowrap" }}>{t}</span>)}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8 }}>
+                          <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.onGreen }}>
+                            {isMetric ? (parseFloat(f.acres||0)*0.404686).toFixed(1) : parseFloat(f.acres||0).toFixed(1)}
+                          </span>
+                          <div style={{ display:"flex", gap:8 }}>
+                            <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:14 }}>✏</button>
+                            <button onClick={() => deleteField(f.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
@@ -5416,6 +5499,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           </div>
         )}
