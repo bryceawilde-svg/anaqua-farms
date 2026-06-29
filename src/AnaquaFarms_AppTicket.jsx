@@ -1344,6 +1344,19 @@ export default function App() {
   useEffect(() => { localStorage.setItem("boomlog_dark", darkMode ? "1" : "0"); }, [darkMode]);
   useEffect(() => { localStorage.setItem("boomlog_accent", accent); }, [accent]);
   const theme = buildTheme(darkMode, accent);
+  // Mobile-themed card/section/label chrome — falls back to the original desktop
+  // styles untouched when not on mobile, so this is a no-op for the desktop layout.
+  const cardT = isMobile ? {
+    background: theme.card, border: `1px solid ${theme.line}`, borderRadius:18,
+    padding:15, marginBottom:16, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)",
+  } : card;
+  const sectionTitleT = isMobile ? {
+    fontSize:14, fontWeight:800, color: theme.ink, marginBottom:12,
+  } : sectionTitle;
+  const labelT = isMobile ? {
+    fontSize:9.5, fontWeight:700, letterSpacing:"0.06em", color: theme.mut,
+    display:"block", marginBottom:4, textTransform:"uppercase",
+  } : labelStyle;
 
   // ── Form state
   const blank = () => ({
@@ -2763,8 +2776,8 @@ export default function App() {
         {/* ══ NEW TICKET ══════════════════════════════════════════════════════════ */}
         {view === "form" && (
           <div>
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Application Info</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Application Info</div>
               {/* Weather fetch button */}
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: isMobile ? 8 : 12, flexWrap:"wrap" }}>
                 <button onClick={fetchWeather} disabled={wxLoading} style={{
@@ -2791,9 +2804,9 @@ export default function App() {
                 )}
               </div>
               {(() => {
-                const ci = isMobile ? { ...inp, fontSize:12, padding:"5px 7px" } : inp;
-                const cs = isMobile ? { ...sel, fontSize:12, padding:"5px 7px" } : sel;
-                const cl = isMobile ? { ...labelStyle, fontSize:9 } : labelStyle;
+                const ci = isMobile ? { ...inp, fontSize:12, padding:"5px 7px", background: theme.input, color: theme.ink, borderColor: theme.inputLine } : inp;
+                const cs = isMobile ? { ...sel, fontSize:12, padding:"5px 7px", background: theme.input, color: theme.ink, borderColor: theme.inputLine } : sel;
+                const cl = isMobile ? { ...labelT, fontSize:9 } : labelStyle;
                 const endTime = form.timeStart && form.selectedFields.length
                   ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)
                   : "—";
@@ -2868,7 +2881,7 @@ export default function App() {
 
               {/* Crop / Site — button presets above fields */}
               <div style={{ marginBottom:12 }}>
-                <label style={labelStyle}>Crop / Site</label>
+                <label style={labelT}>Crop / Site</label>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                   {[...new Set([...orgCrops, ...fieldLibrary.map(f=>f.crop).filter(Boolean)])].filter(Boolean).sort().map(crop => (
                     <button key={crop} type="button"
@@ -2889,7 +2902,7 @@ export default function App() {
 
               {/* Target Pest / Weed / Disease */}
               <div style={{ marginBottom:14 }}>
-                <label style={labelStyle}>Target Pest / Weed / Disease</label>
+                <label style={labelT}>Target Pest / Weed / Disease</label>
                 {(() => {
                   // Last 6 unique pests used across ticket history
                   const seen = new Set();
@@ -3034,7 +3047,7 @@ export default function App() {
               <div style={{ marginBottom:14 }}>
                 {/* Label row with toggle */}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-                  <label style={{ ...labelStyle, marginBottom:0 }}>
+                  <label style={{ ...labelT, marginBottom:0 }}>
                     Fields
                     {form.crop && (
                       <span style={{ marginLeft:6, background:"#e6f5d0", color:"#2a5c0f", borderRadius:3, padding:"1px 6px", fontSize:11, fontWeight:700 }}>
@@ -3202,15 +3215,15 @@ export default function App() {
               )}
 
               <div style={{ marginBottom:12 }}>
-                <label style={labelStyle}>Notes</label>
+                <label style={labelT}>Notes</label>
                 <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
               </div>
             </div>
 
             {/* Tank Setup */}
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                <span style={sectionTitle}>Tank Setup & Calculations</span>
+                <span style={sectionTitleT}>Tank Setup & Calculations</span>
                 <button onClick={() => setShowTankGear(g => !g)} title="Customize presets"
                   style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color: showTankGear ? "#2a5c0f" : "#aaa", padding:"2px 4px" }}>⚙</button>
               </div>
@@ -3243,7 +3256,7 @@ export default function App() {
               )}
               <div style={{ display:"grid", gridTemplateColumns:rGrid(1, 4, isMobile), gap:10, marginBottom:12 }}>
                 <div>
-                  <label style={labelStyle}>Tank Size ({tankLabel(isMetric)})</label>
+                  <label style={labelT}>Tank Size ({tankLabel(isMetric)})</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
                       {tankPresets.map(size => (
@@ -3279,7 +3292,7 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Pressure (PSI)</label>
+                  <label style={labelT}>Pressure (PSI)</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
                       {psiPresets.map(psi => (
@@ -3315,7 +3328,7 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>{sprayRateLabel(isMetric)}</label>
+                  <label style={labelT}>{sprayRateLabel(isMetric)}</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     <div style={{ display:"flex", gap:4 }}>
                       {gpaPresets.map(gpa => (
@@ -3491,8 +3504,8 @@ export default function App() {
             </div>
 
             {/* Chemical Mix */}
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Chemical Mix</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Chemical Mix</div>
 
               {/* ── Recently used chemicals — quick-pick chips ── */}
               {(() => {
@@ -4328,8 +4341,8 @@ export default function App() {
               const unconfirmed   = Object.values(fmMatches).filter(m => m.status === "suggested" && !m.confirmed).length;
 
               return (
-                <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-                  <div style={sectionTitle}>Import Field Boundaries</div>
+                <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+                  <div style={sectionTitleT}>Import Field Boundaries</div>
 
                   {/* Stage 1: Upload */}
                   {fmStage === "upload" && (
@@ -4372,7 +4385,7 @@ export default function App() {
                         { key:"cropCol", label:"Crop / Year",required:false, hint:"Display only" },
                       ].map(({ key, label, required, hint }) => (
                         <div key={key} style={{ marginBottom:12 }}>
-                          <label style={{ ...labelStyle, fontSize:12 }}>
+                          <label style={{ ...labelT, fontSize:12 }}>
                             {label}{required && <span style={{ color:"#c0392b" }}> *</span>}
                             <span style={{ fontWeight:400, color:"#aaa", marginLeft:6 }}>{hint}</span>
                           </label>
@@ -4680,8 +4693,8 @@ export default function App() {
               );
             })()}
 
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Import Fields from CSV</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Import Fields from CSV</div>
 
               {csvStage === "idle" && (
                 <>
@@ -4719,7 +4732,7 @@ export default function App() {
                       { key:"lngCol",   label:"Longitude (separate col)",required:false },
                     ].map(({ key, label, required, hint }) => (
                       <div key={key}>
-                        <label style={{ ...labelStyle, fontSize:11 }}>
+                        <label style={{ ...labelT, fontSize:11 }}>
                           {label}{required && <span style={{ color:"#c0392b" }}> *</span>}
                           {hint && <span style={{ fontWeight:400, color:"#aaa", marginLeft:5, fontSize:10 }}>{hint}</span>}
                         </label>
@@ -4880,19 +4893,19 @@ export default function App() {
               )}
             </div>
 
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Add Field Manually</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Add Field Manually</div>
               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr auto", gap:10, alignItems:"end" }}>
                 <div>
-                  <label style={labelStyle}>Field Name</label>
+                  <label style={labelT}>Field Name</label>
                   <input value={newField.name} onChange={e => setNewField(f=>({...f,name:e.target.value}))} style={inp} placeholder="e.g. South Field 3"/>
                 </div>
                 <div>
-                  <label style={labelStyle}>Acres</label>
+                  <label style={labelT}>Acres</label>
                   <input type="number" value={newField.acres} onChange={e => setNewField(f=>({...f,acres:e.target.value}))} style={inp} placeholder="0.0" min="0" step="0.1"/>
                 </div>
                 <div>
-                  <label style={labelStyle}>Crop</label>
+                  <label style={labelT}>Crop</label>
                   <select value={newField.crop||""} onChange={e => setNewField(f=>({...f,crop:e.target.value,traits:[]}))} style={{ ...inp, fontFamily:"inherit" }}>
                     <option value="">— select crop —</option>
                     {orgCrops.map(c => <option key={c} value={c}>{c}</option>)}
@@ -4939,8 +4952,8 @@ export default function App() {
                 { key: "post_harvest",label: "Post-Harvest" },
               ];
               return (
-                <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-                  <div style={sectionTitle}>Crop Season Status</div>
+                <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+                  <div style={sectionTitleT}>Crop Season Status</div>
                   <div style={{ fontSize:11, color:"#888", marginBottom:10 }}>
                     Set the current growing stage for each crop. Pre-Season and Post-Harvest suppress crop safety warnings for chemicals used to manage volunteer plants.
                   </div>
@@ -4975,8 +4988,8 @@ export default function App() {
               );
             })()}
 
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={{ ...sectionTitle, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={{ ...sectionTitleT, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <span>Field Library — {fieldLibrary.length} fields · {fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0).toFixed(1)} total acres</span>
                 {isOwner && <button onClick={() => { setFieldMergeMode(m => !m); setFieldMergeIds(new Set()); setFieldMergeName(""); setFieldMergeKeepId(null); }}
                   style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1.5px solid #1a6bbf", background: fieldMergeMode ? "#1a6bbf" : "#fff", color: fieldMergeMode ? "#fff" : "#1a6bbf", cursor:"pointer" }}>
@@ -5006,7 +5019,7 @@ export default function App() {
                   </div>
                   <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
                     <div>
-                      <label style={{ ...labelStyle, fontSize:11 }}>Keep name:</label>
+                      <label style={{ ...labelT, fontSize:11 }}>Keep name:</label>
                       <select value={fieldMergeKeepId || ""}
                         onChange={e => {
                           setFieldMergeKeepId(Number(e.target.value));
@@ -5022,7 +5035,7 @@ export default function App() {
                       </select>
                     </div>
                     <div style={{ flex:1, minWidth:160 }}>
-                      <label style={{ ...labelStyle, fontSize:11 }}>Final name (edit if needed):</label>
+                      <label style={{ ...labelT, fontSize:11 }}>Final name (edit if needed):</label>
                       <input value={fieldMergeName} onChange={e => setFieldMergeName(e.target.value)}
                         style={{ ...inp, fontSize:12 }} placeholder="Merged field name" />
                     </div>
@@ -5061,11 +5074,11 @@ export default function App() {
                             <td style={td} colSpan={5}>
                               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"4px 0" }}>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>Field Name</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>Field Name</label>
                                   <input value={editFieldDraft.name||""} onChange={e=>setEditFieldDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>Crop</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>Crop</label>
                                   <select value={editCrop} onChange={e=>setEditFieldDraft(d=>({...d,crop:e.target.value,traits:[]}))} style={{ ...inp, fontSize:12, padding:"3px 6px", fontFamily:"inherit" }}>
                                     <option value="">— select crop —</option>
                                     {orgCrops.map(c => <option key={c} value={c}>{c}</option>)}
@@ -5073,7 +5086,7 @@ export default function App() {
                                   </select>
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>Acres</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>Acres</label>
                                   <input type="number" value={editFieldDraft.acres||""} onChange={e=>setEditFieldDraft(d=>({...d,acres:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px", width:70 }} min="0" step="0.1" />
                                 </div>
                                 <div style={{ display:"flex", gap:4, alignItems:"flex-end", paddingBottom:1 }}>
@@ -5207,15 +5220,15 @@ export default function App() {
         {view === "equipMgr" && (
           <div>
             {/* Equipment */}
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Equipment Library</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Equipment Library</div>
               {isOwner && <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
-                  <label style={labelStyle}>Equipment Name</label>
+                  <label style={labelT}>Equipment Name</label>
                   <input id="newEquipName" style={inp} placeholder="e.g. 4440 Sprayer"/>
                 </div>
                 <div>
-                  <label style={labelStyle}>Acres / Hr</label>
+                  <label style={labelT}>Acres / Hr</label>
                   <input id="newEquipAph" type="number" style={inp} placeholder="75" min="1" defaultValue="75"/>
                 </div>
                 <button onClick={() => {
@@ -5268,11 +5281,11 @@ export default function App() {
             </div>
 
             {/* Licensed Applicators */}
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Licensed Applicators</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Licensed Applicators</div>
               {isOwner && <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
-                  <label style={labelStyle}>Name</label>
+                  <label style={labelT}>Name</label>
                   <input id="newLicName" style={inp} placeholder="Full name"/>
                 </div>
                 <button onClick={() => {
@@ -5319,11 +5332,11 @@ export default function App() {
             </div>
 
             {/* Non-Licensed Applicators */}
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Non-Licensed Applicators <span style={{ fontWeight:400, fontSize:10, color:"#888", textTransform:"none", letterSpacing:0 }}>working under license</span></div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Non-Licensed Applicators <span style={{ fontWeight:400, fontSize:10, color:"#888", textTransform:"none", letterSpacing:0 }}>working under license</span></div>
               {isOwner && <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
-                  <label style={labelStyle}>Name</label>
+                  <label style={labelT}>Name</label>
                   <input id="newNonLicName" style={inp} placeholder="Full name"/>
                 </div>
                 <button onClick={() => {
@@ -5375,8 +5388,8 @@ export default function App() {
 
         {view === "chemMgr" && (
           <div>
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Upload Chemical List (CSV)</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
                 CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Formulation Type, Container Size (optional)</code> — first row is header.<br/>
                 <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, E, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
@@ -5391,9 +5404,9 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                <div style={sectionTitle}>Add Chemical Manually</div>
+                <div style={sectionTitleT}>Add Chemical Manually</div>
                 {isPro ? (
                   <button
                     onClick={() => scanLabelRef.current.click()}
@@ -5416,12 +5429,12 @@ export default function App() {
               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
                 {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
-                    <label style={labelStyle}>{lbl}</label>
+                    <label style={labelT}>{lbl}</label>
                     <input type={type} value={newChem[k]} onChange={e => { setNewChem(c=>({...c,[k]:e.target.value})); if (k==="name"||k==="epa") setChemDupWarning(""); }} style={inp} placeholder={lbl}/>
                   </div>
                 ))}
                 <div>
-                  <label style={labelStyle}>Unit</label>
+                  <label style={labelT}>Unit</label>
                   <select value={newChem.unit||"oz"} onChange={e => setNewChem(c=>({...c,unit:e.target.value}))} style={sel}>
                     <optgroup label="Imperial">
                       <option value="oz">Oz (liquid fl oz)</option>
@@ -5440,7 +5453,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>Formulation Type</label>
+                  <label style={labelT}>Formulation Type</label>
                   <select value={newChem.formType||"L"} onChange={e => setNewChem(c=>({...c,formType:e.target.value}))} style={sel}>
                     <option value="L">L — Liquid Flowable / SC</option>
                     <option value="E">E — EC</option>
@@ -5452,7 +5465,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>
+                  <label style={labelT}>
                     Container Size
                     <span style={{ fontSize:10, fontWeight:400, color:"#888", marginLeft:4 }}>
                       {chemContainerIsLb(newChem) ? "(lb)" : "(gal)"}
@@ -5478,8 +5491,8 @@ export default function App() {
               }}>+ Add Chemical</button>
             </div>
 
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Chemical Library ({chemicals.length})</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Chemical Library ({chemicals.length})</div>
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
@@ -5497,19 +5510,19 @@ export default function App() {
                             <td style={td} colSpan={7}>
                               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"6px 0" }}>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>Chemical Name</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>Chemical Name</label>
                                   <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>EPA #</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>EPA #</label>
                                   <input value={editChemDraft.epa||""} onChange={e=>setEditChemDraft(d=>({...d,epa:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>REI</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>REI</label>
                                   <input value={editChemDraft.rei||""} onChange={e=>setEditChemDraft(d=>({...d,rei:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>Unit</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>Unit</label>
                                   <select value={editChemDraft.unit||"oz"} onChange={e=>setEditChemDraft(d=>({...d,unit:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
                                     <optgroup label="Imperial">
                                       <option value="oz">oz (liquid)</option>
@@ -5528,7 +5541,7 @@ export default function App() {
                                   </select>
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>Form. Type</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>Form. Type</label>
                                   <select value={editChemDraft.formType||"L"} onChange={e=>setEditChemDraft(d=>({...d,formType:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
                                     <option value="L">L</option>
                                     <option value="E">E</option>
@@ -5540,7 +5553,7 @@ export default function App() {
                                   </select>
                                 </div>
                                 <div>
-                                  <label style={{ ...labelStyle, fontSize:10 }}>Container ({draftIsDryOrLb ? "lb" : "gal"})</label>
+                                  <label style={{ ...labelT, fontSize:10 }}>Container ({draftIsDryOrLb ? "lb" : "gal"})</label>
                                   <input type="number" min="0" step="0.01" value={editChemDraft.containerSize||""} onChange={e=>setEditChemDraft(d=>({...d,containerSize:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="blank=tote" />
                                 </div>
                                 <div style={{ display:"flex", gap:4, alignItems:"flex-end", paddingBottom:1 }}>
@@ -5585,8 +5598,8 @@ export default function App() {
             </div>
 
             {/* Pest Library */}
-            <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={sectionTitle}>Pest / Weed / Disease Library ({pestLibrary.length})</div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+              <div style={sectionTitleT}>Pest / Weed / Disease Library ({pestLibrary.length})</div>
               {isOwner && (
                 <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
                   <input
@@ -5626,9 +5639,9 @@ export default function App() {
         {view === "team" && (
           <div>
             {/* Org name header */}
-            <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+            <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
               <div>
-                <div style={{ ...sectionTitle, marginBottom:2 }}>👥 {currentOrg?.name}</div>
+                <div style={{ ...sectionTitleT, marginBottom:2 }}>👥 {currentOrg?.name}</div>
                 <div style={{ fontSize:11, color:"#888" }}>
                   {session?.user?.email} · {userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : userRole === "applicator" ? "Applicator" : "Viewer"}
                 </div>
@@ -5654,8 +5667,8 @@ export default function App() {
             </div>
 
             {/* Appearance */}
-            <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
-              <div style={{ ...sectionTitle, marginBottom:10 }}>Appearance</div>
+            <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+              <div style={{ ...sectionTitleT, marginBottom:10 }}>Appearance</div>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
                 <span style={{ fontSize:13, fontWeight:600, color:"#333" }}>Dark mode</span>
                 <button onClick={() => setDarkMode(d => !d)} style={{
@@ -5681,8 +5694,8 @@ export default function App() {
 
             {/* Crops */}
             {isOwner && (
-              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
-                <div style={{ ...sectionTitle, marginBottom:6 }}>Crops</div>
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitleT, marginBottom:6 }}>Crops</div>
                 <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
                   Check every crop your operation grows — these appear as quick-select buttons on new tickets.
                 </div>
@@ -5734,8 +5747,8 @@ export default function App() {
 
             {/* Unit System */}
             {isOwner && (
-              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
-                <div style={{ ...sectionTitle, marginBottom:6 }}>Unit System</div>
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitleT, marginBottom:6 }}>Unit System</div>
                 <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
                   Sets the measurement system for all members of this org. Data is stored in imperial — metric is a display conversion.
                 </div>
@@ -5760,8 +5773,8 @@ export default function App() {
 
             {/* Farm Location */}
             {isOwner && (
-              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
-                <div style={{ ...sectionTitle, marginBottom:6 }}>Farm Location</div>
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitleT, marginBottom:6 }}>Farm Location</div>
                 <div style={{ fontSize:12, color:"#555", marginBottom:8 }}>
                   Used for weather auto-fill on tickets. Enter a city, town, or postal code — works worldwide.
                 </div>
@@ -5791,9 +5804,9 @@ export default function App() {
 
             {/* Org plan */}
             {isOwner && (
-              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                 <div>
-                  <div style={{ ...sectionTitle, marginBottom:2 }}>Organization Plan</div>
+                  <div style={{ ...sectionTitleT, marginBottom:2 }}>Organization Plan</div>
                   <div style={{ fontSize:11, color:"#888" }}>
                     {currentOrg?.plan === "pro" ? "⭐ Pro — all members have Pro access" : "Basic — upgrade to give all members Pro access"}
                   </div>
@@ -5815,8 +5828,8 @@ export default function App() {
             )}
 
             {/* Members list */}
-            <div style={{ ...card, padding: isMobile ? "10px 10px" : "14px 16px", marginBottom:10 }}>
-              <div style={sectionTitle}>Members</div>
+            <div style={{ ...cardT, padding: isMobile ? "10px 10px" : "14px 16px", marginBottom:10 }}>
+              <div style={sectionTitleT}>Members</div>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
                   <tr style={{ background:"#f0f7e8" }}>
@@ -5875,8 +5888,8 @@ export default function App() {
 
             {/* Invite form — owner only */}
             {isOwner && (
-              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px" }}>
-                <div style={sectionTitle}>Invite Someone</div>
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px" }}>
+                <div style={sectionTitleT}>Invite Someone</div>
                 <div style={{ fontSize:11, color:"#666", marginBottom:10, lineHeight:1.5 }}>
                   Enter their email below, then send them the app link. When they sign up, they will automatically join <strong>{currentOrg?.name}</strong> and see all shared data.
                 </div>
@@ -5934,8 +5947,8 @@ export default function App() {
             )}
 
             {/* Reporting */}
-            <div style={{...card, padding: isMobile ? "10px 12px" : "14px 18px", marginTop:12}}>
-              <div style={sectionTitle}>Reports</div>
+            <div style={{...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginTop:12}}>
+              <div style={sectionTitleT}>Reports</div>
               <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:8 }}>
                 <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
                   style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
@@ -5972,8 +5985,8 @@ export default function App() {
 
             {/* Danger Zone */}
             {isOwner && (
-              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginTop:12, border:"1.5px solid #e0a0a0", background:"#fffafa" }}>
-                <div style={{ ...sectionTitle, color:"#c0392b", marginBottom:4 }}>⚠ Danger Zone</div>
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginTop:12, border:"1.5px solid #e0a0a0", background:"#fffafa" }}>
+                <div style={{ ...sectionTitleT, color:"#c0392b", marginBottom:4 }}>⚠ Danger Zone</div>
                 <div style={{ fontSize:12, color:"#c0392b", marginBottom:14, fontWeight:600 }}>
                   These actions permanently delete data and cannot be undone.
                 </div>
