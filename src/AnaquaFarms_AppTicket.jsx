@@ -6034,8 +6034,8 @@ export default function App() {
 
       {/* ── Floating Sector Chat (Pro only) ──────────────────────────── */}
 
-      {/* Floating bubble — hidden when chat is open */}
-      {isPro && !isViewer && !chatOpen && (
+      {/* Floating bubble — hidden when chat is open, and hidden on mobile (bottom nav takes that space) */}
+      {isPro && !isViewer && !chatOpen && !isMobile && (
         <button
           onClick={() => setChatOpen(true)}
           title="Application Sector Advisor"
