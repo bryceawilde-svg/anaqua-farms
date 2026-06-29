@@ -2810,20 +2810,37 @@ export default function App() {
       )}
 
       {/* Header */}
-      {isMobile && view === "form" ? (
-        <div style={{ background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      {isMobile ? (
+        <div style={{ position:"sticky", top:0, zIndex:50, background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div>
-            <div style={{ fontSize:23, fontWeight:800, letterSpacing:"-0.01em" }}>{editingId ? "Edit Ticket" : "New Ticket"}</div>
+            <div style={{ fontSize:23, fontWeight:800, letterSpacing:"-0.01em" }}>
+              {view === "form" ? (editingId ? "Edit Ticket" : "New Ticket")
+                : view === "log" ? "Tickets"
+                : view === "applicator" ? "Cab"
+                : ["fieldMgr","equipMgr","chemMgr"].includes(view) ? "Library"
+                : view === "team" ? "Account"
+                : "BoomLog"}
+            </div>
             <div style={{ fontSize:12, color: theme.headerSub, marginTop:1 }}>
-              {editingId
-                ? `Editing · No. ${String(tickets.find(t=>t.id===editingId)?.ticketNumber || "").padStart(3,"0")}`
-                : `Draft · No. ${String((Math.max(0, ...tickets.map(t=>t.ticketNumber||0)) + 1)).padStart(3,"0")}`}
+              {view === "form"
+                ? (editingId
+                    ? `Editing · No. ${String(tickets.find(t=>t.id===editingId)?.ticketNumber || "").padStart(3,"0")}`
+                    : `Draft · No. ${String((Math.max(0, ...tickets.map(t=>t.ticketNumber||0)) + 1)).padStart(3,"0")}`)
+                : view === "log" ? `${currentOrg?.name || "Anaqua Farms"} · ${tickets.length} record${tickets.length!==1?"s":""}`
+                : view === "applicator" ? `${tickets.filter(t=>t.team_view).length} queued · tap a ticket to spray`
+                : null}
             </div>
           </div>
-          <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); }}
-            style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", borderRadius:11, cursor:"pointer" }}>
-            Cancel
-          </button>
+          {view === "form" ? (
+            <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); }}
+              style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", borderRadius:11, cursor:"pointer" }}>
+              Cancel
+            </button>
+          ) : view === "log" ? (
+            <div style={{ width:38, height:38, borderRadius:12, background:"rgba(255,255,255,0.14)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            </div>
+          ) : null}
         </div>
       ) : (
       <div style={{ background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)", padding: isMobile ? "12px 14px 0" : "18px 28px 0", boxShadow:"0 3px 16px rgba(0,0,0,0.18)" }}>
@@ -5838,6 +5855,13 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {isMobile && (
+              <button onClick={() => supabase.auth.signOut()} style={{
+                width:"100%", background: theme.card, border:`1.5px solid ${theme.inputLine}`, borderRadius:14,
+                padding:14, fontSize:14, fontWeight:700, color:"#b4452f", cursor:"pointer", marginBottom:10,
+              }}>Sign out</button>
+            )}
 
             {/* Appearance */}
             <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
