@@ -1353,6 +1353,15 @@ export default function App() {
   const sectionTitleT = isMobile ? {
     fontSize:14, fontWeight:800, color: theme.ink, marginBottom:12,
   } : sectionTitle;
+  const pillBtn = (active) => isMobile ? {
+    borderColor: active ? theme.green : theme.inputLine,
+    background:  active ? theme.green : theme.input,
+    color:       active ? "#fff"       : theme.ink2,
+  } : {
+    borderColor: active ? "#2a5c0f" : "#c8dbb0",
+    background:  active ? "#2a5c0f" : "#f9fdf5",
+    color:       active ? "#fff"    : "#3a6b1a",
+  };
   const labelT = isMobile ? {
     fontSize:9.5, fontWeight:700, letterSpacing:"0.06em", color: theme.mut,
     display:"block", marginBottom:4, textTransform:"uppercase",
@@ -3264,11 +3273,9 @@ export default function App() {
                           onClick={() => { set("tankSize", String(size)); setManualTank(false); }}
                           style={{
                             flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                            borderColor: !manualTank && form.tankSize===String(size) ? "#2a5c0f" : "#c8dbb0",
                             borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 12, fontWeight:700,
-                            background: !manualTank && form.tankSize===String(size) ? "#2a5c0f" : "#f9fdf5",
-                            color: !manualTank && form.tankSize===String(size) ? "#fff" : "#3a6b1a",
-                            transition:"all 0.12s"
+                            transition:"all 0.12s",
+                            ...pillBtn(!manualTank && form.tankSize===String(size)),
                           }}
                         >{size}</button>
                       ))}
@@ -3276,11 +3283,9 @@ export default function App() {
                         onClick={() => { setManualTank(true); set("tankSize",""); }}
                         style={{
                           flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                          borderColor: manualTank ? "#2a5c0f" : "#c8dbb0",
                           borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 11, fontWeight:700,
-                          background: manualTank ? "#2a5c0f" : "#f9fdf5",
-                          color: manualTank ? "#fff" : "#3a6b1a",
-                          transition:"all 0.12s"
+                          transition:"all 0.12s",
+                          ...pillBtn(manualTank),
                         }}
                       >Other</button>
                     </div>
@@ -3300,11 +3305,9 @@ export default function App() {
                           onClick={() => { set("pressure", String(psi)); setManualPsi(false); }}
                           style={{
                             flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                            borderColor: !manualPsi && form.pressure===String(psi) ? "#2a5c0f" : "#c8dbb0",
                             borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 12, fontWeight:700,
-                            background: !manualPsi && form.pressure===String(psi) ? "#2a5c0f" : "#f9fdf5",
-                            color:      !manualPsi && form.pressure===String(psi) ? "#fff"    : "#3a6b1a",
-                            transition:"all 0.12s"
+                            transition:"all 0.12s",
+                            ...pillBtn(!manualPsi && form.pressure===String(psi)),
                           }}
                         >{psi}</button>
                       ))}
@@ -3312,11 +3315,9 @@ export default function App() {
                         onClick={() => { setManualPsi(true); set("pressure",""); }}
                         style={{
                           flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                          borderColor: manualPsi ? "#2a5c0f" : "#c8dbb0",
                           borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 11, fontWeight:700,
-                          background: manualPsi ? "#2a5c0f" : "#f9fdf5",
-                          color: manualPsi ? "#fff" : "#3a6b1a",
-                          transition:"all 0.12s"
+                          transition:"all 0.12s",
+                          ...pillBtn(manualPsi),
                         }}
                       >Other</button>
                     </div>
@@ -3336,11 +3337,9 @@ export default function App() {
                           onClick={() => { set("galPerAcre", String(gpa)); setManualGpa(false); }}
                           style={{
                             flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                            borderColor: !manualGpa && form.galPerAcre===String(gpa) ? "#2a5c0f" : "#c8dbb0",
                             borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 12, fontWeight:700,
-                            background: !manualGpa && form.galPerAcre===String(gpa) ? "#2a5c0f" : "#f9fdf5",
-                            color:      !manualGpa && form.galPerAcre===String(gpa) ? "#fff"    : "#3a6b1a",
-                            transition:"all 0.12s"
+                            transition:"all 0.12s",
+                            ...pillBtn(!manualGpa && form.galPerAcre===String(gpa)),
                           }}
                         >{gpa}</button>
                       ))}
@@ -3348,11 +3347,9 @@ export default function App() {
                         onClick={() => { setManualGpa(true); set("galPerAcre",""); }}
                         style={{
                           flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                          borderColor: manualGpa ? "#2a5c0f" : "#c8dbb0",
                           borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 11, fontWeight:700,
-                          background: manualGpa ? "#2a5c0f" : "#f9fdf5",
-                          color:      manualGpa ? "#fff"    : "#3a6b1a",
-                          transition:"all 0.12s"
+                          transition:"all 0.12s",
+                          ...pillBtn(manualGpa),
                         }}
                       >Other</button>
                     </div>
@@ -3470,18 +3467,46 @@ export default function App() {
               {(() => {
                 const mainCalcLive = calcTotals({ ...form, totalAcres });
                 const partAcLive   = mainCalcLive.partialAcres;
+                if (isMobile) {
+                  return (
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", background: theme.header, borderRadius:14, overflow:"hidden" }}>
+                      <div style={{ padding:"13px 10px" }}>
+                        <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>ACRES/LOAD</div>
+                        <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color:"#fff", lineHeight:1.15 }}>{acreLoads}</div>
+                      </div>
+                      <div style={{ padding:"13px 10px", background:"rgba(255,255,255,0.06)" }}>
+                        <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>FULL LOADS</div>
+                        <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color:"#fff", lineHeight:1.15 }}>{fullLoads}</div>
+                      </div>
+                      <div style={{ padding:"13px 10px" }}>
+                        <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>PARTIAL</div>
+                        {partAcLive > 0.01 ? (
+                          <>
+                            <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color: theme.amber, lineHeight:1.15 }}>{partAcLive.toFixed(1)}</div>
+                            <div style={{ fontSize:9.5, color: theme.headerSub }}>ac remaining</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>✓ None</div>
+                            <div style={{ fontSize:9.5, color: theme.headerSub }}>all full loads</div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
                 return (
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap: isMobile ? 6 : 12, background:"#e6f5d0", borderRadius:6, padding:"12px 14px" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, background:"#e6f5d0", borderRadius:6, padding:"12px 14px" }}>
                     <div>
                       <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}>ACRES / LOAD</div>
-                      <div style={{ fontSize: isMobile ? 22 : 28, fontWeight:700, color:"#2a5c0f" }}>{acreLoads}</div>
+                      <div style={{ fontSize:28, fontWeight:700, color:"#2a5c0f" }}>{acreLoads}</div>
                       <div style={{ fontSize:11, color:"#7aaa40" }}>
                         Tank ÷ {form.galPerAcre ? <strong style={{ color:"#2a5c0f" }}>{form.galPerAcre} gal/ac</strong> : "Gal/Acre"}
                       </div>
                     </div>
                     <div>
                       <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}># FULL LOADS</div>
-                      <div style={{ fontSize: isMobile ? 22 : 28, fontWeight:700, color:"#2a5c0f" }}>{fullLoads}</div>
+                      <div style={{ fontSize:28, fontWeight:700, color:"#2a5c0f" }}>{fullLoads}</div>
                       <div style={{ fontSize:11, color:"#7aaa40" }}>Total Acres ÷ Acres/Load</div>
                     </div>
                     <div>
