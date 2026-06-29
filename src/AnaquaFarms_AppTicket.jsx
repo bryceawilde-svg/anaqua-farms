@@ -1070,7 +1070,12 @@ function ChemTag({ chem, onRemove }) {
   );
 }
 
-function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChange, onRemove, isMobile }) {
+function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChange, onRemove, isMobile, theme }) {
+  const t_ = theme || {
+    card:"#f9fdf5", inputLine:"#c8dbb0", ink:"#1a3c08", ink2:"#555", mut:"#888",
+    green:"#2a5c0f", onGreen:"#2a5c0f", tintGreen:"#e6f5d0", fill:"#f1f4ee",
+    blue:"#1a6a8a", tintBlue:"#e8f4ff", input:"#fff", amber:"#7a3a9a", tintAmber:"#f5eeff",
+  };
   const selected    = chemicals.find(c => c.id === chem.chemId);
   const baseUnit    = selected?.unit || "oz";          // library unit
   const inputMode   = chem.inputMode || "rate";        // "rate" | "galtank"
@@ -1145,6 +1150,83 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   // ── Card layout: left half = controls, right half = full tank ────────────────
   const lessThanOneTank = parseFloat(totalAcres) > 0 && acreLoadsRaw > 0 && parseFloat(totalAcres) <= acreLoadsRaw;
   const galtankLabel = isDryUnit ? (unitNorm === "lb" || unitNorm === "lbs" ? "lb/tank" : "oz/tank") : "gal/tank";
+
+  if (isMobile) {
+    const totalStr = lessThanOneTank ? (partialDisplay || tankDisplay) : tankDisplay;
+    return (
+      <div style={{ border:`1.5px solid ${t_.inputLine}`, borderRadius:13, padding:"11px 12px", background: t_.card }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:9 }}>
+          <span style={{ width:24, height:24, borderRadius:7, background: t_.tintBlue, color: t_.blue, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            {selected?.formType || "—"}
+          </span>
+          <span style={{ flex:1, fontSize:13.5, fontWeight:700, color: t_.ink, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{selected?.name || "—"}</span>
+          <button onClick={onRemove} style={{ background:"none", border:"none", color: t_.mut, fontSize:20, lineHeight:1, cursor:"pointer", padding:"0 2px" }}>×</button>
+        </div>
+
+        <div style={{ display:"flex", alignItems:"center", gap:6, background: t_.fill, borderRadius:10, padding:3, marginBottom:9, width:"fit-content" }}>
+          <button onClick={() => onChange("inputMode","rate")}
+            style={{ padding:"6px 12px", border:"none", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:700,
+              background: inputMode==="rate" ? t_.card : "transparent", color: inputMode==="rate" ? t_.ink : t_.mut }}>Rate / ac</button>
+          <button onClick={() => onChange("inputMode","galtank")}
+            style={{ padding:"6px 12px", border:"none", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:700,
+              background: inputMode==="galtank" ? t_.card : "transparent", color: inputMode==="galtank" ? t_.ink : t_.mut }}>{galtankLabel}</button>
+        </div>
+
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          {inputMode === "rate" ? (
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
+                style={{ width:62, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:8, fontSize:14, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace" }}
+                placeholder="0" type="number" min="0" step="0.1"/>
+              <span style={{ fontSize:12, color: t_.mut, fontWeight:600 }}>{baseUnit}/ac</span>
+            </div>
+          ) : (
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
+                style={{ width:62, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:8, fontSize:14, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace" }}
+                placeholder="0" type="number" min="0" step="0.01"/>
+              <span style={{ fontSize:12, color: t_.mut, fontWeight:600 }}>{galtankLabel}</span>
+            </div>
+          )}
+          <div style={{ flex:1, textAlign:"right" }}>
+            <span style={{ fontSize:11, color: t_.mut }}>total </span>
+            <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:13.5, fontWeight:700, color: t_.onGreen }}>{totalStr}</span>
+          </div>
+        </div>
+        {inputMode === "galtank" && galtankLabelRate && (
+          <div style={{ fontSize:10.5, color: t_.mut, marginTop:4 }}>= {parseFloat(galtankLabelRate).toFixed(2)} {baseUnit}/ac</div>
+        )}
+
+        {(isOzUnit || dryOzSubline || containerLabel) && (
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:9, flexWrap:"wrap" }}>
+            {isOzUnit && (
+              <button onClick={() => onChange("roundQtrGal", !roundQtr)} style={{
+                padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
+                background: roundQtr ? t_.tintBlue : t_.fill, color: roundQtr ? t_.blue : t_.mut,
+              }}>↑ Round to ¼ gal</button>
+            )}
+            {isOzUnit && !selected?.containerSize && (
+              <button onClick={() => onChange("jug2_5gal", !jug2_5)} style={{
+                padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
+                background: jug2_5 ? t_.tintAmber : t_.fill, color: jug2_5 ? t_.amber : t_.mut,
+              }}>2.5 gal jugs</button>
+            )}
+            {(containerLabelPartial || containerLabel) && (
+              <span style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color: t_.mut, fontWeight:600 }}>
+                📦 {lessThanOneTank ? (containerLabelPartial || containerLabel) : containerLabel}
+              </span>
+            )}
+          </div>
+        )}
+        {!lessThanOneTank && partialDisplay && (
+          <div style={{ marginTop:9, paddingTop:8, borderTop:`1px dashed ${t_.inputLine}`, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+            <span style={{ fontSize:10.5, color: t_.amber, fontWeight:700, textTransform:"uppercase" }}>Partial ({partialAc.toFixed(1)} ac)</span>
+            <span style={{ fontFamily:"'Space Grotesk',monospace", fontWeight:700, color: t_.amber, fontSize:14 }}>{partialDisplay}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -3639,6 +3721,7 @@ export default function App() {
                       onChange={(k,v) => updateChemRow(row.id,k,v)}
                       onRemove={() => removeChemRow(row.id)}
                       isMobile={isMobile}
+                      theme={theme}
                     />
                   ))}
                 </div>
