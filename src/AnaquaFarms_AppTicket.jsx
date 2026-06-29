@@ -1426,6 +1426,11 @@ export default function App() {
   useEffect(() => { localStorage.setItem("boomlog_dark", darkMode ? "1" : "0"); }, [darkMode]);
   useEffect(() => { localStorage.setItem("boomlog_accent", accent); }, [accent]);
   const theme = buildTheme(darkMode, accent);
+  // Mobile Library sub-nav: "equip" and "people" both live under view==="equipMgr",
+  // this just tracks which half of that view to show on mobile.
+  const [libTab,        setLibTab]        = useState("chems");
+  const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [addPersonDraft,setAddPersonDraft]= useState({ name:"", licensed:true, license:"" });
   // Mobile-themed card/section/label chrome — falls back to the original desktop
   // styles untouched when not on mobile, so this is a no-op for the desktop layout.
   const cardT = isMobile ? {
@@ -2879,14 +2884,19 @@ export default function App() {
         {/* Library sub-nav — mobile only, since the top tabs are hidden on mobile */}
         {isMobile && ["fieldMgr","equipMgr","chemMgr"].includes(view) && (
           <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-            {[["chemMgr","Chems"],["fieldMgr","Fields"],["equipMgr","Equip"]].map(([v,l]) => (
-              <button key={v} onClick={() => setView(v)} style={{
-                flex:1, padding:"9px 0", border:"none", borderRadius:11, cursor:"pointer",
-                fontSize:13, fontWeight:700,
-                background: view===v ? theme.header : theme.fill,
-                color:      view===v ? "#fff"        : theme.ink2,
-              }}>{l}</button>
-            ))}
+            {[["chemMgr","Chems","chems"],["fieldMgr","Fields","fields"],["equipMgr","Equip","equip"],["equipMgr","People","people"]].map(([v,l,tab]) => {
+              const active = tab === "chems" ? view === "chemMgr"
+                : tab === "fields" ? view === "fieldMgr"
+                : view === "equipMgr" && libTab === tab;
+              return (
+                <button key={tab} onClick={() => { setView(v); setLibTab(tab); }} style={{
+                  flex:1, padding:"9px 0", border:"none", borderRadius:11, cursor:"pointer",
+                  fontSize:13, fontWeight:700,
+                  background: active ? theme.header : theme.fill,
+                  color:      active ? "#fff"        : theme.ink2,
+                }}>{l}</button>
+              );
+            })}
           </div>
         )}
 
@@ -5504,8 +5514,127 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ PEOPLE (mobile-only unified applicators view) ═══════════════════ */}
+        {view === "equipMgr" && isMobile && libTab === "people" && (() => {
+          const people = [
+            ...licensed.map(p => ({ ...p, _kind:"lic" })),
+            ...nonLicensed.map(p => ({ ...p, _kind:"nonlic" })),
+          ].sort((a,b) => a.name.localeCompare(b.name));
+          const deletePerson = (p) => {
+            if (p._kind === "lic") {
+              setLicensed(ops=>ops.filter(x=>x.id!==p.id));
+              supabase.from("licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
+                if (error) showToast("Failed to delete applicator: " + error.message);
+              });
+            } else {
+              setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
+              supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
+                if (error) showToast("Failed to delete applicator: " + error.message);
+              });
+            }
+          };
+          const saveNewPerson = () => {
+            const name = addPersonDraft.name.trim();
+            if (!name) return;
+            if (addPersonDraft.licensed) {
+              const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
+              const rec = { id: nextId, name, license: addPersonDraft.license.trim() };
+              setLicensed(ops => [...ops, rec]);
+              supabase.from("licensed_applicators").upsert({ ...rec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+                if (error) showToast("Failed to save applicator: " + error.message);
+              });
+            } else {
+              const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
+              const rec = { id: nextId, name };
+              setNonLicensed(ops => [...ops, rec]);
+              supabase.from("non_licensed_applicators").upsert({ ...rec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+                if (error) showToast("Failed to save applicator: " + error.message);
+              });
+            }
+            setAddPersonDraft({ name:"", licensed:true, license:"" });
+            setAddPersonOpen(false);
+          };
+          return (
+            <div>
+              {isOwner && (
+                <button onClick={() => setAddPersonOpen(true)} style={{
+                  width:"100%", border:`1.5px dashed ${theme.dash}`, borderRadius:13, padding:13,
+                  background: theme.card, color: theme.onGreen, fontSize:14, fontWeight:800, cursor:"pointer", marginBottom:13,
+                }}>+ Add applicator</button>
+              )}
+              <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                {people.map(p => (
+                  <div key={`${p._kind}-${p.id}`} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
+                    <span style={{ width:38, height:38, borderRadius:11, background: p._kind==="lic" ? theme.header : theme.fill, color: p._kind==="lic" ? "#fff" : theme.ink2, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13, fontWeight:800 }}>
+                      {p.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}
+                    </span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{p.name}</div>
+                      <div style={{ fontSize:11.5, color: theme.mut }}>{p._kind==="lic" ? `Licensed${p.license ? " · "+p.license : ""}` : "Non-licensed"}</div>
+                    </div>
+                    <span style={{ background: p._kind==="lic" ? theme.tintGreen : theme.fill, color: p._kind==="lic" ? theme.onGreen : theme.ink2, borderRadius:6, padding:"3px 8px", fontSize:10, fontWeight:800 }}>
+                      {p._kind==="lic" ? "LIC" : "NON-LIC"}
+                    </span>
+                    {isOwner && <button onClick={() => deletePerson(p)} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18, marginLeft:4 }}>×</button>}
+                  </div>
+                ))}
+                {people.length === 0 && (
+                  <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No applicators added yet.</div>
+                )}
+              </div>
+
+              {addPersonOpen && (
+                <div style={{ position:"fixed", inset:0, zIndex:200, display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+                  <div onClick={() => setAddPersonOpen(false)} style={{ position:"absolute", inset:0, background:"rgba(10,20,14,0.45)" }} />
+                  <div style={{ position:"relative", background: theme.canvas, borderRadius:"26px 26px 0 0", padding:"16px 16px 26px", boxShadow:"0 -12px 40px rgba(0,0,0,0.28)", maxHeight:"85vh", overflowY:"auto" }}>
+                    <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 14px" }} />
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+                      <div style={{ fontSize:19, fontWeight:800, color: theme.ink }}>New applicator</div>
+                      <button onClick={() => setAddPersonOpen(false)} style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:19, lineHeight:1, cursor:"pointer" }}>×</button>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:13, marginBottom:18 }}>
+                      <div>
+                        <label style={{ ...labelT, marginBottom:5 }}>Name</label>
+                        <input value={addPersonDraft.name} onChange={e => setAddPersonDraft(d=>({...d,name:e.target.value}))} placeholder="Required" style={inp} autoFocus />
+                      </div>
+                      <div>
+                        <label style={{ ...labelT, marginBottom:5 }}>Type</label>
+                        <div style={{ display:"flex", background: theme.fill, borderRadius:12, padding:3, gap:2 }}>
+                          <button onClick={() => setAddPersonDraft(d=>({...d,licensed:true}))} style={{
+                            flex:1, padding:"9px 0", border:"none", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700,
+                            background: addPersonDraft.licensed ? theme.card : "transparent", color: addPersonDraft.licensed ? theme.ink : theme.mut,
+                            boxShadow: addPersonDraft.licensed ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
+                          }}>Licensed</button>
+                          <button onClick={() => setAddPersonDraft(d=>({...d,licensed:false}))} style={{
+                            flex:1, padding:"9px 0", border:"none", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700,
+                            background: !addPersonDraft.licensed ? theme.card : "transparent", color: !addPersonDraft.licensed ? theme.ink : theme.mut,
+                            boxShadow: !addPersonDraft.licensed ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
+                          }}>Non-licensed</button>
+                        </div>
+                      </div>
+                      {addPersonDraft.licensed && (
+                        <div>
+                          <label style={{ ...labelT, marginBottom:5 }}>License No.</label>
+                          <input value={addPersonDraft.license} onChange={e => setAddPersonDraft(d=>({...d,license:e.target.value}))} placeholder="e.g. 0186663" style={{ ...inp, fontFamily:"'Space Grotesk',monospace" }} />
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display:"flex", gap:9 }}>
+                      <button onClick={() => setAddPersonOpen(false)} style={{ flex:1, padding:14, borderRadius:13, border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.ink2, fontSize:15, fontWeight:700, cursor:"pointer" }}>Cancel</button>
+                      <button onClick={saveNewPerson} disabled={!addPersonDraft.name.trim()} style={{
+                        flex:1, padding:14, borderRadius:13, border:"none", fontSize:15, fontWeight:700, cursor: addPersonDraft.name.trim() ? "pointer" : "default",
+                        background: addPersonDraft.name.trim() ? theme.header : theme.fill, color: addPersonDraft.name.trim() ? "#fff" : theme.mut,
+                      }}>Save</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ══ EQUIPMENT & OPERATORS MANAGER ════════════════════════════════════ */}
-        {view === "equipMgr" && (
+        {view === "equipMgr" && !(isMobile && libTab === "people") && (
           <div>
             {/* Equipment */}
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
