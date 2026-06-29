@@ -1440,9 +1440,9 @@ export default function App() {
   } : sectionTitle;
   const pillBtn = (active) => isMobile ? {
     borderWidth: active ? 2 : 1.5,
-    borderColor: active ? theme.green : "transparent",
-    background:  active ? theme.card  : theme.fill,
-    color:       active ? theme.green : theme.ink2,
+    borderColor: active ? theme.green     : "transparent",
+    background:  active ? theme.tintGreen : theme.fill,
+    color:       active ? theme.green     : theme.ink2,
     borderRadius: 10,
   } : {
     borderColor: active ? "#2a5c0f" : "#c8dbb0",
