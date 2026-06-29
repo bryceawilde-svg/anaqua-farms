@@ -2532,6 +2532,7 @@ export default function App() {
   const [chemDupWarning,  setChemDupWarning]  = useState("");
   const [editingChemId,   setEditingChemId]   = useState(null);
   const [editChemDraft,   setEditChemDraft]   = useState({});
+  const [addChemOpen,     setAddChemOpen]     = useState(false);
 
   const findChemDup = (name, epa) => {
     const n = name?.trim().toLowerCase();
@@ -5883,7 +5884,11 @@ export default function App() {
 
         {view === "chemMgr" && (
           <div>
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <input ref={scanLabelRef} type="file" accept="image/*" capture="environment" onChange={scanLabel} style={{ display:"none" }}/>
+            <input ref={chemFileRef} type="file" accept=".csv" onChange={handleChemCSV} style={{ display:"none" }}/>
+
+            {!isMobile && (
+            <div style={{...cardT, padding:"14px 16px"}}>
               <div style={sectionTitleT}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
                 CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Formulation Type, Container Size (optional)</code> — first row is header.<br/>
@@ -5894,12 +5899,20 @@ export default function App() {
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
                 }}>📂 Upload CSV</button>
-                <input ref={chemFileRef} type="file" accept=".csv" onChange={handleChemCSV} style={{ display:"none" }}/>
                 {chemUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{chemUpMsg}</span>}
               </div>
             </div>
+            )}
 
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            {isMobile ? (
+              isOwner && (
+                <button onClick={() => setAddChemOpen(true)} style={{
+                  width:"100%", border:`1.5px dashed ${theme.dash}`, borderRadius:13, padding:13,
+                  background: theme.card, color: theme.onGreen, fontSize:14, fontWeight:800, cursor:"pointer", marginBottom:13,
+                }}>+ Add chemical</button>
+              )
+            ) : (
+            <div style={{...cardT, padding:"14px 16px"}}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                 <div style={sectionTitleT}>Add Chemical Manually</div>
                 {isPro ? (
@@ -5919,9 +5932,8 @@ export default function App() {
                     📷 Scan Label 🔒
                   </button>
                 )}
-                <input ref={scanLabelRef} type="file" accept="image/*" capture="environment" onChange={scanLabel} style={{ display:"none" }}/>
               </div>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
                 {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelT}>{lbl}</label>
@@ -5985,6 +5997,83 @@ export default function App() {
                 borderRadius:6, padding:"8px 20px", cursor: chemDupWarning ? "default" : "pointer", fontSize:13, fontWeight:700
               }}>+ Add Chemical</button>
             </div>
+            )}
+
+            {isMobile && addChemOpen && (
+              <div style={{ position:"fixed", inset:0, zIndex:200, display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+                <div onClick={() => setAddChemOpen(false)} style={{ position:"absolute", inset:0, background:"rgba(10,20,14,0.45)" }} />
+                <div style={{ position:"relative", background: theme.canvas, borderRadius:"26px 26px 0 0", padding:"16px 16px 26px", boxShadow:"0 -12px 40px rgba(0,0,0,0.28)", maxHeight:"85vh", overflowY:"auto" }}>
+                  <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 14px" }} />
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+                    <div style={{ fontSize:19, fontWeight:800, color: theme.ink }}>New chemical</div>
+                    <button onClick={() => setAddChemOpen(false)} style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:19, lineHeight:1, cursor:"pointer" }}>×</button>
+                  </div>
+
+                  {isPro ? (
+                    <button
+                      onClick={() => scanLabelRef.current.click()}
+                      disabled={scanLabelLoading}
+                      style={{ width:"100%", background: theme.tintBlue, color: theme.blue, border:"none", borderRadius:12,
+                        padding:12, cursor: scanLabelLoading ? "default" : "pointer", fontSize:14, fontWeight:700,
+                        opacity: scanLabelLoading ? 0.7 : 1, marginBottom:16 }}
+                    >
+                      {scanLabelLoading ? "⏳ Scanning…" : "📷 Scan label to fill in fields"}
+                    </button>
+                  ) : (
+                    <button disabled title="Pro feature" style={{
+                      width:"100%", background: theme.fill, color: theme.mut, border:"none", borderRadius:12,
+                      padding:12, cursor:"not-allowed", fontSize:14, fontWeight:700, marginBottom:16,
+                    }}>📷 Scan label to fill in fields 🔒</button>
+                  )}
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:13, marginBottom:18 }}>
+                    <div>
+                      <label style={{ ...labelT, marginBottom:5 }}>Name</label>
+                      <input value={newChem.name} onChange={e => { setNewChem(c=>({...c,name:e.target.value})); setChemDupWarning(""); }} placeholder="Required" style={inp} />
+                    </div>
+                    <div>
+                      <label style={{ ...labelT, marginBottom:5 }}>EPA Reg. No.</label>
+                      <input value={newChem.epa} onChange={e => { setNewChem(c=>({...c,epa:e.target.value})); setChemDupWarning(""); }} placeholder="e.g. 524-537" style={inp} />
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
+                      <div>
+                        <label style={{ ...labelT, marginBottom:5 }}>Formulation</label>
+                        <select value={newChem.formType||"L"} onChange={e => setNewChem(c=>({...c,formType:e.target.value}))} style={{ ...inp, fontFamily:"inherit" }}>
+                          <option value="L">L</option>
+                          <option value="E">E</option>
+                          <option value="S">S</option>
+                          <option value="WDG">WDG</option>
+                          <option value="WP">WP</option>
+                          <option value="D">D</option>
+                          <option value="A">A</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ ...labelT, marginBottom:5 }}>REI</label>
+                        <input value={newChem.rei} onChange={e => setNewChem(c=>({...c,rei:e.target.value}))} placeholder="e.g. 12 hr" style={inp} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {chemDupWarning && (
+                    <div style={{ marginBottom:14, padding:"9px 12px", background: theme.tintAmber, border:`1px solid ${theme.amber}`,
+                      borderRadius:10, color: theme.amber, fontSize:13, fontWeight:600 }}>
+                      ⚠️ Duplicate — {chemDupWarning}
+                    </div>
+                  )}
+
+                  <div style={{ display:"flex", gap:9 }}>
+                    <button onClick={() => setAddChemOpen(false)} style={{ flex:1, padding:14, borderRadius:13, border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.ink2, fontSize:15, fontWeight:700, cursor:"pointer" }}>Cancel</button>
+                    <button onClick={() => { addManualChem(); setAddChemOpen(false); }} disabled={!!chemDupWarning || !newChem.name || !newChem.epa || !newChem.rei} style={{
+                      flex:1, padding:14, borderRadius:13, border:"none", fontSize:15, fontWeight:700,
+                      cursor: (chemDupWarning || !newChem.name || !newChem.epa || !newChem.rei) ? "default" : "pointer",
+                      background: (chemDupWarning || !newChem.name || !newChem.epa || !newChem.rei) ? theme.fill : theme.header,
+                      color:      (chemDupWarning || !newChem.name || !newChem.epa || !newChem.rei) ? theme.mut  : "#fff",
+                    }}>Save</button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitleT}>Chemical Library ({chemicals.length})</div>
