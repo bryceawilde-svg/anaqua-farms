@@ -2258,6 +2258,8 @@ export default function App() {
   const [fieldMerging,  setFieldMerging]  = useState(false);
   const [fieldMergeMode,setFieldMergeMode]= useState(false);
   const [newField,      setNewField]      = useState({ name:"", acres:"", crop:"", traits:[] });
+  const [addFieldOpen,  setAddFieldOpen]  = useState(false);
+  const [addFieldMode,  setAddFieldMode]  = useState(null); // null | "manual" | "csv" | "shape"
   const [editingFieldId,       setEditingFieldId]       = useState(null);
   const [editFieldDraft,       setEditFieldDraft]       = useState({});
   const [copyBoundaryTargetId, setCopyBoundaryTargetId] = useState(null);
@@ -4377,6 +4379,153 @@ export default function App() {
 
         {view === "fieldMgr" && (
           <div>
+            {/* Always-mounted file inputs so mobile sheet can trigger them */}
+            <input ref={fmFileRef} type="file" accept=".zip" style={{ display:"none" }} onChange={e => handleFmZip(e.target.files[0])} />
+            <input ref={fieldFileRef} type="file" accept=".csv,.txt" onChange={handleFieldCSV} style={{ display:"none" }}/>
+
+            {/* Mobile: collapsed entry point */}
+            {isMobile && isOwner && (
+              <button onClick={() => { setAddFieldOpen(true); setAddFieldMode(null); }} style={{
+                width:"100%", border:`1.5px dashed ${theme.dash}`, borderRadius:13, padding:13,
+                background: theme.card, color: theme.onGreen, fontSize:14, fontWeight:800, cursor:"pointer", marginBottom:13,
+              }}>+ Add field</button>
+            )}
+
+            {/* Mobile: bottom sheet */}
+            {isMobile && addFieldOpen && (
+              <div style={{ position:"fixed", inset:0, zIndex:200, display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+                <div onClick={() => setAddFieldOpen(false)} style={{ position:"absolute", inset:0, background:"rgba(10,20,14,0.45)" }} />
+                <div style={{ position:"relative", background: theme.canvas, borderRadius:"26px 26px 0 0", padding:"16px 16px 90px", boxShadow:"0 -12px 40px rgba(0,0,0,0.28)", maxHeight:"85vh", overflowY:"auto" }}>
+                  <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 14px" }} />
+
+                  {addFieldMode === null && (<>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
+                      <div style={{ fontSize:19, fontWeight:800, color: theme.ink }}>Add field</div>
+                      <button onClick={() => setAddFieldOpen(false)} style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:19, lineHeight:1, cursor:"pointer" }}>×</button>
+                    </div>
+                    {[
+                      ["🗺", "Import boundaries", "Shapefile .zip", () => { setAddFieldMode("shape"); setTimeout(() => fmFileRef.current?.click(), 50); }],
+                      ["📄", "Import from CSV",  "Any CSV or spreadsheet export", () => { setAddFieldMode("csv"); setTimeout(() => fieldFileRef.current?.click(), 50); }],
+                      ["✏️", "Add manually",     "Enter field details by hand",   () => setAddFieldMode("manual")],
+                    ].map(([icon, title, sub, onPress]) => (
+                      <button key={title} onClick={onPress} style={{
+                        width:"100%", background: theme.card, border:`1px solid ${theme.line}`, borderRadius:14,
+                        padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:14, marginBottom:9, textAlign:"left",
+                      }}>
+                        <span style={{ fontSize:22, width:36, textAlign:"center" }}>{icon}</span>
+                        <div>
+                          <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{title}</div>
+                          <div style={{ fontSize:12, color: theme.mut }}>{sub}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </>)}
+
+                  {addFieldMode === "shape" && (
+                    <div>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+                        <button onClick={() => { setAddFieldMode(null); setFmStage("upload"); setFmParseError(""); }} style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:17, cursor:"pointer" }}>←</button>
+                        <div style={{ fontSize:19, fontWeight:800, color: theme.ink }}>Import boundaries</div>
+                      </div>
+                      {fmParsing && <div style={{ color: theme.onGreen, fontWeight:700, textAlign:"center", padding:24 }}>⏳ Parsing shapefile…</div>}
+                      {fmParseError && <div style={{ color:"#c0392b", padding:12, background: theme.fill, borderRadius:10, marginBottom:12 }}>{fmParseError}</div>}
+                      {fmStage === "upload" && !fmParsing && (
+                        <button onClick={() => fmFileRef.current?.click()} style={{ width:"100%", background: theme.fill, border:`1.5px dashed ${theme.dash}`, borderRadius:13, padding:20, color: theme.ink2, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                          📂 Tap to browse shapefile .zip
+                        </button>
+                      )}
+                      {fmStage === "result" && fmResult && (
+                        <div>
+                          <div style={{ color: theme.onGreen, fontWeight:700, marginBottom:10 }}>✓ Import complete</div>
+                          <div style={{ fontSize:13, color: theme.ink2, marginBottom:16 }}>{fmResult.imported} imported · {fmResult.updated} updated · {fmResult.skipped} skipped</div>
+                          <button onClick={() => { setAddFieldOpen(false); setFmStage("upload"); setFmResult(null); }} style={{ width:"100%", background: theme.header, color:"#fff", border:"none", borderRadius:13, padding:14, fontSize:15, fontWeight:700, cursor:"pointer" }}>Done</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {addFieldMode === "csv" && (
+                    <div>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+                        <button onClick={() => { setAddFieldMode(null); setCsvStage("idle"); }} style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:17, cursor:"pointer" }}>←</button>
+                        <div style={{ fontSize:19, fontWeight:800, color: theme.ink }}>Import from CSV</div>
+                      </div>
+                      {csvStage === "idle" && (
+                        <button onClick={() => fieldFileRef.current?.click()} style={{ width:"100%", background: theme.fill, border:`1.5px dashed ${theme.dash}`, borderRadius:13, padding:20, color: theme.ink2, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                          📂 Tap to browse CSV file
+                        </button>
+                      )}
+                      {csvStage !== "idle" && csvStage !== "done" && (
+                        <div style={{ color: theme.onGreen, fontWeight:700, textAlign:"center", padding:24 }}>⏳ Processing CSV…</div>
+                      )}
+                      {csvStage === "done" && (
+                        <div>
+                          <div style={{ color: theme.onGreen, fontWeight:700, marginBottom:10 }}>✓ Import complete</div>
+                          <button onClick={() => { setAddFieldOpen(false); setCsvStage("idle"); }} style={{ marginTop:8, width:"100%", background: theme.header, color:"#fff", border:"none", borderRadius:13, padding:14, fontSize:15, fontWeight:700, cursor:"pointer" }}>Done</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {addFieldMode === "manual" && (
+                    <div>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+                        <button onClick={() => setAddFieldMode(null)} style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:17, cursor:"pointer" }}>←</button>
+                        <div style={{ fontSize:19, fontWeight:800, color: theme.ink }}>New field</div>
+                      </div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:13, marginBottom:14 }}>
+                        <div>
+                          <label style={{ ...labelT, marginBottom:5 }}>Field Name</label>
+                          <input value={newField.name} onChange={e => setNewField(f=>({...f,name:e.target.value}))} placeholder="e.g. South Field 3" style={inp} autoFocus />
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
+                          <div>
+                            <label style={{ ...labelT, marginBottom:5 }}>Acres</label>
+                            <input type="number" value={newField.acres} onChange={e => setNewField(f=>({...f,acres:e.target.value}))} placeholder="0.0" min="0" step="0.1" style={inp} />
+                          </div>
+                          <div>
+                            <label style={{ ...labelT, marginBottom:5 }}>Crop</label>
+                            <select value={newField.crop||""} onChange={e => setNewField(f=>({...f,crop:e.target.value,traits:[]}))} style={{ ...inp, fontFamily:"inherit" }}>
+                              <option value="">— select —</option>
+                              {orgCrops.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {CROP_TRAITS[newField.crop] && (
+                          <div>
+                            <label style={{ ...labelT, marginBottom:5 }}>Herbicide Tolerances</label>
+                            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                              {CROP_TRAITS[newField.crop].map(t => (
+                                <label key={t.key} style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, cursor:"pointer",
+                                  background: (newField.traits||[]).includes(t.key) ? theme.tintBlue : theme.fill,
+                                  border:`1px solid ${(newField.traits||[]).includes(t.key) ? theme.blue : "transparent"}`,
+                                  borderRadius:7, padding:"4px 9px" }}>
+                                  <input type="checkbox" checked={(newField.traits||[]).includes(t.key)}
+                                    onChange={e => setNewField(f => ({ ...f, traits: e.target.checked ? [...(f.traits||[]),t.key] : (f.traits||[]).filter(x=>x!==t.key) }))} />
+                                  {t.label}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display:"flex", gap:9 }}>
+                        <button onClick={() => setAddFieldMode(null)} style={{ flex:1, padding:14, borderRadius:13, border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.ink2, fontSize:15, fontWeight:700, cursor:"pointer" }}>Back</button>
+                        <button onClick={() => { addManualField(); setAddFieldOpen(false); }} disabled={!newField.name || !newField.acres} style={{
+                          flex:1, padding:14, borderRadius:13, border:"none", fontSize:15, fontWeight:700,
+                          cursor: (!newField.name || !newField.acres) ? "default" : "pointer",
+                          background: (!newField.name || !newField.acres) ? theme.fill : theme.header,
+                          color: (!newField.name || !newField.acres) ? theme.mut : "#fff",
+                        }}>Save</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Desktop: full import/add cards (hidden on mobile) */}
+            {!isMobile && (<>
             {/* ── FarmMobile Shapefile Importer ─────────────────────────────── */}
             {(() => {
               const resetFm = () => {
@@ -4578,8 +4727,6 @@ export default function App() {
                           </>
                         )}
                       </div>
-                      <input ref={fmFileRef} type="file" accept=".zip" style={{ display:"none" }}
-                        onChange={e => handleFmZip(e.target.files[0])} />
                       {fmParseError && <div style={{ color:"#c0392b", fontSize:12, marginTop:6 }}>{fmParseError}</div>}
                     </div>
                   )}
@@ -4924,7 +5071,6 @@ export default function App() {
                       background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                       padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
                     }}>📂 Upload CSV</button>
-                    <input ref={fieldFileRef} type="file" accept=".csv,.txt" onChange={handleFieldCSV} style={{ display:"none" }}/>
                     {fieldUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{fieldUpMsg}</span>}
                   </div>
                 </>
@@ -5155,6 +5301,7 @@ export default function App() {
                 </div>
               )}
             </div>
+            </>)}
 
             {/* ── Crop Season Status ──────────────────────────────────────────── */}
             {(() => {
