@@ -2785,7 +2785,7 @@ export default function App() {
     : [["applicator","📱 Applicator"],["log","📋 Saved"],["chemMgr","🧪 Chems"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]];
 
   return (
-    <div style={{ minHeight:"100vh", background: isMobile ? theme.canvas : "#f0f7e8", fontFamily:"'Hanken Grotesk',system-ui,sans-serif", paddingBottom: isMobile ? 78 : 0 }}>
+    <div style={{ minHeight:"100vh", background: isMobile ? theme.canvas : "#f0f7e8", fontFamily:"'Hanken Grotesk',system-ui,sans-serif", paddingBottom: isMobile ? 78 : 0, overflowX: isMobile ? "hidden" : undefined }}>
 
       {/* Floating "+" — desktop only; mobile uses the bottom nav's center button */}
       {!isMobile && view === "log" && (
@@ -6664,18 +6664,18 @@ export default function App() {
             {/* Members list */}
             <div style={{ ...cardT, padding: isMobile ? "10px 10px" : "14px 16px", marginBottom:10 }}>
               <div style={sectionTitleT}>Members</div>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, ...(isMobile ? { tableLayout:"fixed" } : {}) }}>
                 <thead>
                   <tr style={{ background:"#f0f7e8" }}>
                     {["Email","Role","Status", isOwner ? "Remove" : ""].filter(Boolean).map(h => (
-                      <th key={h} style={{ padding:"6px 8px", textAlign:"left", fontWeight:700, color:"#2a5c0f", borderBottom:"1.5px solid #c8dbb0" }}>{h}</th>
+                      <th key={h} style={{ padding:"6px 8px", textAlign:"left", fontWeight:700, color:"#2a5c0f", borderBottom:"1.5px solid #c8dbb0", ...(isMobile && h === "Email" ? { width:"48%" } : {}) }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {orgMembers.map(m => (
                     <tr key={m.id} style={{ borderBottom:"1px solid #e8f0dc" }}>
-                      <td style={{ padding:"6px 8px", color: m.status === "pending" ? "#aaa" : "#333" }}>
+                      <td style={{ padding:"6px 8px", color: m.status === "pending" ? "#aaa" : "#333", ...(isMobile ? { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" } : {}) }}>
                         {m.invited_email || "—"}
                       </td>
                       <td style={{ padding:"6px 8px" }}>
