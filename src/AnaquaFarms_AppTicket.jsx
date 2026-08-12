@@ -1427,6 +1427,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem("boomlog_dark", darkMode ? "1" : "0"); }, [darkMode]);
   useEffect(() => { localStorage.setItem("boomlog_accent", accent); }, [accent]);
   const theme = buildTheme(darkMode, accent);
+  useEffect(() => { document.body.style.background = theme.canvas; }, [darkMode, accent]);
   // Mobile Library sub-nav: "equip" and "people" both live under view==="equipMgr",
   // this just tracks which half of that view to show on mobile.
   const [libTab,        setLibTab]        = useState("chems");
