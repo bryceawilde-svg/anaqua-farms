@@ -1399,6 +1399,7 @@ export default function App() {
   const [farmZipDraft,     setFarmZipDraft]     = useState("");
   const [farmZipSaving,    setFarmZipSaving]    = useState(false);
   const [cropInput,        setCropInput]        = useState("");
+  const [cropListOpen,     setCropListOpen]     = useState(false);
   const [resetAction,      setResetAction]      = useState(null);   // "fields" | "chemicals" | "account"
   const [resetConfirm,     setResetConfirm]     = useState("");
   const [resetWorking,     setResetWorking]     = useState(false);
@@ -6545,25 +6546,33 @@ export default function App() {
                   </div>
                 )}
 
-                <div style={{ border:"1.5px solid #c8dbb0", borderRadius:6, overflow:"hidden", marginBottom:8 }}>
-                  <div style={{ padding:"6px 10px", background:"#f0f7e8", fontSize:11, fontWeight:700, color:"#2a5c0f", borderBottom:"1px solid #c8dbb0", display:"flex", justifyContent:"space-between" }}>
-                    <span>Select from list</span>
-                    <span style={{ fontWeight:400, color:"#888" }}>{CROPS_LIST.filter(c => orgCrops.includes(c)).length} / {CROPS_LIST.length} selected</span>
-                  </div>
-                  <div style={isMobile ? {} : { maxHeight:220, overflowY:"auto" }}>
-                    {CROPS_LIST.map(crop => {
-                      const active = orgCrops.includes(crop);
-                      return (
-                        <label key={crop} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 12px", cursor:"pointer",
-                          background: active ? "#f0f7e8" : "transparent", borderBottom:"1px solid #f5f5f5" }}>
-                          <input type="checkbox" checked={active}
-                            onChange={() => active ? removeOrgCrop(crop) : saveOrgCrops([...orgCrops, crop])}
-                            style={{ accentColor:"#2a5c0f", flexShrink:0 }} />
-                          <span style={{ fontSize:13, color: active ? "#2a5c0f" : "#333", fontWeight: active ? 600 : 400 }}>{crop}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
+                <div style={{ border:`1.5px solid ${theme.inputLine}`, borderRadius:10, overflow:"hidden", marginBottom:8 }}>
+                  <button
+                    onClick={() => isMobile && setCropListOpen(o => !o)}
+                    style={{ width:"100%", padding:"8px 12px", background: theme.fill, border:"none", borderBottom:`1px solid ${theme.inputLine}`, display:"flex", justifyContent:"space-between", alignItems:"center", cursor: isMobile ? "pointer" : "default", textAlign:"left" }}
+                  >
+                    <span style={{ fontSize:12, fontWeight:700, color: theme.ink2 }}>Select from list</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontWeight:400, color: theme.mut, fontSize:11 }}>{CROPS_LIST.filter(c => orgCrops.includes(c)).length} / {CROPS_LIST.length}</span>
+                      {isMobile && <span style={{ color: theme.mut, fontSize:12 }}>{cropListOpen ? "▲" : "▼"}</span>}
+                    </span>
+                  </button>
+                  {(!isMobile || cropListOpen) && (
+                    <div style={isMobile ? {} : { maxHeight:220, overflowY:"auto" }}>
+                      {CROPS_LIST.map(crop => {
+                        const active = orgCrops.includes(crop);
+                        return (
+                          <label key={crop} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 12px", cursor:"pointer",
+                            background: active ? theme.tintGreen : "transparent", borderBottom:`1px solid ${theme.line}` }}>
+                            <input type="checkbox" checked={active}
+                              onChange={() => active ? removeOrgCrop(crop) : saveOrgCrops([...orgCrops, crop])}
+                              style={{ accentColor: theme.green, flexShrink:0 }} />
+                            <span style={{ fontSize:13, color: active ? theme.green : theme.ink, fontWeight: active ? 600 : 400 }}>{crop}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display:"flex", gap:8 }}>
