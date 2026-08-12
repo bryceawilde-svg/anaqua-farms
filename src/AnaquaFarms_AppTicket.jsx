@@ -1523,6 +1523,8 @@ export default function App() {
   const compatDebounceRef      = useRef(null);
   const cropSafetyDebounceRef  = useRef(null);
   const adjuvantDebounceRef    = useRef(null);
+  const headerRef              = useRef(null);
+  const [headerH, setHeaderH]  = useState(74);
   const [aiCropSafety,        setAiCropSafety]        = useState(null);
   const [aiCropSafetyLoading, setAiCropSafetyLoading] = useState(false);
   const [aiAdjuvants,         setAiAdjuvants]         = useState(null);
@@ -1532,6 +1534,10 @@ export default function App() {
   const [chatInput,    setChatInput]    = useState("");
   const [chatLoading,  setChatLoading]  = useState(false);
   const chatBottomRef = useRef(null);
+
+  useEffect(() => {
+    if (isMobile && headerRef.current) setHeaderH(headerRef.current.offsetHeight);
+  }, [view, libTab, isMobile]);
 
   const showToast = (message, type = "error") => {
     setToast({ message, type });
@@ -2820,7 +2826,7 @@ export default function App() {
 
       {/* Header */}
       {isMobile ? (
-        <div style={{ position:"sticky", top:0, zIndex:50, background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap" }}>
+        <div ref={headerRef} style={{ position:"fixed", top:0, left:0, right:0, zIndex:100, background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap" }}>
           <div>
             <div style={{ fontSize:23, fontWeight:800, letterSpacing:"-0.01em" }}>
               {view === "form" ? (editingId ? "Edit Ticket" : "New Ticket")
@@ -2901,7 +2907,7 @@ export default function App() {
       </div>
       )}
 
-      <div style={{ maxWidth:880, margin:"0 auto", padding: isMobile ? "12px 10px 80px" : "24px 16px 40px" }}>
+      <div style={{ maxWidth:880, margin:"0 auto", paddingTop: isMobile ? headerH + 12 : 24, paddingLeft: isMobile ? 10 : 16, paddingRight: isMobile ? 10 : 16, paddingBottom: isMobile ? 80 : 40 }}>
 
         {/* ══ APPLICATOR VIEW ══════════════════════════════════════════════════════ */}
         {view === "applicator" && (
