@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { fmtAcres, fmtAcresShort, fmtTankVol, fmtGpa, fmtTemp, fmtWindSpeed, areaLabel, tankLabel, sprayRateLabel, windSpeedLabel, tempLabel, AC_TO_HA, GAL_TO_L } from "./utils/units";
+import { parseCSV, csvCell } from "./utils/csv";
 import FieldMapPicker from "./FieldMapPicker";
 import BoundaryAssignMap from "./BoundaryAssignMap";
 import ApplicatorView from "./ApplicatorView";
@@ -115,13 +116,13 @@ const FORM_LABELS  = {
 };
 
 const DEFAULT_CHEMICALS = [
-  { id: 1,  name: "Roundup PowerMAX 3", epa: "524-537",    rei: "4 hours",  unit: "oz", formType: "S" },
-  { id: 2,  name: "Atrazine 4L",        epa: "100-816",    rei: "12 hours", unit: "oz", formType: "L" },
-  { id: 3,  name: "2,4-D Amine 4",      epa: "62719-17",   rei: "48 hours", unit: "oz", formType: "L" },
-  { id: 4,  name: "Bicep II Magnum",    epa: "100-1077",   rei: "12 hours", unit: "oz", formType: "L" },
-  { id: 5,  name: "Headline SC",        epa: "7969-187",   rei: "12 hours", unit: "oz", formType: "L" },
-  { id: 6,  name: "Lorsban 4E",         epa: "62719-220",  rei: "24 hours", unit: "oz", formType: "E" },
-  { id: 7,  name: "Treflan HFP",        epa: "62719-176",  rei: "24 hours", unit: "oz", formType: "E" },
+  { id: 1,  name: "Roundup PowerMAX 3", epa: "524-537",    rei: "4 hours",  unit: "oz", formType: "S",   activeIngredient: "Glyphosate, potassium salt 48.7%" },
+  { id: 2,  name: "Atrazine 4L",        epa: "100-816",    rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "Atrazine 42.2%" },
+  { id: 3,  name: "2,4-D Amine 4",      epa: "62719-17",   rei: "48 hours", unit: "oz", formType: "L",   activeIngredient: "2,4-D, dimethylamine salt 46.3%" },
+  { id: 4,  name: "Bicep II Magnum",    epa: "100-1077",   rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "S-metolachlor 33.0%, Atrazine 26.1%" },
+  { id: 5,  name: "Headline SC",        epa: "7969-187",   rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "Pyraclostrobin 23.6%" },
+  { id: 6,  name: "Lorsban 4E",         epa: "62719-220",  rei: "24 hours", unit: "oz", formType: "E",   activeIngredient: "Chlorpyrifos 44.9%" },
+  { id: 7,  name: "Treflan HFP",        epa: "62719-176",  rei: "24 hours", unit: "oz", formType: "E",   activeIngredient: "Trifluralin 43.0%" },
 ];
 
 const DEFAULT_EQUIPMENT = [
@@ -218,6 +219,12 @@ function fmtJugCount(totalOz) {
 }
 
 const DRY_FORM_TYPES = ["WDG","WP","D","WG"];
+
+// Label formulation codes (as printed on the product) that mix in the same WALES step
+// as one of the app's bucket codes. Without this, SC/CS/EC products fall out of the
+// printed mixing sequence and sort to the end of the tank.
+const FORM_TYPE_ALIASES = { SC:"L", CS:"L", EC:"E" };
+const walesKey = (formType) => FORM_TYPE_ALIASES[formType] || formType;
 
 // True when a chemical's container size is measured in lb (not gal).
 function chemContainerIsLb(chem) {
@@ -411,7 +418,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   const walesOrder2 = ["A","L","E","S","WDG","WP","D"];
   const circleColors2 = { A:"#4a7a20",L:"#2a5c0f",E:"#6a3a00",S:"#1a4a6a",WDG:"#5a3a7a",WP:"#7a3a00",D:"#4a4a00" };
   const sortByWales2 = (arr) => [...arr].sort((a,b) => {
-    const ai = walesOrder2.indexOf(a.chem.formType); const bi = walesOrder2.indexOf(b.chem.formType);
+    const ai = walesOrder2.indexOf(walesKey(a.chem.formType)); const bi = walesOrder2.indexOf(walesKey(b.chem.formType));
     return (ai===-1?99:ai) - (bi===-1?99:bi);
   });
   const colHdr = (isPartial) => `<tr>
@@ -435,8 +442,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     </tr>`;
     const rowTints = { A:"#f3faf0",L:"#f3faf0",E:"#fdf5f0",S:"#f0f5fa",WDG:"#f5f0fa",WP:"#faf0f0",D:"#f5f5f0" };
     return water + sorted.map(({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }, i) => {
-      const cc = circleColors2[chem.formType] || "#555";
-      const rowBg = rowTints[chem.formType] || "#fff";
+      const cc = circleColors2[walesKey(chem.formType)] || "#555";
+      const rowBg = rowTints[walesKey(chem.formType)] || "#fff";
       const rateLabel = parseFloat(effRate||0).toFixed(2) + " " + chem.unit + "/ac"
         + (roundQtr && isOzUnit ? " ↑¼gal" : "");
       const lbOzLine = lbOzFn ? lbOzFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }) : null;
@@ -536,11 +543,11 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     { key:"WP",  color:"#7a3a00", label:"WETTABLE POWDERS",                detail:"Pre-slurry wettable powders before adding" },
     { key:"D",   color:"#4a4a00", label:"DRY FLOWABLES",                   detail:"Add dry flowables last" },
   ];
-  const usedTypes = [...new Set(resolvedChems.map(r => r.chem.formType).filter(Boolean))];
+  const usedTypes = [...new Set(resolvedChems.map(r => walesKey(r.chem.formType)).filter(Boolean))];
   const walesRows = walesSteps
     .filter(s => usedTypes.includes(s.key))
     .map((s, i) => {
-      const chems = resolvedChems.filter(r => r.chem.formType === s.key);
+      const chems = resolvedChems.filter(r => walesKey(r.chem.formType) === s.key);
       const names = chems.map(r => {
         const fmtAmt = r.roundQtr && r.isOzUnit
           ? (fmtOzAsDecimalGal(r.calc.totalPerTankRaw) || "—")
@@ -820,29 +827,29 @@ function downloadCSV(tickets, orgName, isMetric) {
     `Field Wind Speed (${windH})`,"Field Wind Dir",`Field Air Temp (${tempH})`,
     `Tank Size (${tankH})`,"Pressure (PSI)",spdH,"Acre Loads","Full Loads",`Partial Load (${areaH})`,
     "Equipment","Licensed Applicator","Non-Licensed Applicator",
-    "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
-  ].join(",");
+    "Product Name","Active Ingredient","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
+  ].map(csvCell).join(",");
 
   const rows = tickets.flatMap(t => {
     const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
-    const chems    = t.chemicals.length ? t.chemicals : [{ name:"", epa:"", rei:"", ratePerAcre:"", unit:"", totalPerTank:"" }];
+    const chems    = t.chemicals.length ? t.chemicals : [{ name:"", activeIngredient:"", epa:"", rei:"", ratePerAcre:"", unit:"", totalPerTank:"" }];
     return schedule.flatMap(fs =>
       chems.map(c => [
         fs.actualDateEnd || fs.actualDateStart || t.date,
         fs.actualTimeStart || fs.timeStart || "",
         fs.actualTimeEnd   || fs.timeEnd   || "",
-        `"${fs.name}"`, fs.acres,
-        t.crop, `"${t.targetPest||""}"`,
+        fs.name, fs.acres,
+        t.crop, t.targetPest||"",
         (fs.fieldWeather?.windSpeed ?? t.windSpeed) || "",
         (fs.fieldWeather?.windDir   ?? t.windDir)   || "",
         (fs.fieldWeather?.airTemp   ?? t.airTemp)   || "",
         t.tankSize, t.pressure, t.galPerAcre, t.acreLoads, t.fullLoads, t.partialAcres||"0",
-        `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, `"${t.nonLicensedApplicant||""}"`,
-        `"${c.name||""}"`, c.epa||"", c.rei||"",
+        t.equipmentType||"", t.licensedApplicant||"", t.nonLicensedApplicant||"",
+        c.name||"", c.activeIngredient||"", c.epa||"", c.rei||"",
         c.ratePerAcre||"", c.unit||"",
         (() => { const r = parseFloat(c.ratePerAcre), a = parseFloat(fs.acres); return (!isNaN(r) && r > 0 && !isNaN(a) && a > 0) ? `${(r * a).toFixed(2)} ${c.unit||""}`.trim() : ""; })(),
-        `"${t.notes||""}"`
-      ].join(","))
+        t.notes||""
+      ].map(csvCell).join(","))
     );
   });
 
@@ -851,6 +858,30 @@ function downloadCSV(tickets, orgName, isMetric) {
   const a    = document.createElement("a");
   a.href = url;
   a.download = `${(orgName || "BoomLog").replace(/\s+/g,"_")}_TDA_Records_${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Active ingredient strings are free text off a label; escape before interpolating into HTML.
+function escHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, ch => (
+    { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]
+  ));
+}
+
+// Round-trip export of the chemical library: edit in Excel, re-import to update in place.
+function downloadChemLibraryCSV(chemicals, orgName) {
+  if (!chemicals.length) return;
+  const header = ["ID","Chemical Name","EPA #","REI","Unit","Formulation Type","Container Size","Active Ingredient"];
+  const rows = chemicals.map(c => [
+    c.id, c.name || "", c.epa || "NA", c.rei || "", c.unit || "oz",
+    c.formType || "L", c.containerSize ?? "", c.activeIngredient || "",
+  ].map(csvCell).join(","));
+  const blob = new Blob([[header.map(csvCell).join(","), ...rows].join("\n")], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = `${(orgName || "Farm").replace(/\s+/g,"_")}_Chemical_Library_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -877,6 +908,7 @@ function downloadTDAReport(tickets, orgName) {
         <td>${t.crop}</td>
         <td>${pest}</td>
         <td>${c.name||"—"}</td>
+        <td>${escHtml(c.activeIngredient)||"—"}</td>
         <td>${c.epa||"—"}</td>
         <td>${c.ratePerAcre||"—"} ${c.unit||""}/ac</td>
         <td><strong>${totalAmt}</strong></td>
@@ -942,6 +974,7 @@ function downloadTDAReport(tickets, orgName) {
         <th>Crop / Site</th>
         <th>Target Pest</th>
         <th>Product Name</th>
+        <th>Active Ingredient</th>
         <th>EPA Reg #</th>
         <th>Rate/Acre</th>
         <th>Total Applied</th>
@@ -1622,7 +1655,7 @@ export default function App() {
         cs.data.forEach(r => { seasons[r.crop_name] = r.season; });
         setCropSeasons(seasons);
       }
-      setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })));
+      setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.form_type || ch.formType || "L", containerSize: ch.container_size ?? ch.containerSize ?? null, activeIngredient: ch.active_ingredient ?? ch.activeIngredient ?? "" })));
       setPestLibrary(p.data || []);
       setEquipment((e.data || []).map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })));
       setLicensed(la.data || []);
@@ -1851,6 +1884,7 @@ export default function App() {
         const partialFmt = calc.partialAcres > 0.01 ? fmtFull(partRaw) : null;
         return {
           name: c.name, epa: c.epa, rei: c.rei, unit: c.unit,
+          activeIngredient: c.activeIngredient || "",
           ratePerAcre: parseFloat(effRate||0).toFixed(4),
           roundQtrGal: r.roundQtrGal || false,
           jug2_5gal: r.jug2_5gal || false,
@@ -2407,7 +2441,7 @@ export default function App() {
   const chemFileRef     = useRef();
   const scanLabelRef    = useRef();
   const [chemUpMsg,       setChemUpMsg]       = useState("");
-  const [newChem,         setNewChem]         = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
+  const [newChem,         setNewChem]         = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"" });
   const [scanLabelLoading, setScanLabelLoading] = useState(false);
   const [chemDupWarning,  setChemDupWarning]  = useState("");
   const [editingChemId,   setEditingChemId]   = useState(null);
@@ -2449,6 +2483,7 @@ export default function App() {
           unit:          ["oz","dry oz","lb"].includes(parsed.unit) ? parsed.unit : c.unit,
           formType:      ["L","E","S","WDG","WP","D","A"].includes(parsed.formType) ? parsed.formType : c.formType,
           containerSize: parsed.containerSize || c.containerSize,
+          activeIngredient: (parsed.activeIngredient && parsed.activeIngredient !== "NA" ? parsed.activeIngredient : "") || c.activeIngredient,
         }));
         const dup = findChemDup(filledName, filledEpa);
         if (dup) setChemDupWarning(`Already in library: "${dup.name}" (EPA ${dup.epa})`);
@@ -2466,21 +2501,48 @@ export default function App() {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const lines = ev.target.result.split("\n").filter(Boolean);
-      let imported = 0, skipped = 0;
-      const added = [];
-      lines.slice(1).forEach(line => {
-        const p = line.split(",").map(s => s.trim().replace(/^"|"$/g,""));
-        if (!p[0] || !p[1] || !p[2]) { skipped++; return; }
-        // Columns: Name, EPA #, REI, Unit, Formulation Type
-        added.push({ id: Date.now() + imported, name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", formType:p[4]||"L", containerSize: p[5] ? parseFloat(p[5]) : null });
-        imported++;
+      const rows = parseCSV(ev.target.result);
+      // Columns: ID, Chemical Name, EPA #, REI, Unit, Formulation Type, Container Size, Active Ingredient
+      // The leading ID column is optional — a list without it still imports.
+      const hasId = (rows[0]?.[0] || "").trim().toLowerCase() === "id";
+      let addedCount = 0, updatedCount = 0, skipped = 0, epaChanged = 0;
+      const recs = [];
+      rows.slice(1).forEach(cols => {
+        const [name, epa, rei, unit, formType, containerSize, activeIngredient] =
+          (hasId ? cols.slice(1) : cols).map(v => (v ?? "").trim());
+        // Only the name is required: adjuvants legitimately have no EPA # or REI.
+        if (!name) { skipped++; return; }
+        const rawId = hasId ? parseInt(cols[0], 10) : NaN;
+        // Match by id, else by exact name. Never by EPA alone — some products share one.
+        const match = (!isNaN(rawId) && chemicals.find(c => c.id === rawId))
+          || chemicals.find(c => c.name?.trim().toLowerCase() === name.toLowerCase())
+          || null;
+        if (match?.epa && epa && match.epa.trim().toLowerCase() !== epa.toLowerCase()) epaChanged++;
+        recs.push({
+          id: match ? match.id : Date.now() + addedCount,
+          name,
+          epa:  epa  || match?.epa || "NA",
+          rei:  rei  || match?.rei || "",
+          unit: unit || match?.unit || "oz",
+          formType: formType || match?.formType || "L",
+          containerSize: containerSize ? parseFloat(containerSize) : (match?.containerSize ?? null),
+          // A blank cell never wipes an existing value — this list gets filled in over several passes.
+          activeIngredient: activeIngredient || match?.activeIngredient || "",
+        });
+        match ? updatedCount++ : addedCount++;
       });
-      setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, container_size: a.containerSize ?? null, user_id: session.user.id, org_id: currentOrg?.id }))).then(({ error }) => {
+      setChemicals(prev => {
+        const byId = new Map(recs.map(r => [r.id, r]));
+        const seen = new Set(prev.map(c => c.id));
+        return prev.map(c => byId.get(c.id) || c).concat(recs.filter(r => !seen.has(r.id)));
+      });
+      supabase.from("chemicals").upsert(recs.map(a => {
+        const { formType: ft, containerSize: cs, activeIngredient: ai, ...rest } = a;
+        return { ...rest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id };
+      })).then(({ error }) => {
         if (error) showToast("Failed to import chemicals: " + error.message);
       });
-      setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
+      setChemUpMsg(`✓ ${updatedCount} updated, ${addedCount} added${epaChanged ? `, ${epaChanged} EPA # changed` : ""}${skipped ? `, ${skipped} skipped` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
     reader.readAsText(file);
@@ -2488,17 +2550,19 @@ export default function App() {
   };
 
   const addManualChem = () => {
-    if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
+    const adjuvant = newChem.formType === "A";
+    if (!newChem.name || (!adjuvant && (!newChem.epa || !newChem.rei)))
+      return alert(adjuvant ? "Name is required." : "Name, EPA #, and REI are required.");
     const dup = findChemDup(newChem.name, newChem.epa);
     if (dup) { setChemDupWarning(`Already in library: "${dup.name}" (EPA ${dup.epa})`); return; }
     setChemDupWarning("");
     const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
-    const { formType: ft, containerSize: cs, ...chemRest } = newChemRec;
-    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    const { formType: ft, containerSize: cs, activeIngredient: ai, ...chemRest } = newChemRec;
+    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to save chemical: " + error.message);
     });
-    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
+    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"" });
   };
   const deleteChem = (id) => {
     setChemicals(c => c.filter(x => x.id !== id));
@@ -2523,14 +2587,16 @@ export default function App() {
     });
   };
   const saveChemEdit = () => {
-    if (!editChemDraft.name || !editChemDraft.epa || !editChemDraft.rei) return alert("Name, EPA #, and REI are required.");
+    const adjuvant = editChemDraft.formType === "A";
+    if (!editChemDraft.name || (!adjuvant && (!editChemDraft.epa || !editChemDraft.rei)))
+      return alert(adjuvant ? "Name is required." : "Name, EPA #, and REI are required.");
     const updated = {
       ...editChemDraft,
       containerSize: editChemDraft.containerSize ? parseFloat(editChemDraft.containerSize) : null,
     };
     setChemicals(c => c.map(x => x.id === updated.id ? updated : x));
-    const { formType, containerSize, ...rest } = updated;
-    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    const { formType, containerSize, activeIngredient, ...rest } = updated;
+    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, active_ingredient: activeIngredient?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to update chemical: " + error.message);
       else showToast("Chemical saved.", "success");
     });
@@ -5291,8 +5357,9 @@ export default function App() {
             <div style={{...card, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitle}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Formulation Type, Container Size (optional)</code> — first row is header.<br/>
-                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, E, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
+                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>ID, Name, EPA #, REI, Unit, Formulation Type, Container Size, Active Ingredient</code> — first row is header.<br/>
+                <span style={{ fontSize:11, color:"#888" }}>Download the library below, fill in <strong>Active Ingredient</strong> from the product labels, then re-upload — rows with a matching ID or name are <strong>updated in place</strong>, not duplicated. Values containing commas are fine.</span><br/>
+                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, SC, CS, E, EC, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <button onClick={() => chemFileRef.current.click()} style={{
@@ -5300,6 +5367,11 @@ export default function App() {
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
                 }}>📂 Upload CSV</button>
                 <input ref={chemFileRef} type="file" accept=".csv" onChange={handleChemCSV} style={{ display:"none" }}/>
+                <button onClick={() => downloadChemLibraryCSV(chemicals, currentOrg?.name)} disabled={!chemicals.length} style={{
+                  background:"#fff", color:"#2a5c0f", border:"1.5px solid #2a5c0f", borderRadius:6,
+                  padding:"8px 18px", cursor: chemicals.length ? "pointer" : "not-allowed",
+                  fontSize:13, fontWeight:700, opacity: chemicals.length ? 1 : 0.5
+                }}>⬇ Download Library CSV</button>
                 {chemUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{chemUpMsg}</span>}
               </div>
             </div>
@@ -5326,8 +5398,8 @@ export default function App() {
                 )}
                 <input ref={scanLabelRef} type="file" accept="image/*" capture="environment" onChange={scanLabel} style={{ display:"none" }}/>
               </div>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
-                {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1.6fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
+                {[["name","Chemical Name","text"],["activeIngredient","Active Ingredient","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelStyle}>{lbl}</label>
                     <input type={type} value={newChem[k]} onChange={e => { setNewChem(c=>({...c,[k]:e.target.value})); if (k==="name"||k==="epa") setChemDupWarning(""); }} style={inp} placeholder={lbl}/>
@@ -5355,8 +5427,11 @@ export default function App() {
                 <div>
                   <label style={labelStyle}>Formulation Type</label>
                   <select value={newChem.formType||"L"} onChange={e => setNewChem(c=>({...c,formType:e.target.value}))} style={sel}>
-                    <option value="L">L — Liquid Flowable / SC</option>
-                    <option value="E">E — EC</option>
+                    <option value="L">L — Liquid Flowable</option>
+                    <option value="SC">SC — Suspension Concentrate</option>
+                    <option value="CS">CS — Capsule Suspension</option>
+                    <option value="E">E — Emulsifiable</option>
+                    <option value="EC">EC — Emulsifiable Concentrate</option>
                     <option value="S">S — Soluble Liquid</option>
                     <option value="WDG">WDG — Dispersible Granule</option>
                     <option value="WP">WP — Wettable Powder</option>
@@ -5396,7 +5471,7 @@ export default function App() {
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
-                    <tr>{["Chemical Name","Form.","EPA #","REI","Unit","Container",""].map(h=>(
+                    <tr>{["Chemical Name","Active Ingredient","Form.","EPA #","REI","Unit","Container",""].map(h=>(
                       <th key={h} style={th}>{h}</th>
                     ))}</tr>
                   </thead>
@@ -5407,11 +5482,15 @@ export default function App() {
                         const draftIsDryOrLb = chemContainerIsLb(editChemDraft);
                         return (
                           <tr key={c.id} style={{ background:"#f5fff0" }}>
-                            <td style={td} colSpan={7}>
-                              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"6px 0" }}>
+                            <td style={td} colSpan={8}>
+                              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1.6fr 1fr 1fr 1fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"6px 0" }}>
                                 <div>
                                   <label style={{ ...labelStyle, fontSize:10 }}>Chemical Name</label>
                                   <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize:10 }}>Active Ingredient</label>
+                                  <input value={editChemDraft.activeIngredient||""} onChange={e=>setEditChemDraft(d=>({...d,activeIngredient:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="from label" />
                                 </div>
                                 <div>
                                   <label style={{ ...labelStyle, fontSize:10 }}>EPA #</label>
@@ -5444,7 +5523,10 @@ export default function App() {
                                   <label style={{ ...labelStyle, fontSize:10 }}>Form. Type</label>
                                   <select value={editChemDraft.formType||"L"} onChange={e=>setEditChemDraft(d=>({...d,formType:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
                                     <option value="L">L</option>
+                                    <option value="SC">SC</option>
+                                    <option value="CS">CS</option>
                                     <option value="E">E</option>
+                                    <option value="EC">EC</option>
                                     <option value="S">S</option>
                                     <option value="WDG">WDG</option>
                                     <option value="WP">WP</option>
@@ -5480,6 +5562,9 @@ export default function App() {
                       return (
                         <tr key={c.id}>
                           <td style={{ ...td, fontWeight:600 }}>{c.name}</td>
+                          <td style={{ ...td, fontSize:12 }}>
+                            {c.activeIngredient || <span style={{ color:"#c9a227" }} title="Required on TDA records">— missing</span>}
+                          </td>
                           <td style={td}>{c.formType||"—"}</td>
                           <td style={td}>{c.epa}</td>
                           <td style={td}>{c.rei}</td>

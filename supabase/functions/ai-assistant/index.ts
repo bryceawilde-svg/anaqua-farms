@@ -232,7 +232,11 @@ Deno.serve(async (req) => {
         'You are a pesticide label reader and agrochemical expert. ' +
         'Extract fields from the label image, then use your training knowledge of the product to determine the REI. ' +
         'Return ONLY valid JSON with no extra text or markdown: ' +
-        '{"name":"<retail product name>","epa":"<EPA Reg No or NA>","rei":"<REI with units e.g. 12 hours>","unit":"<oz|dry oz|lb>","formType":"<L|E|S|WDG|WP|D|A>","containerSize":"<number or blank>"}. ' +
+        '{"name":"<retail product name>","epa":"<EPA Reg No or NA>","rei":"<REI with units e.g. 12 hours>","unit":"<oz|dry oz|lb>","formType":"<L|E|S|WDG|WP|D|A>","containerSize":"<number or blank>","activeIngredient":"<active ingredient(s) with percentages, or NA>"}. ' +
+        'Active ingredient rule: read it from the "ACTIVE INGREDIENT(S)" panel printed on the label and copy it verbatim, ' +
+        'including each percentage by weight — e.g. "Glyphosate, potassium salt 48.7%" or "S-metolachlor 33.0%, Atrazine 26.1%". ' +
+        'Texas TDA records require this. If the panel is not legible, fall back to your training knowledge of that EPA Reg No; ' +
+        'if the product is an adjuvant or surfactant with no registered active ingredient, use NA. ' +
         'REI rule: DO NOT try to read REI from the image — front labels almost never show it. ' +
         'Instead, identify the product by name and EPA number, then state the standard REI from your training knowledge. ' +
         cropContext +
