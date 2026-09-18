@@ -815,7 +815,22 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   if (!w) URL.revokeObjectURL(url);
 }
 
-function downloadCSV(tickets, orgName, isMetric) {
+// Only EPA-registered pesticides belong on TDA/REI records: drop adjuvants and anything
+// without an EPA number. Keep in sync with supabase/functions/sheets-export.
+// Ticket snapshots don't carry the formulation, so classify by name against the library.
+const hasEpaNumber = (epa) => !/^(|n\/?a|none|-+|—)$/i.test((epa ?? "").trim());
+
+function reportableTickets(tickets, chemicals) {
+  const adjuvants = new Set(chemicals.filter(c => c.formType === "A").map(c => c.name?.trim().toLowerCase()));
+  return tickets.flatMap(t => {
+    const listed = t.chemicals.filter(c => hasEpaNumber(c.epa) && !adjuvants.has(c.name?.trim().toLowerCase()));
+    if (t.chemicals.length && !listed.length) return []; // nothing reportable was applied
+    return [{ ...t, chemicals: listed }];
+  });
+}
+
+function downloadCSV(allTickets, orgName, isMetric, chemicals) {
+  const tickets = reportableTickets(allTickets, chemicals);
   if (!tickets.length) return;
   const areaH  = isMetric ? "ha"    : "ac";
   const windH  = isMetric ? "km/h"  : "mph";
@@ -886,7 +901,8 @@ function downloadChemLibraryCSV(chemicals, orgName) {
   URL.revokeObjectURL(url);
 }
 
-function downloadTDAReport(tickets, orgName) {
+function downloadTDAReport(allTickets, orgName, chemicals) {
+  const tickets = reportableTickets(allTickets, chemicals);
   if (!tickets.length) return;
   const rows = tickets.flatMap(t => {
     const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
@@ -5918,7 +5934,7 @@ export default function App() {
                   title="Report to date"/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button onClick={() => downloadCSV(tickets, currentOrg?.name, isMetric)} disabled={!tickets.length} style={{
+                <button onClick={() => downloadCSV(tickets, currentOrg?.name, isMetric, chemicals)} disabled={!tickets.length} style={{
                   flex:1, background: tickets.length ? "#2a5c0f" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
                   cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
@@ -5933,7 +5949,7 @@ export default function App() {
                     return true;
                   });
                   if (!filtered.length) return alert("No tickets in selected date range.");
-                  downloadTDAReport(filtered, currentOrg?.name);
+                  downloadTDAReport(filtered, currentOrg?.name, chemicals);
                 }} disabled={!tickets.length} style={{
                   flex:1, background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
