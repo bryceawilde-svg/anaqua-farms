@@ -388,44 +388,37 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                 }}>
                   {reorderMode ? (isTapped ? tapPos + 1 : "·") : listIdx + 1}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1a1a1a" }}>{f.name}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1a1a1a", lineHeight: 1.25 }}>{f.name}</div>
                   <div style={{ fontSize: 12, color: "#888" }}>
                     {parseFloat(f.acres || 0).toFixed(2)} ac
-                    {started && !reorderMode && <span style={{ marginLeft: 6, color: "#2a5c0f", fontWeight: 600 }}>▶ {fmtHHMM(entry.actualTimeStart)}</span>}
+                    {started && !reorderMode && <span style={{ marginLeft: 6, color: "#2a5c0f", fontWeight: 600, whiteSpace: "nowrap" }}>{"\u25B6\uFE0E"} {fmtHHMM(entry.actualTimeStart)}</span>}
                   </div>
                 </div>
-                {!reorderMode && f.centroid_lat && f.centroid_lng && (
+                {!reorderMode && (f.centroid_lat && f.centroid_lng ? (
                   <a
                     href={`https://www.google.com/maps/dir/?api=1&destination=${f.centroid_lat},${f.centroid_lng}&travelmode=driving`}
                     target="_blank" rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     title={`Directions to ${f.name}`}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0 10px",
-                      borderRadius: 5, border: "1.5px solid #2a5c0f", background: "#fff", color: "#2a5c0f",
-                      fontWeight: 700, fontSize: 12, textDecoration: "none", whiteSpace: "nowrap", boxSizing: "border-box" }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    aria-label={`Directions to ${f.name}`}
+                    style={{ width: 44, height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                      borderRadius: 6, border: "1.5px solid #2a5c0f", background: "#fff", color: "#2a5c0f", boxSizing: "border-box" }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M5 20v-7a4 4 0 0 1 4-4h11" />
                       <path d="M15 4l5 5-5 5" />
                     </svg>
-                    Directions
                   </a>
-                )}
+                ) : (
+                  <div style={{ width: 44, flexShrink: 0 }} />
+                ))}
                 {/* Start/Stop — hidden in reorder mode */}
                 {!reorderMode && (
-                  !started ? (
-                    <button onClick={(e) => { e.stopPropagation(); handleStart(f); }}
-                      style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-                        background: "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>
-                      ▶ Start
-                    </button>
-                  ) : (
-                    <button onClick={(e) => { e.stopPropagation(); handleStop(f); }}
-                      style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-                        background: "#c0392b", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>
-                      ■ Stop
-                    </button>
-                  )
+                  <button onClick={(e) => { e.stopPropagation(); started ? handleStop(f) : handleStart(f); }}
+                    style={{ width: 84, height: 44, flexShrink: 0, borderRadius: 6, border: "none", cursor: "pointer",
+                      background: started ? "#c0392b" : "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 13, whiteSpace: "nowrap" }}>
+                    {started ? "■ Stop" : "\u25B6\uFE0E Start"}
+                  </button>
                 )}
               </div>
             </div>
