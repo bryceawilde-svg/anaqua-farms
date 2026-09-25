@@ -402,20 +402,22 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                     onClick={(e) => e.stopPropagation()}
                     title={`Directions to ${f.name}`}
                     aria-label={`Directions to ${f.name}`}
-                    style={{ width: 44, height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                      borderRadius: 6, border: "1.5px solid #2a5c0f", background: "#fff", color: "#2a5c0f", boxSizing: "border-box" }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    style={{ width: 76, height: 44, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+                      borderRadius: 6, border: "1.5px solid #2a5c0f", background: "#fff", color: "#2a5c0f", boxSizing: "border-box",
+                      fontFamily: "Arial, sans-serif", fontWeight: 700, fontSize: 11, textDecoration: "none" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M5 20v-7a4 4 0 0 1 4-4h11" />
                       <path d="M15 4l5 5-5 5" />
                     </svg>
+                    Directions
                   </a>
                 ) : (
-                  <div style={{ width: 44, flexShrink: 0 }} />
+                  <div style={{ width: 76, flexShrink: 0 }} />
                 ))}
                 {/* Start/Stop — hidden in reorder mode */}
                 {!reorderMode && (
                   <button onClick={(e) => { e.stopPropagation(); started ? handleStop(f) : handleStart(f); }}
-                    style={{ width: 84, height: 44, flexShrink: 0, borderRadius: 6, border: "none", cursor: "pointer",
+                    style={{ width: 76, height: 44, flexShrink: 0, borderRadius: 6, border: "none", cursor: "pointer",
                       background: started ? "#c0392b" : "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 13, whiteSpace: "nowrap" }}>
                     {started ? "■ Stop" : "\u25B6\uFE0E Start"}
                   </button>
