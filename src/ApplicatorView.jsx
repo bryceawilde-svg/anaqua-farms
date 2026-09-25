@@ -393,6 +393,22 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                     {started && !reorderMode && <span style={{ marginLeft: 6, color: "#2a5c0f", fontWeight: 600 }}>▶ {fmtHHMM(entry.actualTimeStart)}</span>}
                   </div>
                 </div>
+                {!reorderMode && f.centroid_lat && f.centroid_lng && (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${f.centroid_lat},${f.centroid_lng}&travelmode=driving`}
+                    target="_blank" rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={`Directions to ${f.name}`}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0 10px",
+                      borderRadius: 5, border: "1.5px solid #2a5c0f", background: "#fff", color: "#2a5c0f",
+                      fontWeight: 700, fontSize: 12, textDecoration: "none", whiteSpace: "nowrap", boxSizing: "border-box" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 20v-7a4 4 0 0 1 4-4h11" />
+                      <path d="M15 4l5 5-5 5" />
+                    </svg>
+                    Directions
+                  </a>
+                )}
                 {/* Start/Stop — hidden in reorder mode */}
                 {!reorderMode && (
                   !started ? (
