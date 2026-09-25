@@ -309,6 +309,8 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       <div style={{ margin: "10px 12px 0" }}>
         <ApplicatorMapView
           fields={enriched}
+          libraryFields={fieldLibrary}
+          onFieldClick={(id) => { if (pendingFields.some(f => f.id === id)) setFocusFieldId(id); }}
           focusFieldId={focusFieldId}
           completedFieldIds={completedFields.map(f => f.id)}
           height={250}
