@@ -1745,8 +1745,18 @@ export default function App() {
   const removeField = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
 
   const updateCropSeason = async (cropName, season) => {
+    const prev = cropSeasons[cropName];
     setCropSeasons(s => ({ ...s, [cropName]: season }));
-    await supabase.from("crop_seasons").upsert({ crop_name: cropName, season, user_id: session.user.id, org_id: currentOrg?.id });
+    const { error } = await supabase.from("crop_seasons").upsert(
+      { crop_name: cropName, season, user_id: session.user.id, org_id: currentOrg?.id },
+      { onConflict: "org_id,crop_name" }
+    );
+    if (error) {
+      setCropSeasons(s => ({ ...s, [cropName]: prev }));
+      showToast(isOwner
+        ? "Couldn't save crop season: " + error.message
+        : "Only the org owner can change crop seasons.");
+    }
   };
 
   const addChemRow    = (chemId) => {
