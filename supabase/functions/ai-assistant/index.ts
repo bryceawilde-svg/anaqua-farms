@@ -2,6 +2,13 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
 
+const MODEL = "claude-sonnet-5";
+// Sonnet 5 thinks adaptively by default and thinking counts toward max_tokens,
+// so limits need headroom beyond the visible reply.
+const MAX_TOKENS = 16000;
+const EFFORT = { effort: "medium" as const };
+const WEB_SEARCH = { type: "web_search_20260209", name: "web_search" };
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -21,9 +28,6 @@ Deno.serve(async (req) => {
   }
 
   const { action, ...payload } = body as { action: string; [key: string]: unknown };
-  const model = (action === "compatibility" || action === "research" || action === "suggest-chems" || action === "crop-safety")
-    ? "claude-haiku-4-5-20251001"
-    : "claude-sonnet-4-6";
   let systemPrompt: string;
   let userMessage: string;
   let useWebSearch = false;
@@ -191,8 +195,9 @@ Deno.serve(async (req) => {
         },
       ];
       const advisorResp = await client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        output_config: EFFORT,
         system:
           'You are a farm records advisor with full access to this operation\'s application tickets, field library, and chemical library. ' +
           'Rules you must follow on every response:\n' +
@@ -212,7 +217,7 @@ Deno.serve(async (req) => {
           'NEVER recommend 2,4-D (Enlist One) without a 2,4-D-tolerant trait.\n' +
           'If the user asks for a recommendation that would violate these rules, refuse that specific product and explain why in one sentence.',
         messages,
-      });
+      } as Parameters<typeof client.messages.create>[0]);
       const answerText = advisorResp.content
         .filter((b: { type: string }) => b.type === "text")
         .map((b: { type: string; text?: string }) => b.text ?? "")
@@ -253,8 +258,9 @@ Deno.serve(async (req) => {
         'containerSize: the size of one container (numeric, in gal for liquid or lb for dry/lb), blank if not shown. ' +
         'For all other fields not visible on the label use NA for text fields or blank for containerSize.';
       const visionResp = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        output_config: { effort: "low" },
         system: scanSystemPrompt,
         messages: [{
           role: "user",
@@ -263,7 +269,7 @@ Deno.serve(async (req) => {
             source: { type: "base64", media_type: mediaType as "image/jpeg"|"image/png"|"image/webp"|"image/gif", data: imageBase64 },
           }, { type: "text", text: "Extract the pesticide label fields." }],
         }],
-      });
+      } as Parameters<typeof client.messages.create>[0]);
       let raw = visionResp.content
         .filter((b: { type: string }) => b.type === "text")
         .map((b: { type: string; text?: string }) => b.text ?? "")
@@ -335,11 +341,12 @@ Deno.serve(async (req) => {
       ];
 
       const sectorResp = await client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2048,
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        output_config: EFFORT,
         system: sectorSystem,
         messages: sectorMessages,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        tools: [WEB_SEARCH],
       } as Parameters<typeof client.messages.create>[0]);
 
       const answerText = sectorResp.content
@@ -360,11 +367,12 @@ Deno.serve(async (req) => {
   }
 
   const resp = await client.messages.create({
-    model,
-    max_tokens: action === "research" ? 1500 : 1024,
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    output_config: EFFORT,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
-    ...(useWebSearch ? { tools: [{ type: "web_search_20250305", name: "web_search" }] } : {}),
+    ...(useWebSearch ? { tools: [WEB_SEARCH] } : {}),
   } as Parameters<typeof client.messages.create>[0]);
 
   // Filter for text blocks — web search responses have mixed block types
