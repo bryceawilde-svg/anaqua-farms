@@ -9,6 +9,15 @@ const MAX_TOKENS = 16000;
 const EFFORT = { effort: "medium" as const };
 const WEB_SEARCH = { type: "web_search_20260209", name: "web_search" };
 
+// Product data comes from the operator's chemical library, taken from the actual labels.
+const VERIFIED_LABEL_DATA =
+  'Each product includes its EPA Reg No, active ingredient, and formulation code from the operator\'s chemical library, ' +
+  'transcribed from the product labels. Treat these values as authoritative. Never infer, guess, or substitute an active ingredient ' +
+  'from a product name, brand family, or manufacturer. If a product\'s activeIngredient is blank, say its active ingredient is not ' +
+  'on file and make no claims that depend on it. Refer to each product by its name and the provided active ingredient. ';
+
+type LabelChem = { name: string; epa?: string; activeIngredient?: string; formType?: string };
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -53,14 +62,14 @@ Deno.serve(async (req) => {
     }
 
     case "compatibility": {
-      const { products } = payload as {
-        products: { name: string }[];
-      };
+      const { products } = payload as { products: LabelChem[] };
       systemPrompt =
         'You are an agrochemical tank mix compatibility expert. ' +
-        'Using your training knowledge of product labels, university extension research, and known chemical interactions, ' +
+        VERIFIED_LABEL_DATA +
+        'Using the provided active ingredients, label knowledge, and university extension research, ' +
         'assess whether the listed products can be safely mixed in the same tank. ' +
-        'Identify each product\'s active ingredient(s) by product name. ' +
+        'Only report issues you are confident apply to these specific active ingredients and formulations. ' +
+        'Do not give mixing-order instructions; the app prints the WALES mixing order separately. ' +
         'Return ONLY valid JSON with no extra text or markdown: ' +
         '{"compatible":<boolean>,"warnings":["<one sentence per issue — reference product name and active ingredient, never EPA numbers>"]}. ' +
         'Keep each warning concise (one sentence). Return an empty warnings array if there are no known issues.';
@@ -74,10 +83,11 @@ Deno.serve(async (req) => {
         pest: string;
         month: string;
         equipment: string;
-        chemLib: { id: number; name: string; formType: string; epa: string }[];
+        chemLib: (LabelChem & { id: number })[];
       };
       systemPrompt =
         'You are a crop protection specialist for row-crop production. ' +
+        VERIFIED_LABEL_DATA +
         'Select the best products from the provided library to control the listed pest(s) on the given crop. ' +
         'Factor in: crop growth stage typical for the given month, equipment type (e.g. ground rig vs. aerial affects rate and coverage), ' +
         'and whether the product is labeled for that crop and pest combination. ' +
@@ -113,13 +123,13 @@ Deno.serve(async (req) => {
     }
 
     case "suggest-adjuvants": {
-      const { products } = payload as {
-        products: { name: string }[];
-      };
+      const { products } = payload as { products: LabelChem[] };
       systemPrompt =
         'You are a pesticide label expert. Given a list of pesticide products in a tank mix, ' +
         'identify any adjuvants or surfactants that are required or strongly recommended by the product labels. ' +
-        'Use product names to look up label requirements from your training knowledge. ' +
+        VERIFIED_LABEL_DATA +
+        'Use the provided active ingredient and EPA Reg No to identify each label, then its adjuvant requirements. ' +
+        'In each summary, name the product and its provided active ingredient. ' +
         'Include required non-ionic surfactants (NIS), crop oil concentrates (COC), methylated seed oils (MSO), ' +
         'ammonium sulfate (AMS), or any other adjuvants specified on the labels. ' +
         'Only include adjuvants that are label-required or label-recommended — do not invent generic suggestions. ' +
@@ -133,13 +143,14 @@ Deno.serve(async (req) => {
     case "crop-safety": {
       const { fields, chemicals: chems } = payload as {
         fields: { name: string; crop: string; traits: string[]; season: string }[];
-        chemicals: { name: string; epa: string }[];
+        chemicals: LabelChem[];
       };
       systemPrompt =
         'You are a strict pesticide label compliance checker for row-crop production. ' +
+        VERIFIED_LABEL_DATA +
         'Apply these rules MECHANICALLY — do not hedge, do not assume the farmer knows what they are doing, flag every violation.\n\n' +
         'SKIP pre_season and post_harvest fields entirely. Only check fields where season = "in_season".\n\n' +
-        'RULE 1 — TRAIT VIOLATIONS. Use EPA number and product name to identify the active ingredient, then apply:\n' +
+        'RULE 1 — TRAIT VIOLATIONS. Use each product\'s provided active ingredient, then apply:\n' +
         '• Glyphosate products (Roundup PowerMAX, Roundup WeatherMAX, Touchdown, Credit, Durango, any "glyphosate" generic): ' +
         'REQUIRES trait "glyphosate". Flag if "glyphosate" is NOT in the field\'s traits array.\n' +
         '• Glufosinate products (Liberty 280, Ignite 280, Reckon 280 SL, any "glufosinate" generic): ' +
@@ -200,6 +211,7 @@ Deno.serve(async (req) => {
         output_config: EFFORT,
         system:
           'You are a farm records advisor with full access to this operation\'s application tickets, field library, and chemical library. ' +
+          VERIFIED_LABEL_DATA +
           'Rules you must follow on every response:\n' +
           '1. Give ONLY the direct answer — no calculation steps, no per-ticket breakdowns, no intermediate math.\n' +
           '2. Never show or mention EPA registration numbers unless the user explicitly asks for them.\n' +

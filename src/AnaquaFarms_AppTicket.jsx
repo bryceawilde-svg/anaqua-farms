@@ -160,6 +160,11 @@ function fmtOzAsDecimalGal(totalOz) {
   return fracStr ? `${whole}${fracStr} gal` : `${whole} gal`;
 }
 
+// Verified label data sent with every AI request so the model never guesses active ingredients
+function chemForAI(c) {
+  return { name: c.name, epa: c.epa || "", activeIngredient: c.activeIngredient || "", formType: c.formType || "" };
+}
+
 function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
   const ts  = parseFloat(tankSize)    || 0;
   const gpa = parseFloat(galPerAcre)  || 0;
@@ -1607,7 +1612,7 @@ export default function App() {
         end:        t.timeEnd,
       }));
       const fieldData = fieldLibrary.map(f => ({ name: f.name, crop: f.crop, acres: f.acres }));
-      const chemData  = chemicals.map(c => ({ name: c.name, epa: c.epa, rei: c.rei, formType: c.formType }));
+      const chemData  = chemicals.map(c => ({ ...chemForAI(c), rei: c.rei }));
       // Pass last 10 messages as history for multi-turn context
       const history = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
       const { data, error } = await supabase.functions.invoke("ai-assistant", {
@@ -1820,7 +1825,7 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c && c.epa?.trim() ? { name: c.name } : null;
+          return c && c.epa?.trim() ? chemForAI(c) : null;
         }).filter(Boolean);
         if (products.length < 2) { setAiCompatWarning(null); return; }
         const res = await callAI("compatibility", { products });
@@ -1848,7 +1853,7 @@ export default function App() {
     cropSafetyDebounceRef.current = setTimeout(async () => {
       setAiCropSafetyLoading(true);
       try {
-        const chems = filledRows.map(r => { const c = chemicals.find(x => x.id === r.chemId); return c && c.epa?.trim() ? { name: c.name, epa: c.epa } : null; }).filter(Boolean);
+        const chems = filledRows.map(r => { const c = chemicals.find(x => x.id === r.chemId); return c && c.epa?.trim() ? chemForAI(c) : null; }).filter(Boolean);
         if (!chems.length) { setAiCropSafety(null); return; }
         const res = await callAI("crop-safety", { fields: fieldsWithTraits, chemicals: chems });
         setAiCropSafety(res);
@@ -1869,7 +1874,7 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c && c.epa?.trim() ? { name: c.name } : null;
+          return c && c.epa?.trim() ? chemForAI(c) : null;
         }).filter(Boolean);
         if (!products.length) { setAiAdjuvants(null); return; }
         const res = await callAI("suggest-adjuvants", { products });
@@ -3071,7 +3076,7 @@ export default function App() {
                             pest: form.targetPest.join(", "),
                             month: new Date().toLocaleString("default", { month: "long" }),
                             equipment: form.equipmentType || "",
-                            chemLib: chemicals.map(c => ({ id: c.id, name: c.name, formType: c.formType, epa: c.epa })),
+                            chemLib: chemicals.map(c => ({ id: c.id, ...chemForAI(c) })),
                           });
                           setAiSuggestions(res.suggestions || []);
                         } catch (e) {
