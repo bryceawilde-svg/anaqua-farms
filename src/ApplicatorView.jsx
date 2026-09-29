@@ -1,9 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState } from "react";
 import ApplicatorMapView from "./ApplicatorMapView";
-import { pointInGeoJSON } from "./utils/geo";
-
-// Only prompt on a reasonably tight GPS fix, so standing near a field edge doesn't trigger it
-const PROMPT_MAX_ACCURACY_M = 50;
 
 
 function cropChip(crop) {
@@ -84,10 +80,6 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
   const [reorderMode,       setReorderMode]       = useState(false);
   const [tapOrder,          setTapOrder]          = useState([]);  // field IDs in tapped sequence
   const [syncing,           setSyncing]           = useState(false);
-  const [myLocation,        setMyLocation]        = useState(null); // { lat, lng, acc }
-  const [locStatus,         setLocStatus]         = useState("off"); // off | searching | on | denied | unavailable
-  const [dismissedFieldIds, setDismissedFieldIds] = useState([]);
-  const watchIdRef = useRef(null);
 
   const enrichFields = (selectedFields) =>
     (selectedFields || []).map(f => ({
@@ -95,171 +87,10 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       ...(fieldLibrary.find(fl => fl.id === f.id) || {}),
     }));
 
-  // ── Live location ─────────────────────────────────────────────────────────
-  const startLocating = () => {
-    if (!("geolocation" in navigator)) { setLocStatus("unavailable"); return; }
-    if (watchIdRef.current != null) return;
-    setLocStatus("searching");
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy || 0 });
-        setLocStatus("on");
-      },
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-          setLocStatus("denied");
-        } else {
-          setLocStatus(s => (s === "on" ? s : "unavailable"));
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
-    );
-  };
-
-  const requestLocation = () => {
-    if (locStatus === "denied" || locStatus === "unavailable") {
-      if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    startLocating();
-  };
-
-  // Start automatically only if location was already allowed, so opening the app never prompts
-  useEffect(() => {
-    navigator.permissions?.query({ name: "geolocation" })
-      .then(p => { if (p.state === "granted") startLocating(); })
-      .catch(() => {});
-    return () => { if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current); };
-  }, []); // eslint-disable-line
-
-  // ── "You're in a field — start?" across every active ticket ──────────────
-  const boundaries = useMemo(() => {
-    const m = new Map();
-    fieldLibrary.forEach(f => {
-      if (!f.boundary_geojson) return;
-      try { m.set(f.id, JSON.parse(f.boundary_geojson)); } catch { /* skip bad boundary */ }
-    });
-    return m;
-  }, [fieldLibrary]);
-
-  // fieldId → [{ ticket, field, running }] for unstarted fields on active tickets that contain the operator
-  const fieldsHere = useMemo(() => {
-    const out = new Map();
-    if (!myLocation) return out;
-    const active = tickets.filter(tk => tk.queue_status !== "completed");
-    // A field being sprayed on any ticket right now shouldn't prompt for another ticket
-    const sprayingNow = new Set();
-    active.forEach(tk => (tk.fieldSchedule || []).forEach(fs => {
-      if (fs.actualTimeStart && !fs.actualTimeEnd) sprayingNow.add(fs.id);
-    }));
-    active.forEach(tk => {
-      const enrichedTk = enrichFields(tk.selectedFields);
-      const sched = ensureSchedule(tk, enrichedTk);
-      const running = enrichedTk.find(f => {
-        const e = sched.find(fs => fs.id === f.id);
-        return e?.actualTimeStart && !e?.actualTimeEnd;
-      });
-      enrichedTk.forEach(f => {
-        const e = sched.find(fs => fs.id === f.id);
-        if (e?.actualTimeStart || e?.actualTimeEnd || sprayingNow.has(f.id)) return;
-        const gj = boundaries.get(f.id);
-        if (!gj || !pointInGeoJSON(myLocation.lng, myLocation.lat, gj)) return;
-        if (!out.has(f.id)) out.set(f.id, []);
-        out.get(f.id).push({ ticket: tk, field: f, running });
-      });
-    });
-    return out;
-  }, [myLocation, tickets, boundaries]); // eslint-disable-line
-
-  // Forget a "Not now" once the operator leaves that field, so re-entering asks again
-  useEffect(() => {
-    if (!myLocation) return;
-    setDismissedFieldIds(ids => {
-      const kept = ids.filter(id => fieldsHere.has(id));
-      return kept.length === ids.length ? ids : kept;
-    });
-  }, [fieldsHere]); // eslint-disable-line
-
-  const promptEntry = myLocation && myLocation.acc <= PROMPT_MAX_ACCURACY_M
-    ? [...fieldsHere.entries()].find(([id]) => !dismissedFieldIds.includes(id))
-    : null;
-
-  const startField = (tk, field) => {
-    const sched = ensureSchedule(tk, enrichFields(tk.selectedFields));
-    const idx = sched.findIndex(fs => fs.id === field.id);
-    if (idx === -1) return;
-    const now   = nowHHMM();
-    const today = localDateYMD();
-
-    // Save start time immediately — don't wait for weather
-    const updated = sched.map((fs, i) =>
-      i === idx ? { ...fs, actualTimeStart: now, actualDateStart: today } : fs
-    );
-    onSaveFieldSchedule(tk.id, updated);
-
-    // Fetch weather in background using field centroid or org farm location as fallback
-    const wxLat = field.centroid_lat || farmLat;
-    const wxLng = field.centroid_lng || farmLng;
-    if (wxLat && wxLng) {
-      fetchFieldWeather(wxLat, wxLng).then(weather => {
-        if (!weather) return; // API failed — don't overwrite with empty data
-        onSaveFieldSchedule(tk.id, updated.map((fs, i) =>
-          i === idx ? { ...fs, fieldWeather: weather } : fs
-        ));
-      });
-    }
-  };
-
-  const startPrompt = promptEntry && (() => {
-    const [fieldId, matches] = promptEntry;
-    const field = matches[0].field;
-    return (
-      <div style={{ position: "fixed", top: 12, left: 12, right: 12, zIndex: 3000, maxWidth: 616, margin: "0 auto",
-        background: "#fff", border: "2px solid #2a5c0f", borderRadius: 10, boxShadow: "0 6px 24px rgba(0,0,0,0.25)", padding: "12px 14px" }}>
-        <div style={{ fontWeight: 800, fontSize: 16, color: "#1a4a0a" }}>📍 You're in {field.name}</div>
-        <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
-          {parseFloat(field.acres || 0).toFixed(2)} ac · Start spraying?
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-          {matches.map(({ ticket: tk, running }) => (
-            <div key={tk.id}>
-              <button
-                onClick={() => {
-                  startField(tk, field);
-                  setSelectedTicket(tk);
-                  setFocusFieldId(fieldId);
-                  setCompletedExpanded(false);
-                  setReorderMode(false);
-                  setTapOrder([]);
-                }}
-                style={{ width: "100%", minHeight: 44, borderRadius: 6, border: "none", cursor: "pointer",
-                  background: "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 14 }}>
-                {"\u25B6\uFE0E"} Start · #{String(tk.ticketNumber || tk.ticket_number || "").padStart(3, "0")}{tk.crop ? ` ${tk.crop}` : ""}
-              </button>
-              {running && (
-                <div style={{ fontSize: 11, color: "#a04000", marginTop: 3 }}>
-                  {running.name} is still running on this ticket — stop it when you're done there.
-                </div>
-              )}
-            </div>
-          ))}
-          <button onClick={() => setDismissedFieldIds(ids => [...ids, fieldId])}
-            style={{ minHeight: 44, borderRadius: 6, border: "1.5px solid #c8dbb0", background: "#fff",
-              color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-            Not now
-          </button>
-        </div>
-      </div>
-    );
-  })();
-
   // ── Ticket list ──────────────────────────────────────────────────────────
   if (!selectedTicket) {
     return (
       <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
-        {startPrompt}
         <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #e8f5e0", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 20 }}>🌱</div>
           <div style={{ flex: 1 }}>
@@ -385,7 +216,30 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     exitReorder();
   };
 
-  const handleStart = (field) => startField(t, field);
+  const handleStart = (field) => {
+    const idx = schedule.findIndex(fs => fs.id === field.id);
+    if (idx === -1) return;
+    const now   = nowHHMM();
+    const today = localDateYMD();
+
+    // Save start time immediately — don't wait for weather
+    const updated = schedule.map((fs, i) =>
+      i === idx ? { ...fs, actualTimeStart: now, actualDateStart: today } : fs
+    );
+    onSaveFieldSchedule(t.id, updated);
+
+    // Fetch weather in background using field centroid or org farm location as fallback
+    const wxLat = field.centroid_lat || farmLat;
+    const wxLng = field.centroid_lng || farmLng;
+    if (wxLat && wxLng) {
+      fetchFieldWeather(wxLat, wxLng).then(weather => {
+        if (!weather) return; // API failed — don't overwrite with empty data
+        onSaveFieldSchedule(t.id, updated.map((fs, i) =>
+          i === idx ? { ...fs, fieldWeather: weather } : fs
+        ));
+      });
+    }
+  };
 
   const handleStop = (field) => {
     const idx = schedule.findIndex(fs => fs.id === field.id);
@@ -403,7 +257,6 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
-      {startPrompt}
       {/* Back bar — full-width tap target */}
       <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #c8dbb0" }}>
         <div
@@ -460,9 +313,6 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
           onFieldClick={(id) => { if (pendingFields.some(f => f.id === id)) setFocusFieldId(id); }}
           focusFieldId={focusFieldId}
           completedFieldIds={completedFields.map(f => f.id)}
-          myLocation={myLocation}
-          locStatus={locStatus}
-          onRequestLocation={requestLocation}
           height={250}
         />
       </div>
