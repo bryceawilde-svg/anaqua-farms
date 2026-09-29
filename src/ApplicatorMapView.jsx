@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -14,7 +14,7 @@ const ME_ICON = L.divIcon({
   iconAnchor: [9, 9],
 });
 
-export default function ApplicatorMapView({ fields, libraryFields = [], focusFieldId, completedFieldIds = [], onFieldClick, height = 280 }) {
+export default function ApplicatorMapView({ fields, libraryFields = [], focusFieldId, completedFieldIds = [], onFieldClick, myLocation, locStatus = "off", onRequestLocation, height = 280 }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
   const layersRef    = useRef({});  // ticket field id → L.geoJSON layer
@@ -23,9 +23,7 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
   onClickRef.current = onFieldClick;
   const meMarkerRef  = useRef(null);
   const meCircleRef  = useRef(null);
-  const watchIdRef   = useRef(null);
   const centerNextRef = useRef(false);
-  const [locStatus, setLocStatus] = useState("off"); // off | searching | on | denied | unavailable
 
   useEffect(() => {
     const map = L.map(containerRef.current, { zoomControl: true, preferCanvas: true });
@@ -34,54 +32,26 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
       { attribution: "Tiles © Esri", maxZoom: 19 }
     ).addTo(map);
     mapRef.current = map;
-    return () => {
-      if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
-      map.remove(); mapRef.current = null;
-    };
+    return () => { map.remove(); mapRef.current = null; meMarkerRef.current = null; meCircleRef.current = null; };
   }, []);
 
-  const startLocating = () => {
-    if (!("geolocation" in navigator)) { setLocStatus("unavailable"); return; }
-    if (watchIdRef.current != null) return;
-    setLocStatus("searching");
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const map = mapRef.current;
-        if (!map) return;
-        const ll = [pos.coords.latitude, pos.coords.longitude];
-        const acc = pos.coords.accuracy || 0;
-        if (!meMarkerRef.current) {
-          meCircleRef.current = L.circle(ll, { radius: acc, color: "#1a73e8", weight: 1, fillColor: "#1a73e8", fillOpacity: 0.12, interactive: false }).addTo(map);
-          meMarkerRef.current = L.marker(ll, { icon: ME_ICON, interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
-        } else {
-          meMarkerRef.current.setLatLng(ll);
-          meCircleRef.current.setLatLng(ll).setRadius(acc);
-        }
-        setLocStatus("on");
-        if (centerNextRef.current) {
-          centerNextRef.current = false;
-          map.flyTo(ll, Math.max(map.getZoom(), 15), { duration: 0.6 });
-        }
-      },
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-          setLocStatus("denied");
-        } else if (!meMarkerRef.current) {
-          setLocStatus("unavailable");
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
-    );
-  };
-
-  // Start automatically only if location was already allowed, so opening the map never prompts
+  // Draw / move the operator's position
   useEffect(() => {
-    navigator.permissions?.query({ name: "geolocation" })
-      .then(p => { if (p.state === "granted") startLocating(); })
-      .catch(() => {});
-  }, []); // eslint-disable-line
+    const map = mapRef.current;
+    if (!map || !myLocation) return;
+    const ll = [myLocation.lat, myLocation.lng];
+    if (!meMarkerRef.current) {
+      meCircleRef.current = L.circle(ll, { radius: myLocation.acc, color: "#1a73e8", weight: 1, fillColor: "#1a73e8", fillOpacity: 0.12, interactive: false }).addTo(map);
+      meMarkerRef.current = L.marker(ll, { icon: ME_ICON, interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+    } else {
+      meMarkerRef.current.setLatLng(ll);
+      meCircleRef.current.setLatLng(ll).setRadius(myLocation.acc);
+    }
+    if (centerNextRef.current) {
+      centerNextRef.current = false;
+      map.flyTo(ll, Math.max(map.getZoom(), 15), { duration: 0.6 });
+    }
+  }, [myLocation]);
 
   const onLocateClick = () => {
     const map = mapRef.current;
@@ -90,11 +60,7 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
       return;
     }
     centerNextRef.current = true;
-    if (locStatus === "denied" || locStatus === "unavailable") {
-      if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    startLocating();
+    onRequestLocation?.();
   };
 
   const addFieldLayer = (map, field, style, onClick) => {
