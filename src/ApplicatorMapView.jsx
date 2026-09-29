@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 const LIB_STYLE   = { color: "#e000e0", weight: 2,   fillColor: "#e67be6", fillOpacity: 0.35, opacity: 1 };
 const BASE_STYLE  = { color: "#1e6fd9", weight: 2.5, fillColor: "#3d8bff", fillOpacity: 0.45, opacity: 1 };
 const FOCUS_STYLE = { color: "#fff",    weight: 3,   fillColor: "#FFE600", fillOpacity: 0.70, opacity: 1 };
-const DONE_STYLE  = { color: "#aaa",    weight: 1.5, fillColor: "#ccc",    fillOpacity: 0.20, opacity: 0.50 };
+const DONE_STYLE  = LIB_STYLE;
 
 const ME_ICON = L.divIcon({
   className: "",
