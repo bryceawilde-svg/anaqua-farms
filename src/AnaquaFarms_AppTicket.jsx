@@ -5,6 +5,7 @@ import { parseCSV, csvCell } from "./utils/csv";
 import FieldMapPicker from "./FieldMapPicker";
 import BoundaryAssignMap from "./BoundaryAssignMap";
 import ApplicatorView from "./ApplicatorView";
+import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
 
@@ -165,9 +166,17 @@ function chemForAI(c) {
   return { name: c.name, epa: c.epa || "", activeIngredient: c.activeIngredient || "", formType: c.formType || "" };
 }
 
-function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
+// Spot sprayers only cover part of each acre. The broadcast gal/acre stays on the
+// ticket for the operator; every tank and load calculation uses the reduced rate.
+function calcGpa({ galPerAcre, targetZone, targetZonePct }) {
+  const gpa = parseFloat(galPerAcre)    || 0;
+  const pct = parseFloat(targetZonePct) || 0;
+  return targetZone && pct > 0 && pct < 100 ? gpa * (1 - pct / 100) : gpa;
+}
+
+function calcTotals({ tankSize, galPerAcre, targetZone, targetZonePct, totalAcres, ratePerAcre }) {
   const ts  = parseFloat(tankSize)    || 0;
-  const gpa = parseFloat(galPerAcre)  || 0;
+  const gpa = calcGpa({ galPerAcre, targetZone, targetZonePct });
   const ta  = parseFloat(totalAcres)  || 0;
   const rpa = parseFloat(ratePerAcre) || 0;
   const acreLoads      = ts > 0 && gpa > 0 ? ts / gpa : 0;
@@ -415,7 +424,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   // Actual tank size for the "this load" case.
   // When partialAcres snapped to 0 (totalAcres ≈ acreLoadsRaw), treat as a full tank fill.
   const thisLoadTankGal = lessThanOneTank
-    ? (!hasPartial ? String(parseFloat(form.tankSize || 0)) : (parseFloat(totalAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2))
+    ? (!hasPartial ? String(parseFloat(form.tankSize || 0)) : (parseFloat(totalAcres) * calcGpa(form)).toFixed(2))
     : null;
 
   // Chem rows for when total acres < one full tank — use partial calc (= total acres × rate)
@@ -478,7 +487,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     ({fullJugs}) => fullJugs || null
   ) + fillRow2(form.tankSize||"—");
 
-  const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
+  const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * calcGpa(form)).toFixed(2) : "0";
   const partialChemCompact = hasPartial
     ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, partJugs }, pi) => {
         const amt = roundQtr && isOzUnit
@@ -722,7 +731,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
       <div class="farm">${orgName || ""}</div>
     </div>
     <div>
-      <div class="ticket-title">Application Ticket${form.ticketNumber ? ` #${String(form.ticketNumber).padStart(3,'0')}` : ''}</div>
+      <div class="ticket-title">Application Ticket${form.ticketNumber ? ` #${String(form.ticketNumber).padStart(3,'0')}` : ''}${isTargetZone(form) ? ` <span style="display:inline-block;background:#f3eefc;color:#4a2a7a;border:1.5px solid #7a4ab0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:900;letter-spacing:.04em;vertical-align:middle;">SPOT SPRAY</span>` : ""}</div>
       <div class="ticket-meta">Date: ${form.date || "___________"} &nbsp;|&nbsp; ${form.crop||""} &nbsp;|&nbsp; Printed: ${new Date().toLocaleDateString()}</div>
     </div>
   </div>
@@ -845,7 +854,7 @@ function downloadCSV(allTickets, orgName, isMetric, chemicals) {
   const header = [
     "App Date","Actual Start","Actual Stop",`Location/Field`,`Area (${areaH})`,"Crop/Site","Target Pest",
     `Field Wind Speed (${windH})`,"Field Wind Dir",`Field Air Temp (${tempH})`,
-    `Tank Size (${tankH})`,"Pressure (PSI)",spdH,"Acre Loads","Full Loads",`Partial Load (${areaH})`,
+    `Tank Size (${tankH})`,"Pressure (PSI)",spdH,"Target Zone %","Acre Loads","Full Loads",`Partial Load (${areaH})`,
     "Equipment","Licensed Applicator","Non-Licensed Applicator",
     "Product Name","Active Ingredient","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
   ].map(csvCell).join(",");
@@ -863,7 +872,7 @@ function downloadCSV(allTickets, orgName, isMetric, chemicals) {
         (fs.fieldWeather?.windSpeed ?? t.windSpeed) || "",
         (fs.fieldWeather?.windDir   ?? t.windDir)   || "",
         (fs.fieldWeather?.airTemp   ?? t.airTemp)   || "",
-        t.tankSize, t.pressure, t.galPerAcre, t.acreLoads, t.fullLoads, t.partialAcres||"0",
+        t.tankSize, t.pressure, t.galPerAcre, isTargetZone(t) ? parseFloat(t.targetZonePct) : "", t.acreLoads, t.fullLoads, t.partialAcres||"0",
         t.equipmentType||"", t.licensedApplicant||"", t.nonLicensedApplicant||"",
         c.name||"", c.activeIngredient||"", c.epa||"", c.rei||"",
         c.ratePerAcre||"", c.unit||"",
@@ -1316,6 +1325,8 @@ function normalizeTicket(tk) {
     timeStart:                tk.time_start                 || tk.timeStart                 || "",
     timeEnd:                  tk.time_end                   || tk.timeEnd                   || "",
     galPerAcre:               tk.gal_per_acre               || tk.galPerAcre                || "",
+    targetZone:               tk.target_zone                ?? tk.targetZone                ?? false,
+    targetZonePct:            tk.target_zone_pct != null ? String(tk.target_zone_pct) : (tk.targetZonePct || ""),
     tankSize:                 tk.tank_size                  || tk.tankSize                  || "",
     windSpeed:                tk.wind_speed                 || tk.windSpeed                 || "",
     windDir:                  tk.wind_dir                   || tk.windDir                   || "",
@@ -1410,6 +1421,8 @@ export default function App() {
     tankSize: "",
     pressure: "",
     galPerAcre: "",
+    targetZone: false,
+    targetZonePct: "28",
     primeBoom: false,
     flushCleanout: false,
     equipmentType: "New 4440 Sprayer",
@@ -1502,7 +1515,7 @@ export default function App() {
     if (!session) return;
     // Fast path: check for active membership without claiming first (saves one RPC round-trip for existing users)
     supabase.from("org_memberships")
-      .select("org_id, role, organizations(id, name, plan)")
+      .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops)")
       .eq("user_id", session.user.id)
       .eq("status", "active")
       .limit(1)
@@ -1515,7 +1528,7 @@ export default function App() {
           // No active org — claim pending invites (new user or invite recipient) then re-check
           await supabase.rpc("claim_pending_invites");
           const { data: claimed } = await supabase.from("org_memberships")
-            .select("org_id, role, organizations(id, name, plan)")
+            .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops)")
             .eq("user_id", session.user.id)
             .eq("status", "active")
             .limit(1)
@@ -1558,6 +1571,9 @@ export default function App() {
   const isOwner    = userRole === "owner";
   const isViewer   = userRole === "viewer" || userRole === "applicator";
   const isMetric   = currentOrg?.unit_system === "metric";
+  // Opt-in specialty features, enabled per org by the owner in the Team tab
+  const orgFeatures       = currentOrg?.features || {};
+  const targetZoneEnabled = !!orgFeatures.targetZone;
 
   // Org crop list — falls back to crops already assigned to fields if org list is empty
   const orgCrops = React.useMemo(() => {
@@ -1961,6 +1977,8 @@ export default function App() {
       tank_size:                  t.tankSize,
       pressure:                   t.pressure,
       gal_per_acre:               t.galPerAcre,
+      target_zone:                !!t.targetZone,
+      target_zone_pct:            t.targetZone && parseFloat(t.targetZonePct) > 0 ? parseFloat(t.targetZonePct) : null,
       prime_boom:                 t.primeBoom,
       flush_cleanout:             t.flushCleanout,
       equipment_type:             t.equipmentType,
@@ -3426,6 +3444,33 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Target zone (spot spray) — calc-only rate reduction */}
+              {(targetZoneEnabled || form.targetZone) && <div style={{ marginBottom:10, background: form.targetZone ? "#f3eefc" : "#f4fbee",
+                border:`1.5px solid ${form.targetZone ? "#7a4ab0" : "#c8dbb0"}`, borderRadius:7, padding:"12px 14px" }}>
+                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+                  <input type="checkbox" checked={!!form.targetZone}
+                    onChange={e => setForm(f => ({ ...f, targetZone: e.target.checked, targetZonePct: f.targetZonePct || "28" }))}
+                    style={{ width:20, height:20, accentColor:"#7a4ab0", flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color: form.targetZone ? "#4a2a7a" : "#2a5c0f" }}>Target Zone</div>
+                    <div style={{ fontSize:10, color:"#888" }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
+                  </div>
+                </label>
+                {form.targetZone && (
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:10, flexWrap:"wrap" }}>
+                    <input type="number" value={form.targetZonePct}
+                      onChange={e => set("targetZonePct", e.target.value)}
+                      style={{ ...inp, width:80 }} min="1" max="99" step="0.1" placeholder="28"/>
+                    <span style={{ fontSize:13, color:"#4a2a7a", fontWeight:600 }}>% less than broadcast</span>
+                    {parseFloat(form.galPerAcre) > 0 && parseFloat(form.targetZonePct) > 0 && parseFloat(form.targetZonePct) < 100 && (
+                      <span style={{ fontSize:12, color:"#666" }}>
+                        {form.galPerAcre} gal/ac → <strong style={{ color:"#4a2a7a" }}>{calcGpa(form).toFixed(2)} gal/ac</strong> effective
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>}
+
               {/* Prime boom + Flush checkboxes — compact side by side */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
                 <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer",
@@ -3457,9 +3502,12 @@ export default function App() {
               {/* ── Full-loads optimizer ── */}
               {(() => {
                 const ts  = parseFloat(form.tankSize)   || 0;
-                const gpa = parseFloat(form.galPerAcre) || 0;
+                const broadcastGpa = parseFloat(form.galPerAcre) || 0;
+                const gpa = calcGpa(form);
                 const ta  = totalAcres;
                 if (!ts || !gpa || !ta) return null;
+                // Suggestions are computed on the effective rate but offered as broadcast rates
+                const toBroadcast = (eff) => parseFloat((eff * broadcastGpa / gpa).toFixed(4));
                 const currentLoads = ts > 0 && gpa > 0 ? ta / (ts / gpa) : 0;
 
                 // Candidate whole-load counts: round and round+1
@@ -3490,7 +3538,8 @@ export default function App() {
 
                 // Filter: meaningful difference, and only suggest 5–15 gal/acre range, cap at 2
                 const filtered = suggestions
-                  .filter(s => Math.abs(s.idealGpa - gpa) > 0.005 && s.idealGpa >= 5 && s.idealGpa <= 15)
+                  .map(s => ({ ...s, broadcastGpa: toBroadcast(s.idealGpa) }))
+                  .filter(s => Math.abs(s.broadcastGpa - broadcastGpa) > 0.005 && s.broadcastGpa >= 5 && s.broadcastGpa <= 15)
                   .slice(0, 2);
                 if (!filtered.length) return (
                   <div style={{ background:"#d4e8c2", borderRadius:6, padding:"5px 10px", fontSize:11, color:"#2a5c0f", fontWeight:600, marginBottom:8 }}>
@@ -3505,14 +3554,14 @@ export default function App() {
                       {filtered.map(s => {
                         const partAc = ta - s.n * (ts / s.idealGpa);
                         return (
-                          <button key={s.n} onClick={() => set("galPerAcre", String(s.idealGpa))}
+                          <button key={s.n} onClick={() => set("galPerAcre", String(s.broadcastGpa))}
                             style={{
                               flex:1, border:"1.5px solid #c0a020", borderRadius:6, padding:"5px 8px",
                               background:"#fffbe6", cursor:"pointer", fontFamily:"inherit",
                               display:"flex", flexDirection:"column", alignItems:"flex-start", gap:1
                             }}>
                             <span style={{ fontSize:13, fontWeight:800, color:"#2a5c0f" }}>
-                              {s.idealGpa % 1 === 0 ? s.idealGpa : s.idealGpa.toFixed(2)} gal/ac
+                              {s.broadcastGpa % 1 === 0 ? s.broadcastGpa : s.broadcastGpa.toFixed(2)} gal/ac
                             </span>
                             <span style={{ fontSize:10, color:"#7a5800" }}>
                               {s.n} load{s.n!==1?"s":""} · {(ts/s.idealGpa).toFixed(1)} ac/tank
@@ -3537,7 +3586,9 @@ export default function App() {
                       <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}>ACRES / LOAD</div>
                       <div style={{ fontSize: isMobile ? 22 : 28, fontWeight:700, color:"#2a5c0f" }}>{acreLoads}</div>
                       <div style={{ fontSize:11, color:"#7aaa40" }}>
-                        Tank ÷ {form.galPerAcre ? <strong style={{ color:"#2a5c0f" }}>{form.galPerAcre} gal/ac</strong> : "Gal/Acre"}
+                        Tank ÷ {form.galPerAcre
+                          ? <strong style={{ color:"#2a5c0f" }}>{form.targetZone && calcGpa(form) !== parseFloat(form.galPerAcre) ? `${calcGpa(form).toFixed(2)} gal/ac target zone` : `${form.galPerAcre} gal/ac`}</strong>
+                          : "Gal/Acre"}
                       </div>
                     </div>
                     <div>
@@ -3669,7 +3720,7 @@ export default function App() {
                   {form.chemRows.map(row => (
                     <ChemicalRow
                       key={row.id} chem={row} chemicals={chemicals}
-                      tankSize={form.tankSize} galPerAcre={form.galPerAcre} totalAcres={totalAcres}
+                      tankSize={form.tankSize} galPerAcre={calcGpa(form)} totalAcres={totalAcres}
                       onChange={(k,v) => updateChemRow(row.id,k,v)}
                       onRemove={() => removeChemRow(row.id)}
                       isMobile={isMobile}
@@ -3918,6 +3969,7 @@ export default function App() {
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                         {t.crop && <span style={{ fontSize:12, color:"#2a5c0f", fontWeight:600 }}>{t.crop}</span>}
+                        <TargetZoneBadge ticket={t} />
                         {(() => {
                           const sched = t.fieldSchedule || [];
                           const anyDate = sched.some(fs => fs.actualDateEnd);
@@ -3953,7 +4005,9 @@ export default function App() {
                       <div style={{ display:"flex", gap:8, fontSize:12, color:"#555", flexWrap:"wrap", marginBottom:10 }}>
                         {[
                           t.totalAcres        && fmtAcres(t.totalAcres, isMetric),
-                          t.galPerAcre        && fmtGpa(t.galPerAcre, isMetric),
+                          t.galPerAcre        && (isTargetZone(t)
+                            ? `${fmtGpa(t.galPerAcre, isMetric)} broadcast · ${fmtGpa(calcGpa(t).toFixed(2), isMetric)} effective`
+                            : fmtGpa(t.galPerAcre, isMetric)),
                           t.equipmentType,
                           t.licensedApplicant,
                         ].filter(Boolean).map((item, i) => (
@@ -4070,6 +4124,8 @@ export default function App() {
                             tankSize:    t.tankSize || "",
                             pressure:    t.pressure || "",
                             galPerAcre:  t.galPerAcre || "",
+                            targetZone:  !!t.targetZone,
+                            targetZonePct: t.targetZonePct || "28",
                             acresPerHour: t.acresPerHour || 75,
                             equipmentType: t.equipmentType || "",
                             licensedApplicant: t.licensedApplicant || "",
@@ -5742,6 +5798,40 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Operation Features — opt-in specialty tools */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitle, marginBottom:6 }}>Operation Features</div>
+                <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+                  Turn on specialty tools for your operation. They apply to everyone in this org; turned-off tools stay hidden.
+                </div>
+                {[
+                  ["targetZone", "Target Zone / Spot Spray",
+                   "Adds a Target Zone option to Tank Setup. Loads and tank mix are calculated on a reduced rate while the ticket still shows the broadcast gal/acre."],
+                ].map(([key, label, desc]) => {
+                  const on = !!orgFeatures[key];
+                  return (
+                    <label key={key} style={{ display:"flex", alignItems:"flex-start", gap:10, cursor:"pointer",
+                      background: on ? "#f3eefc" : "#f4fbee", border:`1.5px solid ${on ? "#7a4ab0" : "#c8dbb0"}`,
+                      borderRadius:7, padding:"12px 14px", marginBottom:6 }}>
+                      <input type="checkbox" checked={on}
+                        onChange={async e => {
+                          const next = { ...orgFeatures, [key]: e.target.checked };
+                          const { error } = await supabase.from("organizations").update({ features: next }).eq("id", currentOrg.id);
+                          if (error) showToast("Failed to update: " + error.message);
+                          else setCurrentOrg(prev => ({ ...prev, features: next }));
+                        }}
+                        style={{ width:20, height:20, accentColor:"#7a4ab0", flexShrink:0, marginTop:1 }}/>
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:14, color: on ? "#4a2a7a" : "#2a5c0f" }}>{label}</div>
+                        <div style={{ fontSize:11, color:"#777", marginTop:2 }}>{desc}</div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             )}
 

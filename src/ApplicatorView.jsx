@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ApplicatorMapView from "./ApplicatorMapView";
+import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 
 
 function cropChip(crop) {
@@ -133,6 +134,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                   </span>
                   {t.crop && <span style={{ color: "#555", fontSize: 18, fontWeight: 800 }}>{t.crop}</span>}
                   <span style={{ background: statusBadge.bg, color: statusBadge.color, borderRadius: 4, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{statusBadge.label}</span>
+                  <TargetZoneBadge ticket={t} />
                 </div>
               </div>
               {isOwner && (
@@ -162,6 +164,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                     #{String(t.ticketNumber || t.ticket_number || "").padStart(3, "0")}
                   </span>
                   {t.crop && <span style={{ fontSize: 13, color: "#888" }}>{t.crop}</span>}
+                  <TargetZoneBadge ticket={t} size={10} />
                   <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{(t.selectedFields||[]).length} fields</span>
                   {isOwner && (
                     <button onClick={(e) => { e.stopPropagation(); onToggleQueue && onToggleQueue(t.id, false); }}
@@ -280,6 +283,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
           <div style={{ fontWeight: 800, fontSize: 15, color: "#1a4a0a" }}>
             #{ticketNum}{t.crop && cropChip(t.crop)}
           </div>
+          {isTargetZone(t) && <div style={{ margin: "3px 0" }}><TargetZoneBadge ticket={t} /></div>}
           <div style={{ fontSize: 12, color: "#888" }}>
             {pendingFields.length} field{pendingFields.length !== 1 ? "s" : ""} remaining · {pendingFields.reduce((sum, f) => sum + (parseFloat(f.acres) || 0), 0).toFixed(1)} ac
           </div>
@@ -295,6 +299,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
               ["Gal/Acre",   t.galPerAcre   || t.gal_per_acre],
               ["Pressure",   t.pressure     ? `${t.pressure} PSI` : null],
               ["Tank Size",  t.tankSize     || t.tank_size ? `${t.tankSize || t.tank_size} gal` : null],
+              ["Spot Spray", isTargetZone(t) ? "Yes" : null],
             ].filter(([,v]) => v).map(([label, val]) => (
               <div key={label}>
                 <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
