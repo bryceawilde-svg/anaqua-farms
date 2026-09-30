@@ -1596,27 +1596,11 @@ export default function App() {
     setChatInput("");
     setChatLoading(true);
     try {
-      // Slim ticket summaries to keep payload manageable
-      const ticketData = tickets.map(t => ({
-        num:        t.ticketNumber,
-        date:       t.date,
-        crop:       t.crop,
-        fields:     (t.selectedFields || []).map(f => f.name).join(", "),
-        acres:      t.totalAcres,
-        chemicals:  (t.chemicals || []).map(c =>
-                      `${c.name}${c.ratePerAcre ? ` @ ${c.ratePerAcre}${c.unit || ""}/ac` : ""}`).join("; "),
-        pest:       Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest || ""),
-        applicator: t.licensedApplicant,
-        equipment:  t.equipmentType,
-        start:      t.timeStart,
-        end:        t.timeEnd,
-      }));
-      const fieldData = fieldLibrary.map(f => ({ name: f.name, crop: f.crop, acres: f.acres }));
-      const chemData  = chemicals.map(c => ({ ...chemForAI(c), rei: c.rei }));
       // Pass last 10 messages as history for multi-turn context
       const history = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
       const { data, error } = await supabase.functions.invoke("ai-assistant", {
-        body: { action: "advisor", question, history, tickets: ticketData, fields: fieldData, chemicals: chemData },
+        // The advisor looks up the operation's records itself, scoped by the user's login
+        body: { action: "advisor", question, history },
       });
       if (error) throw new Error(error.message);
       const parsed = JSON.parse(data.result);
