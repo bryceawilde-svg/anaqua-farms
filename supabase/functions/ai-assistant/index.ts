@@ -44,7 +44,8 @@ const MAX_RESULT_CHARS = 120_000;
 const QUERY_TOOL = {
   name: "query_records",
   description:
-    "Look up this operation's farm records. Tables: tickets (application tickets; date is YYYY-MM-DD text; " +
+    "Look up this operation's farm records. Tables: tickets (application tickets; date is YYYY-MM-DD text; each ticket row " +
+    "includes computed applied_acres, applied_field_count, finished_acres and planned_acres, and each field_schedule entry has applied: true/false; " +
     "chemicals lists products with rates, EPA #, active ingredient and per-tank amounts; field_schedule lists each field on the ticket " +
     "with its acres, planned and actual start/end times, dates and field weather), fields (field library: acres, crop, traits), " +
     "chemicals (chemical library with label data), equipment, licensed_applicators, non_licensed_applicators, pests, crop_seasons, " +
@@ -95,9 +96,22 @@ function slimTicket(t: Record<string, unknown>) {
   if ("chemicals" in t)
     out.chemicals = ((t.chemicals as Record<string, unknown>[]) || []).map(c => pick(c,
       ["name", "epa", "activeIngredient", "rei", "ratePerAcre", "unit", "totalPerTankFmt", "partialPerTankFmt", "partialAcres"]));
-  if ("field_schedule" in t)
-    out.field_schedule = ((t.field_schedule as Record<string, unknown>[]) || []).map(fs => pick(fs,
-      ["name", "acres", "timeStart", "timeEnd", "actualTimeStart", "actualTimeEnd", "actualDateStart", "actualDateEnd", "fieldWeather"]));
+  if ("field_schedule" in t) {
+    const sched = (t.field_schedule as Record<string, unknown>[]) || [];
+    // A field counts as applied once it has an actual date/time or recorded field weather
+    const isApplied = (fs: Record<string, unknown>) =>
+      !!(fs.actualDateStart || fs.actualDateEnd || fs.actualTimeStart || fs.actualTimeEnd || fs.fieldWeather);
+    const isFinished = (fs: Record<string, unknown>) => !!(fs.actualDateEnd || fs.actualTimeEnd);
+    const sum = (rows: Record<string, unknown>[]) =>
+      Math.round(rows.reduce((a, fs) => a + (parseFloat(String(fs.acres)) || 0), 0) * 100) / 100;
+    out.applied_acres = sum(sched.filter(isApplied));
+    out.applied_field_count = sched.filter(isApplied).length;
+    out.finished_acres = sum(sched.filter(isFinished));
+    out.planned_acres = sum(sched);
+    out.field_schedule = sched.map(fs => ({ ...pick(fs,
+      ["name", "acres", "timeStart", "timeEnd", "actualTimeStart", "actualTimeEnd", "actualDateStart", "actualDateEnd", "fieldWeather"]),
+      applied: isApplied(fs) }));
+  }
   return out;
 }
 
@@ -111,7 +125,9 @@ async function runRecordQuery(db: any, input: QueryInput): Promise<{ content: st
     .filter(c => !allowed.includes(c));
   if (bad.length) return { content: `Unknown column(s) for ${input.table}: ${bad.join(", ")}. Columns: ${allowed.join(", ")}`, isError: true };
 
-  let q = db.from(spec.table).select(input.columns?.length ? input.columns.join(", ") : spec.columns);
+  let cols = input.columns?.length ? [...input.columns] : null;
+  if (cols && input.table === "tickets" && !cols.includes("field_schedule")) cols.push("field_schedule");
+  let q = db.from(spec.table).select(cols ? cols.join(", ") : spec.columns);
   for (const f of input.filters || []) {
     if (!FILTER_OPS.includes(f.op)) return { content: `Unsupported filter op "${f.op}".`, isError: true };
     q = q[f.op](f.column, f.value);
@@ -312,7 +328,12 @@ Deno.serve(async (req) => {
         'Always look records up before answering a question about them; never answer from memory or guess. If one lookup ' +
         'isn\'t enough, make more. If the records don\'t contain the answer, say so in one sentence.\n' +
         'Chemical active ingredients and EPA numbers come from the chemicals table or the ticket\'s chemical list, taken from the ' +
-        'product labels. Treat them as authoritative and never infer an active ingredient from a product name.\n\n' +
+        'product labels. Treat them as authoritative and never infer an active ingredient from a product name.\n' +
+        'ACRES: "applied" or "sprayed" acres means fields that have an actual date/time or field weather recorded. Use each ticket\'s ' +
+        'applied_acres (or sum the acres of field_schedule entries with applied: true). Never use partial_acres, acre_loads or ' +
+        'total_acres as applied acres: partial_acres is the size of the last partial tank load, and total_acres is planned acres. ' +
+        'To find tickets with a product, fetch tickets with the chemicals column and match by product name or active ingredient, ' +
+        'checking every ticket returned.\n\n' +
         'Rules for every response:\n' +
         '1. Give the direct answer first. Skip calculation steps and per-ticket breakdowns unless the user asks for them.\n' +
         '2. Don\'t mention EPA registration numbers unless the user asks for them.\n' +
