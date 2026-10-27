@@ -1998,30 +1998,55 @@ export default function App() {
       field_schedule:             t.fieldSchedule,
     });
 
+    // The phone sometimes never hears back even though the save went through, which left
+    // the button stuck on "Saving…". Give each attempt a time limit, then retry with an
+    // upsert on the ticket id: it is safe to repeat and also confirms whether the first one landed.
+    const withTimeout = (promise, ms) => Promise.race([
+      promise,
+      new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), ms)),
+    ]);
+    const isEdit = !!editingId;
+    const existingNum = isEdit ? (tickets.find(x => x.id === editingId)?.ticketNumber || 0) : null;
+    const row = {
+      ...dbRow(newTicket),
+      ...(isEdit ? { ticket_number: existingNum } : {}),
+      user_id: session.user.id, org_id: currentOrg?.id,
+    };
+
     let assignedTicketNumber;
-    if (editingId) {
-      const existingNum = tickets.find(x => x.id === editingId)?.ticketNumber || 0;
-      const finalTicket = { ...newTicket, ticketNumber: existingNum };
-      setTickets(prev => prev.map(x => x.id === editingId ? finalTicket : x));
-      const { error } = await supabase.from("tickets")
-        .update({ ...dbRow(finalTicket), ticket_number: existingNum, user_id: session.user.id, org_id: currentOrg?.id })
-        .eq("id", editingId);
-      if (error) { setIsSaving(false); showToast("Failed to save ticket: " + error.message); return null; }
-      assignedTicketNumber = existingNum;
-    } else {
-      // Let the DB sequence assign ticket_number — omit it from the insert payload
-      const { data, error } = await supabase.from("tickets")
-        .insert({ ...dbRow(newTicket), user_id: session.user.id, org_id: currentOrg?.id })
-        .select("id, ticket_number")
-        .single();
-      if (error) { setIsSaving(false); showToast("Failed to save ticket: " + error.message); return null; }
-      assignedTicketNumber = data.ticket_number;
-      const finalTicket = { ...newTicket, ticketNumber: assignedTicketNumber };
-      // Realtime INSERT will also fire; guard in the subscription prevents duplication
-      setTickets(prev => [finalTicket, ...prev]);
+    try {
+      let res = await withTimeout(
+        isEdit
+          ? supabase.from("tickets").update(row).eq("id", editingId)
+          : supabase.from("tickets").insert(row).select("id, ticket_number").single(),
+        15000
+      );
+      if (res.timedOut) {
+        res = await withTimeout(
+          supabase.from("tickets").upsert(row, { onConflict: "id" }).select("id, ticket_number").single(),
+          15000
+        );
+      }
+      if (res.timedOut) {
+        showToast("No answer from the server, so the save couldn't be confirmed. Check your signal, then open the Saved tab to see if the ticket is there before saving again.");
+        return null;
+      }
+      if (res.error) { showToast("Failed to save ticket: " + res.error.message); return null; }
+      assignedTicketNumber = isEdit ? existingNum : res.data?.ticket_number;
+    } catch (e) {
+      showToast("Failed to save ticket: " + (e?.message || "unknown error"));
+      return null;
+    } finally {
+      setIsSaving(false);
     }
 
-    setIsSaving(false);
+    const finalTicket = { ...newTicket, ticketNumber: assignedTicketNumber };
+    // Realtime may also deliver this row; the subscription guard prevents duplicates
+    setTickets(prev => isEdit
+      ? prev.map(x => x.id === editingId ? finalTicket : x)
+      : [finalTicket, ...prev.filter(x => x.id !== finalTicket.id)]);
+    showToast(`Ticket #${String(assignedTicketNumber || "").padStart(3, "0")} ${isEdit ? "updated" : "saved"}`, "success");
+
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
