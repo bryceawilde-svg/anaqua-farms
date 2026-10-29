@@ -1855,6 +1855,8 @@ export default function App() {
   const noteT = { fontSize:12.5, color: theme.ink2, lineHeight:1.45 };
   // Mobile secondary button (Rename, Cancel, CSV…).
   const softBtnT = { background: theme.fill, color: theme.ink2, border:"none", borderRadius:10, padding:"8px 13px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap", fontFamily:"inherit" };
+  // Mobile status badge (import review: auto / suggested / new / add / replace …).
+  const badgeT = (bg, fg) => ({ background:bg, color:fg, borderRadius:6, padding:"2px 8px", fontSize:11, fontWeight:700, whiteSpace:"nowrap" });
   // Mobile 32px delete (×) button on library cards; theme red so it reads in dark mode.
   const delBtnT = { width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color: theme.red,
     fontSize:18, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 };
@@ -5397,8 +5399,8 @@ export default function App() {
                   {/* Stage 1b: Column Mapping — shown for non-FarmMobile shapefiles */}
                   {fmStage === "mapping" && (
                     <div>
-                      <div style={{ fontSize:13, color:"#555", marginBottom:14 }}>
-                        <strong>{fmFeatures.length} features found.</strong> We couldn't auto-detect the format.
+                      <div style={isMobile ? { ...noteT, marginBottom:14 } : { fontSize:13, color:"#555", marginBottom:14 }}>
+                        <strong style={isMobile ? { color: theme.ink } : undefined}>{fmFeatures.length} features found.</strong> We couldn't auto-detect the format.
                         Tell us which column holds each piece of data.
                       </div>
 
@@ -5409,12 +5411,19 @@ export default function App() {
                         { key:"cropCol", label:"Crop / Year",required:false, hint:"Display only" },
                       ].map(({ key, label, required, hint }) => (
                         <div key={key} style={{ marginBottom:12 }}>
+                          {isMobile ? (
+                            <label style={{ ...labelT, marginBottom:5 }}>
+                              {label}{required && <span style={{ color: theme.red }}> *</span>}
+                              <span style={{ display:"block", fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:11.5, marginTop:1 }}>{hint}</span>
+                            </label>
+                          ) : (
                           <label style={{ ...labelT, fontSize:12 }}>
                             {label}{required && <span style={{ color:"#c0392b" }}> *</span>}
                             <span style={{ fontWeight:400, color:"#aaa", marginLeft:6 }}>{hint}</span>
                           </label>
+                          )}
                           <select value={fmColMap[key]} onChange={e => setFmColMap(m => ({ ...m, [key]: e.target.value }))}
-                            style={{ ...inp, fontSize:13, width:"100%", maxWidth:320 }}>
+                            style={isMobile ? sel : { ...inp, fontSize:13, width:"100%", maxWidth:320 }}>
                             <option value="">— {required ? "required" : "not used"} —</option>
                             {fmAvailCols.map(col => (
                               <option key={col} value={col}>{col}
@@ -5429,7 +5438,26 @@ export default function App() {
                       ))}
 
                       {/* Preview first 3 features with current mapping */}
-                      {fmColMap.nameCol && (
+                      {fmColMap.nameCol && isMobile && (
+                        <div style={{ marginBottom:14 }}>
+                          <div style={{ ...labelT, marginBottom:6 }}>Preview — first 3 features</div>
+                          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                            {fmFeatures.slice(0,3).map((feat,i) => {
+                              const p = feat.properties || {};
+                              const sub = [fmColMap.farmCol && p[fmColMap.farmCol], fmColMap.cropCol && p[fmColMap.cropCol]].filter(Boolean).join(" · ");
+                              return (
+                                <div key={i} style={{ background: theme.fill, borderRadius:10, padding:"9px 11px" }}>
+                                  <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{p[fmColMap.nameCol] || "—"}</div>
+                                  <div style={{ fontSize:11.5, color: theme.mut }}>
+                                    {sub || "No farm / crop"} · ID <span style={{ fontFamily:"'Space Grotesk',monospace" }}>{fmColMap.idCol ? p[fmColMap.idCol] : "auto"}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {fmColMap.nameCol && !isMobile && (
                         <div style={{ marginBottom:14 }}>
                           <div style={{ fontSize:11, fontWeight:700, color:"#555", marginBottom:4 }}>Preview (first 3 features):</div>
                           <div style={{ overflowX:"auto" }}>
@@ -5461,13 +5489,13 @@ export default function App() {
                         <button
                           disabled={!fmColMap.nameCol}
                           onClick={confirmMapping}
-                          style={{ background: fmColMap.nameCol ? "#2a5c0f" : "#ccc", color:"#fff", border:"none",
+                          style={isMobile ? { ...addBtnT(!!fmColMap.nameCol), flex:1, minHeight:46, fontSize:14 } : { background: fmColMap.nameCol ? "#2a5c0f" : "#ccc", color:"#fff", border:"none",
                             borderRadius:6, padding:"8px 16px", cursor: fmColMap.nameCol ? "pointer" : "not-allowed",
                             fontSize:13, fontWeight:700 }}>
                           Continue to Review →
                         </button>
                         <button onClick={resetFm}
-                          style={{ background:"none", border:"none", color:"#888", cursor:"pointer", fontSize:12, textDecoration:"underline" }}>
+                          style={isMobile ? { ...softBtnT, minHeight:46 } : { background:"none", border:"none", color:"#888", cursor:"pointer", fontSize:12, textDecoration:"underline" }}>
                           Start Over
                         </button>
                       </div>
@@ -5478,17 +5506,33 @@ export default function App() {
                   {fmStage === "review" && (
                     <div>
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+                        {isMobile ? (
+                          <div style={{ width:"100%" }}>
+                            <div style={{ fontSize:13, color: theme.ink2, marginBottom:7 }}><strong style={{ color: theme.ink }}>{fmFeatures.length}</strong> fields found</div>
+                            <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                              <span style={badgeT(theme.tintGreen, theme.onGreen)}>{autoCount} auto-matched</span>
+                              <span style={badgeT(theme.tintAmber, theme.amber)}>{suggestedCount} suggested</span>
+                              <span style={badgeT(theme.tintRed, theme.red)}>{unmatchedCount} unmatched</span>
+                            </div>
+                          </div>
+                        ) : (
                         <div style={{ fontSize:12, color:"#555" }}>
                           <strong>{fmFeatures.length}</strong> fields found ·{" "}
                           <span style={{ color:"#2a7a1f", fontWeight:700 }}>{autoCount} auto-matched</span> ·{" "}
                           <span style={{ color:"#a07000", fontWeight:700 }}>{suggestedCount} suggested</span> ·{" "}
                           <span style={{ color:"#c0392b", fontWeight:700 }}>{unmatchedCount} unmatched</span>
                         </div>
-                        <div style={{ display:"flex", gap:2 }}>
+                        )}
+                        <div style={isMobile ? { display:"flex", background: theme.fill, borderRadius:10, padding:3, gap:2 } : { display:"flex", gap:2 }}>
                           {["Table","Map"].map(mode => (
                             <button key={mode}
                               onClick={() => setFmReviewMode(mode.toLowerCase())}
-                              style={{
+                              style={isMobile ? {
+                                padding:"5px 14px", fontSize:12.5, fontWeight:700, cursor:"pointer", border:"none", borderRadius:8, fontFamily:"inherit",
+                                background: fmReviewMode === mode.toLowerCase() ? theme.card : "transparent",
+                                color:      fmReviewMode === mode.toLowerCase() ? theme.ink : theme.mut,
+                                boxShadow:  fmReviewMode === mode.toLowerCase() ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
+                              } : {
                                 padding:"3px 12px", fontSize:12, fontWeight:700, cursor:"pointer",
                                 border:"1.5px solid #c8dbb0", borderRadius:4,
                                 background: fmReviewMode === mode.toLowerCase() ? "#2a5c0f" : "#f9fdf5",
@@ -5510,121 +5554,163 @@ export default function App() {
                         </div>
                       )}
 
-                      {fmReviewMode === "table" && <div style={{ overflowX:"auto", marginBottom:10 }}>
-                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                          <thead>
-                            <tr>
-                              {["Shapefile Field","Farm","Crop Year","Status","Your Field","Boundary"].map(h => (
-                                <th key={h} style={th}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {fmFeatures.map((feat, idx) => {
-                              const p    = feat.properties || {};
-                              const fmid = p.FLD_FMID;
-                              const m    = fmMatches[fmid] || {};
-                              const isAuto      = m.status === "auto";
-                              const isSuggested = m.status === "suggested";
-                              const isUnmatched = m.status === "unmatched";
-                              const isNew       = m.fieldId === "__new__";
+                      {fmReviewMode === "table" && (() => {
+                        // One entry per shapefile feature: a table row on desktop, a card on mobile.
+                        const rows = fmFeatures.map((feat, idx) => {
+                          const p    = feat.properties || {};
+                          const fmid = p.FLD_FMID;
+                          const m    = fmMatches[fmid] || {};
+                          const isAuto      = m.status === "auto";
+                          const isSuggested = m.status === "suggested";
+                          const isUnmatched = m.status === "unmatched";
+                          const isNew       = m.fieldId === "__new__";
 
-                              const badgeStyle = isAuto
-                                ? { background:"#d4edda", color:"#155724", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
-                                : isSuggested && !isNew
-                                ? { background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
-                                : isNew
-                                ? { background:"#cce5ff", color:"#004085", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
-                                : { background:"#f8d7da", color:"#721c24", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 };
+                          const badgeStyle = isMobile
+                            ? (isAuto ? badgeT(theme.tintGreen, theme.onGreen)
+                              : isSuggested && !isNew ? badgeT(theme.tintAmber, theme.amber)
+                              : isNew ? badgeT(theme.tintBlue, theme.blue)
+                              : badgeT(theme.tintRed, theme.red))
+                            : isAuto
+                            ? { background:"#d4edda", color:"#155724", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
+                            : isSuggested && !isNew
+                            ? { background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
+                            : isNew
+                            ? { background:"#cce5ff", color:"#004085", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 }
+                            : { background:"#f8d7da", color:"#721c24", borderRadius:4, padding:"1px 7px", fontSize:10, fontWeight:700 };
 
-                              const badgeLabel = isAuto ? "Auto" : isNew ? "New" : isSuggested ? "Suggested" : "Unmatched";
+                          const badgeLabel = isAuto ? "Auto" : isNew ? "New" : isSuggested ? "Suggested" : "Unmatched";
 
-                              const matchedField = fieldLibrary.find(f => f.id === m.fieldId);
-                              const hasBoundary  = !!matchedField?.boundary_geojson;
-                              const willSkip     = fmFillMissingOnly && hasBoundary && !isNew && m.fieldId;
+                          const matchedField = fieldLibrary.find(f => f.id === m.fieldId);
+                          const hasBoundary  = !!matchedField?.boundary_geojson;
+                          const willSkip     = fmFillMissingOnly && hasBoundary && !isNew && m.fieldId;
 
-                              return (
-                                <tr key={fmid || idx} style={{ borderBottom:"1px solid #eef5e8", opacity: willSkip ? 0.45 : 1 }}>
-                                  <td style={td}>{p.FLD_NM}</td>
-                                  <td style={td}>{p.FARM_NM || "—"}</td>
-                                  <td style={td}>{p.CROP_CYCLE || "—"}</td>
-                                  <td style={td}><span style={badgeStyle}>{badgeLabel}</span></td>
-                                  <td style={{ ...td, position:"relative", minWidth:160 }}>
-                                    {(() => {
-                                      const isOpen = fmDropState?.fmid === fmid;
-                                      const displayName = matchedField?.name || (m.fieldId === "__new__" ? "＋ New field" : "");
-                                      const dropResults = fieldLibrary
-                                        .filter(f => !fmDropState?.search || f.name.toLowerCase().includes(fmDropState.search.toLowerCase()))
-                                        .slice(0, 18);
-                                      return (
-                                        <div style={{ position:"relative" }}>
-                                          <input
-                                            value={isOpen ? (fmDropState.search ?? "") : displayName}
-                                            onChange={e => setFmDropState({ fmid, search: e.target.value })}
-                                            onFocus={() => { if (!isOpen) setFmDropState({ fmid, search: "" }); }}
-                                            placeholder="— type to search —"
-                                            style={{ ...inp, padding:"3px 7px", fontSize:11, width:"100%", boxSizing:"border-box",
-                                              background: isAuto && !isOpen ? "#f9fdf9" : "#fff",
-                                              color: displayName ? "#222" : "#aaa" }}
-                                          />
-                                          {isOpen && (
-                                            <>
-                                              <div style={{ position:"fixed", inset:0, zIndex:198 }} onClick={() => setFmDropState(null)} />
-                                              <div style={{
-                                                position:"absolute", top:"100%", left:0, minWidth:220, zIndex:199,
-                                                background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
-                                                boxShadow:"0 4px 16px rgba(0,0,0,0.13)", maxHeight:180, overflowY:"auto"
-                                              }}>
-                                                {dropResults.map(f => (
-                                                  <div key={f.id}
-                                                    onClick={() => {
-                                                      setFmMatches(prev => ({ ...prev, [fmid]: { ...prev[fmid], fieldId: f.id, confirmed: true, status: prev[fmid]?.status === "auto" ? "auto" : "suggested" } }));
-                                                      setFmDropState(null);
-                                                    }}
-                                                    style={{ padding:"6px 10px", cursor:"pointer", fontSize:12, borderBottom:"1px solid #eef5e8",
-                                                      display:"flex", justifyContent:"space-between", alignItems:"center",
-                                                      background: matchedField?.id === f.id ? "#e6f5d0" : "transparent" }}
-                                                    onMouseEnter={e => { if (matchedField?.id !== f.id) e.currentTarget.style.background="#f0f7e8"; }}
-                                                    onMouseLeave={e => { if (matchedField?.id !== f.id) e.currentTarget.style.background="transparent"; }}
-                                                  >
-                                                    <span style={{ fontWeight: matchedField?.id === f.id ? 700 : 400 }}>{f.name}</span>
-                                                    <span style={{ color:"#888", fontSize:11, whiteSpace:"nowrap", marginLeft:8 }}>
-                                                      {f.crop && <span style={{ background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 4px",fontWeight:700,fontSize:10,marginRight:4 }}>{f.crop}</span>}
-                                                      {parseFloat(f.acres||0).toFixed(1)} ac
-                                                    </span>
-                                                  </div>
-                                                ))}
-                                                {dropResults.length === 0 && <div style={{ padding:"8px 10px", fontSize:12, color:"#aaa" }}>No fields found</div>}
-                                                <div
-                                                  onClick={() => {
-                                                    setFmMatches(prev => ({ ...prev, [fmid]: { ...prev[fmid], fieldId:"__new__", confirmed:true, status:"unmatched" } }));
-                                                    setFmDropState(null);
-                                                  }}
-                                                  style={{ padding:"6px 10px", cursor:"pointer", fontSize:12, color:"#1a4a8a", fontWeight:600, borderTop:"1px solid #eee" }}
-                                                  onMouseEnter={e => e.currentTarget.style.background="#f0f5ff"}
-                                                  onMouseLeave={e => e.currentTarget.style.background="transparent"}
-                                                >＋ Create as new field</div>
-                                              </div>
-                                            </>
-                                          )}
+                          // "Your field" search-and-pick — shared by the table cell and the mobile card.
+                          const picker = (() => {
+                            const isOpen = fmDropState?.fmid === fmid;
+                            const displayName = matchedField?.name || (m.fieldId === "__new__" ? "＋ New field" : "");
+                            const dropResults = fieldLibrary
+                              .filter(f => !fmDropState?.search || f.name.toLowerCase().includes(fmDropState.search.toLowerCase()))
+                              .slice(0, 18);
+                            return (
+                              <div style={{ position:"relative" }}>
+                                <input
+                                  value={isOpen ? (fmDropState.search ?? "") : displayName}
+                                  onChange={e => setFmDropState({ fmid, search: e.target.value })}
+                                  onFocus={() => { if (!isOpen) setFmDropState({ fmid, search: "" }); }}
+                                  placeholder="— type to search —"
+                                  style={isMobile
+                                    ? { ...inp, padding:"8px 10px", color: displayName ? theme.ink : theme.mut }
+                                    : { ...inp, padding:"3px 7px", fontSize:11, width:"100%", boxSizing:"border-box",
+                                    background: isAuto && !isOpen ? "#f9fdf9" : "#fff",
+                                    color: displayName ? "#222" : "#aaa" }}
+                                />
+                                {isOpen && (
+                                  <>
+                                    <div style={{ position:"fixed", inset:0, zIndex:198 }} onClick={() => setFmDropState(null)} />
+                                    <div style={isMobile ? {
+                                      position:"absolute", top:"100%", left:0, right:0, marginTop:4, zIndex:199,
+                                      background: theme.card, border:`1px solid ${theme.line}`, borderRadius:12,
+                                      boxShadow:"0 8px 24px rgba(0,0,0,0.18)", maxHeight:240, overflowY:"auto"
+                                    } : {
+                                      position:"absolute", top:"100%", left:0, minWidth:220, zIndex:199,
+                                      background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
+                                      boxShadow:"0 4px 16px rgba(0,0,0,0.13)", maxHeight:180, overflowY:"auto"
+                                    }}>
+                                      {dropResults.map(f => {
+                                        const on = matchedField?.id === f.id;
+                                        const hover = isMobile ? theme.fill : "#f0f7e8";
+                                        return (
+                                        <div key={f.id}
+                                          onClick={() => {
+                                            setFmMatches(prev => ({ ...prev, [fmid]: { ...prev[fmid], fieldId: f.id, confirmed: true, status: prev[fmid]?.status === "auto" ? "auto" : "suggested" } }));
+                                            setFmDropState(null);
+                                          }}
+                                          style={{ padding: isMobile ? "11px 12px" : "6px 10px", cursor:"pointer", fontSize: isMobile ? 14 : 12,
+                                            borderBottom: `1px solid ${isMobile ? theme.divider : "#eef5e8"}`, color: isMobile ? theme.ink : undefined,
+                                            display:"flex", justifyContent:"space-between", alignItems:"center",
+                                            background: on ? (isMobile ? theme.tintGreen : "#e6f5d0") : "transparent" }}
+                                          onMouseEnter={e => { if (!on) e.currentTarget.style.background = hover; }}
+                                          onMouseLeave={e => { if (!on) e.currentTarget.style.background="transparent"; }}
+                                        >
+                                          <span style={{ fontWeight: on ? 700 : 400 }}>{f.name}</span>
+                                          <span style={{ color: isMobile ? theme.mut : "#888", fontSize:11, whiteSpace:"nowrap", marginLeft:8 }}>
+                                            {f.crop && <span style={isMobile
+                                              ? { ...badgeT(theme.tintGreen, theme.onGreen), fontSize:10, padding:"1px 5px", marginRight:4 }
+                                              : { background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 4px",fontWeight:700,fontSize:10,marginRight:4 }}>{f.crop}</span>}
+                                            {parseFloat(f.acres||0).toFixed(1)} ac
+                                          </span>
                                         </div>
-                                      );
-                                    })()}
-                                  </td>
-                                  <td style={td}>
-                                    {willSkip
-                                      ? <span style={{ fontSize:10, color:"#888", fontStyle:"italic" }}>skip</span>
-                                      : hasBoundary
-                                        ? <span style={{ background:"#fff3cd", color:"#856404", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>replace</span>
-                                        : <span style={{ background:"#d4edda", color:"#155724", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>add</span>
-                                    }
-                                  </td>
+                                        );
+                                      })}
+                                      {dropResults.length === 0 && <div style={{ padding:"8px 10px", fontSize:12, color: isMobile ? theme.mut : "#aaa" }}>No fields found</div>}
+                                      <div
+                                        onClick={() => {
+                                          setFmMatches(prev => ({ ...prev, [fmid]: { ...prev[fmid], fieldId:"__new__", confirmed:true, status:"unmatched" } }));
+                                          setFmDropState(null);
+                                        }}
+                                        style={{ padding: isMobile ? "11px 12px" : "6px 10px", cursor:"pointer", fontSize: isMobile ? 14 : 12, color: isMobile ? theme.blue : "#1a4a8a", fontWeight:600, borderTop: `1px solid ${isMobile ? theme.line : "#eee"}` }}
+                                        onMouseEnter={e => e.currentTarget.style.background = isMobile ? theme.tintBlue : "#f0f5ff"}
+                                        onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                                      >＋ Create as new field</div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })();
+
+                          const boundary = willSkip
+                            ? <span style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888", fontStyle:"italic" }}>skip</span>
+                            : hasBoundary
+                              ? <span style={isMobile ? badgeT(theme.tintAmber, theme.amber) : { background:"#fff3cd", color:"#856404", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>replace</span>
+                              : <span style={isMobile ? badgeT(theme.tintGreen, theme.onGreen) : { background:"#d4edda", color:"#155724", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>add</span>;
+
+                          if (isMobile) {
+                            const sub = [p.FARM_NM, p.CROP_CYCLE].filter(Boolean).join(" · ");
+                            return (
+                              <div key={fmid || idx} style={{ background: theme.card, border:`1px solid ${isSuggested && !m.confirmed ? theme.amber : theme.line}`, borderRadius:14, padding:"11px 12px", opacity: willSkip ? 0.5 : 1 }}>
+                                <div style={{ display:"flex", alignItems:"flex-start", gap:8, marginBottom:8 }}>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{p.FLD_NM}</div>
+                                    {sub && <div style={{ fontSize:11.5, color: theme.mut }}>{sub}</div>}
+                                  </div>
+                                  <span style={badgeStyle}>{badgeLabel}</span>
+                                </div>
+                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                  <div style={{ flex:1, minWidth:0 }}>{picker}</div>
+                                  <div style={{ flexShrink:0 }}>{boundary}</div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <tr key={fmid || idx} style={{ borderBottom:"1px solid #eef5e8", opacity: willSkip ? 0.45 : 1 }}>
+                              <td style={td}>{p.FLD_NM}</td>
+                              <td style={td}>{p.FARM_NM || "—"}</td>
+                              <td style={td}>{p.CROP_CYCLE || "—"}</td>
+                              <td style={td}><span style={badgeStyle}>{badgeLabel}</span></td>
+                              <td style={{ ...td, position:"relative", minWidth:160 }}>{picker}</td>
+                              <td style={td}>{boundary}</td>
+                            </tr>
+                          );
+                        });
+                        return isMobile ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>{rows}</div>
+                        ) : (
+                          <div style={{ overflowX:"auto", marginBottom:10 }}>
+                            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                              <thead>
+                                <tr>
+                                  {["Shapefile Field","Farm","Crop Year","Status","Your Field","Boundary"].map(h => (
+                                    <th key={h} style={th}>{h}</th>
+                                  ))}
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>}
+                              </thead>
+                              <tbody>{rows}</tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
 
                       {(() => {
                         const skipCount = Object.values(fmMatches).filter(m => {
@@ -5632,33 +5718,38 @@ export default function App() {
                           return fmFillMissingOnly && f?.boundary_geojson && m.fieldId !== "__new__" && m.fieldId;
                         }).length;
                         return (
-                          <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:8, flexWrap:"wrap" }}>
-                            <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:12, fontWeight:600, color:"#444" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap: isMobile ? 6 : 16, marginBottom: isMobile ? 10 : 8, flexWrap:"wrap" }}>
+                            <label style={isMobile
+                              ? toggleCardT(fmFillMissingOnly, theme.green, theme.tintGreen, { width:"100%", boxSizing:"border-box", fontSize:13, fontWeight:600, color: theme.ink })
+                              : { display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:12, fontWeight:600, color:"#444" }}>
                               <input
                                 type="checkbox"
                                 checked={fmFillMissingOnly}
                                 onChange={e => setFmFillMissingOnly(e.target.checked)}
+                                style={isMobile ? { width:18, height:18, margin:0, accentColor: theme.green, flexShrink:0 } : undefined}
                               />
                               Fill missing only — skip fields that already have a boundary
                             </label>
                             {fmFillMissingOnly && skipCount > 0 && (
-                              <span style={{ fontSize:11, color:"#888" }}>{skipCount} field{skipCount !== 1 ? "s" : ""} will be skipped</span>
+                              <span style={{ fontSize:11, color: isMobile ? theme.mut : "#888" }}>{skipCount} field{skipCount !== 1 ? "s" : ""} will be skipped</span>
                             )}
                           </div>
                         );
                       })()}
                       {unconfirmed > 0 && (
-                        <div style={{ fontSize:11, color:"#a07000", marginBottom:8 }}>
-                          ⚠ Review {unconfirmed} yellow row{unconfirmed !== 1 ? "s" : ""} before importing
+                        <div style={isMobile
+                          ? { fontSize:12.5, fontWeight:600, color: theme.amber, background: theme.tintAmber, borderRadius:10, padding:"9px 12px", marginBottom:10 }
+                          : { fontSize:11, color:"#a07000", marginBottom:8 }}>
+                          ⚠ Review {unconfirmed} {isMobile ? "amber-outlined card" : "yellow row"}{unconfirmed !== 1 ? "s" : ""} before importing
                         </div>
                       )}
-                      {fmImportError && <div style={{ color:"#c0392b", fontSize:12, marginBottom:8 }}>{fmImportError}</div>}
+                      {fmImportError && <div style={{ color: isMobile ? theme.red : "#c0392b", fontSize: isMobile ? 13 : 12, marginBottom:8 }}>{fmImportError}</div>}
 
-                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                      <div style={isMobile ? { display:"flex", flexDirection:"column", gap:8 } : { display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
                         <button
                           disabled={fmImporting || unconfirmed > 0}
                           onClick={() => runImport(false)}
-                          style={{ background: unconfirmed > 0 ? "#ccc" : "#2a5c0f", color:"#fff", border:"none",
+                          style={isMobile ? { ...addBtnT(!(fmImporting || unconfirmed > 0)), minHeight:46, fontSize:14 } : { background: unconfirmed > 0 ? "#ccc" : "#2a5c0f", color:"#fff", border:"none",
                             borderRadius:6, padding:"8px 16px", cursor: unconfirmed > 0 ? "not-allowed" : "pointer",
                             fontSize:13, fontWeight:700 }}
                         >
@@ -5667,14 +5758,16 @@ export default function App() {
                         <button
                           disabled={fmImporting}
                           onClick={() => runImport(true)}
-                          style={{ background:"#1a4a8a", color:"#fff", border:"none",
+                          style={isMobile
+                            ? { ...softBtnT, minHeight:46, fontSize:14, background: theme.tintBlue, color: theme.blue, opacity: fmImporting ? 0.6 : 1, cursor: fmImporting ? "not-allowed" : "pointer" }
+                            : { background:"#1a4a8a", color:"#fff", border:"none",
                             borderRadius:6, padding:"8px 16px", cursor: fmImporting ? "not-allowed" : "pointer",
                             fontSize:13, fontWeight:700 }}
                         >
                           Import All + Create Remaining
                         </button>
                         <button onClick={resetFm}
-                          style={{ background:"none", border:"none", color:"#888", cursor:"pointer", fontSize:12, textDecoration:"underline" }}>
+                          style={isMobile ? { ...softBtnT, minHeight:42 } : { background:"none", border:"none", color:"#888", cursor:"pointer", fontSize:12, textDecoration:"underline" }}>
                           Start Over
                         </button>
                       </div>
@@ -5685,9 +5778,19 @@ export default function App() {
                   {fmStage === "result" && fmResult && (
                     <div>
                       <div style={{ marginBottom:12 }}>
-                        <div style={{ color:"#2a7a1f", fontWeight:700, fontSize:13 }}>✓ {fmResult.updated} boundaries imported to existing fields</div>
-                        <div style={{ color:"#1a4a8a", fontWeight:700, fontSize:13 }}>✓ {fmResult.created} new fields created</div>
+                        <div style={{ color: isMobile ? theme.onGreen : "#2a7a1f", fontWeight:700, fontSize: isMobile ? 14 : 13 }}>✓ {fmResult.updated} boundaries imported to existing fields</div>
+                        <div style={{ color: isMobile ? theme.blue : "#1a4a8a", fontWeight:700, fontSize: isMobile ? 14 : 13 }}>✓ {fmResult.created} new fields created</div>
                       </div>
+                      {isMobile ? (
+                        <div style={{ background: theme.fill, borderRadius:12, marginBottom:12, maxHeight:320, overflowY:"auto" }}>
+                          {fmResult.rows.map((r, i) => (
+                            <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"9px 12px", borderTop: i ? `1px solid ${theme.divider}` : "none", fontSize:13 }}>
+                              <span style={{ color: theme.ink, fontWeight:600, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.name}</span>
+                              <span style={{ color: r.outcome.startsWith("Skipped") ? theme.mut : theme.onGreen, fontSize:12, fontWeight:600, flexShrink:0 }}>{r.outcome}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
                       <div style={{ overflowX:"auto", marginBottom:12 }}>
                         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                           <thead>
@@ -5706,8 +5809,9 @@ export default function App() {
                           </tbody>
                         </table>
                       </div>
+                      )}
                       <button onClick={resetFm}
-                        style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
+                        style={isMobile ? { ...addBtnT(), width:"100%", minHeight:46, fontSize:14 } : { background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                           padding:"8px 20px", cursor:"pointer", fontSize:13, fontWeight:700 }}>
                         Done
                       </button>
@@ -5742,8 +5846,8 @@ export default function App() {
 
               {csvStage === "mapping" && (
                 <div>
-                  <div style={{ fontSize:13, color:"#555", marginBottom:12 }}>
-                    <strong>{csvRows.length} rows found.</strong> Map each column to its data type. Only Field Name is required.
+                  <div style={isMobile ? { ...noteT, marginBottom:12 } : { fontSize:13, color:"#555", marginBottom:12 }}>
+                    <strong style={isMobile ? { color: theme.ink } : undefined}>{csvRows.length} rows found.</strong> Map each column to its data type. Only Field Name is required.
                   </div>
 
                   <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:10, marginBottom:14 }}>
@@ -5756,13 +5860,13 @@ export default function App() {
                       { key:"lngCol",   label:"Longitude (separate col)",required:false },
                     ].map(({ key, label, required, hint }) => (
                       <div key={key}>
-                        <label style={{ ...labelT, fontSize:11 }}>
-                          {label}{required && <span style={{ color:"#c0392b" }}> *</span>}
-                          {hint && <span style={{ fontWeight:400, color:"#aaa", marginLeft:5, fontSize:10 }}>{hint}</span>}
+                        <label style={isMobile ? { ...labelT, marginBottom:5 } : { ...labelT, fontSize:11 }}>
+                          {label}{required && <span style={{ color: isMobile ? theme.red : "#c0392b" }}> *</span>}
+                          {hint && <span style={{ fontWeight:400, color: isMobile ? theme.mut : "#aaa", marginLeft:5, fontSize:10, textTransform: isMobile ? "none" : undefined }}>{hint}</span>}
                         </label>
                         <select value={csvColMap[key]}
                           onChange={e => setCsvColMap(m => ({ ...m, [key]: e.target.value }))}
-                          style={{ ...inp, fontSize:12, width:"100%" }}>
+                          style={isMobile ? sel : { ...inp, fontSize:12, width:"100%" }}>
                           <option value="">— {required ? "select column" : "not used"} —</option>
                           {csvHeaders.map(h => (
                             <option key={h} value={h}>{h}
@@ -5782,18 +5886,22 @@ export default function App() {
                     const unknownCrops = rawCrops.filter(c => !CROPS_LIST.includes(c) && !orgCrops.includes(c));
                     if (!unknownCrops.length) return null;
                     return (
-                      <div style={{ background:"#fffbe8", border:"1.5px solid #e0c040", borderRadius:6, padding:"10px 14px", marginBottom:12 }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:"#7a5000", marginBottom:8 }}>
+                      <div style={isMobile
+                        ? { background: theme.tintAmber, border:`1.5px solid ${theme.amber}`, borderRadius:14, padding:"11px 12px", marginBottom:12 }
+                        : { background:"#fffbe8", border:"1.5px solid #e0c040", borderRadius:6, padding:"10px 14px", marginBottom:12 }}>
+                        <div style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: isMobile ? theme.amber : "#7a5000", marginBottom: isMobile ? 10 : 8, lineHeight: isMobile ? 1.4 : undefined }}>
                           ⚠ {unknownCrops.length} crop name{unknownCrops.length > 1 ? "s" : ""} not in the standard list — map each one or add as custom.
                         </div>
                         {unknownCrops.map(raw => (
-                          <div key={raw} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
-                            <code style={{ background:"#fff3cd", borderRadius:3, padding:"2px 6px", fontSize:12, color:"#856404", whiteSpace:"nowrap" }}>{raw}</code>
-                            <span style={{ fontSize:11, color:"#888" }}>→</span>
+                          <div key={raw} style={{ display:"flex", alignItems:"center", gap:8, marginBottom: isMobile ? 8 : 6, flexWrap:"wrap" }}>
+                            <code style={isMobile
+                              ? { ...badgeT(theme.card, theme.amber), fontSize:13, fontFamily:"'Space Grotesk',monospace" }
+                              : { background:"#fff3cd", borderRadius:3, padding:"2px 6px", fontSize:12, color:"#856404", whiteSpace:"nowrap" }}>{raw}</code>
+                            <span style={{ fontSize:11, color: isMobile ? theme.amber : "#888" }}>→</span>
                             <select
                               value={csvCropMap[raw] ?? "__keep__"}
                               onChange={e => setCsvCropMap(prev => ({ ...prev, [raw]: e.target.value === "__keep__" ? undefined : e.target.value }))}
-                              style={{ ...inp, fontSize:12, flex:1, minWidth:180, padding:"3px 6px" }}>
+                              style={isMobile ? { ...sel, flex:"1 1 100%", padding:"8px 10px" } : { ...inp, fontSize:12, flex:1, minWidth:180, padding:"3px 6px" }}>
                               <option value="__keep__">Add "{raw}" as a new custom crop</option>
                               <optgroup label="Map to standard crop:">
                                 {CROPS_LIST.map(c => (
@@ -5814,9 +5922,9 @@ export default function App() {
                     const selAcres = [...csvSelected].reduce((s, i) => s + (parseNum(csvRows[i]?.[csvColMap.acresCol]) || 0), 0);
                     return (
                       <div style={{ marginBottom:12 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                          <span style={{ fontSize:11, fontWeight:700, color:"#555" }}>
-                            Preview — {csvRows.length} rows ({csvSelected.size > 0 ? `${csvSelected.size} selected` : "check rows to merge"})
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: isMobile ? 8 : 6, gap:8 }}>
+                          <span style={isMobile ? { ...labelT, marginBottom:0 } : { fontSize:11, fontWeight:700, color:"#555" }}>
+                            Preview — {csvRows.length} rows ({csvSelected.size > 0 ? `${csvSelected.size} selected` : isMobile ? "tap rows to merge" : "check rows to merge"})
                           </span>
                           {csvSelected.size >= 2 && (
                             <button onClick={() => {
@@ -5825,7 +5933,9 @@ export default function App() {
                               const acres = indices.reduce((s, i) => s + (parseNum(csvRows[i]?.[csvColMap.acresCol]) || 0), 0);
                               setCsvMergeGroups(prev => [...prev, { name, indices, acres: Math.round(acres * 100) / 100 }]);
                               setCsvSelected(new Set());
-                            }} style={{ background:"#1a4a8a", color:"#fff", border:"none", borderRadius:5, padding:"3px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>
+                            }} style={isMobile
+                              ? { ...softBtnT, background: theme.blue, color: theme.card, flexShrink:0 }
+                              : { background:"#1a4a8a", color:"#fff", border:"none", borderRadius:5, padding:"3px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>
                               Merge {csvSelected.size} rows →
                             </button>
                           )}
@@ -5833,21 +5943,61 @@ export default function App() {
 
                         {/* Merged groups */}
                         {csvMergeGroups.map((g, gi) => (
-                          <div key={gi} style={{ background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:5, padding:"6px 10px", marginBottom:6, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:11, color:"#1a3a6a", fontWeight:700 }}>Merged group {gi+1}:</span>
+                          <div key={gi} style={isMobile
+                            ? { background: theme.tintBlue, border:`1.5px solid ${theme.blue}`, borderRadius:12, padding:"9px 11px", marginBottom:8, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }
+                            : { background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:5, padding:"6px 10px", marginBottom:6, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                            <span style={{ fontSize: isMobile ? 12.5 : 11, color: isMobile ? theme.blue : "#1a3a6a", fontWeight:700 }}>Merged group {gi+1}:</span>
                             <select value={g.name} onChange={e => setCsvMergeGroups(prev => prev.map((x,i) => i===gi ? {...x, name: e.target.value} : x))}
-                              style={{ ...inp, fontSize:11, padding:"2px 4px" }}>
+                              style={isMobile ? { ...sel, flex:"1 1 100%", order:3, padding:"8px 10px" } : { ...inp, fontSize:11, padding:"2px 4px" }}>
                               {g.indices.map(idx => {
                                 const n = csvRows[idx]?.[csvColMap.nameCol]?.trim();
                                 return n ? <option key={idx} value={n}>{n}</option> : null;
                               })}
                             </select>
-                            <span style={{ fontSize:11, color:"#555" }}>{g.acres.toFixed(1)} ac combined</span>
-                            <button onClick={() => setCsvMergeGroups(prev => prev.filter((_,i) => i!==gi))}
-                              style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:13, marginLeft:"auto" }}>×</button>
+                            <span style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.ink2 : "#555", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{g.acres.toFixed(1)} ac combined</span>
+                            <button onClick={() => setCsvMergeGroups(prev => prev.filter((_,i) => i!==gi))} aria-label={`Undo merged group ${gi+1}`}
+                              style={isMobile ? { ...delBtnT, background: theme.card, marginLeft:"auto" } : { background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:13, marginLeft:"auto" }}>×</button>
                           </div>
                         ))}
 
+                        {/* Mobile: rows as cards — tap to select for merging (same set as the desktop checkboxes) */}
+                        {isMobile ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:420, overflowY:"auto" }}>
+                            {csvRows.map((row, i) => {
+                              const isMerged = mergedIndices.has(i);
+                              const isSelected = csvSelected.has(i);
+                              const name = row[csvColMap.nameCol]?.trim();
+                              const acres = csvColMap.acresCol ? parseNum(row[csvColMap.acresCol]) : null;
+                              const crop  = csvColMap.cropCol  ? row[csvColMap.cropCol] : "";
+                              const exists = name && fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
+                              const toggle = () => setCsvSelected(prev => {
+                                const s = new Set(prev);
+                                s.has(i) ? s.delete(i) : s.add(i);
+                                return s;
+                              });
+                              return (
+                                <div key={i} onClick={isMerged ? undefined : toggle} role={isMerged ? undefined : "checkbox"} aria-checked={isMerged ? undefined : isSelected}
+                                  style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 11px", borderRadius:12, cursor: isMerged ? "default" : "pointer",
+                                    background: isSelected ? theme.tintBlue : theme.fill, border:`1.5px solid ${isSelected ? theme.blue : "transparent"}`, opacity: isMerged ? 0.45 : 1 }}>
+                                  <span style={{ width:22, height:22, borderRadius:7, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+                                    background: isSelected ? theme.blue : theme.card, border: isSelected ? "none" : `1.5px solid ${theme.dash}`, boxSizing:"border-box", color: theme.card }}>
+                                    {isSelected && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
+                                  </span>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:14, fontWeight:700, color: name ? theme.ink : theme.mut, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name || "— no name —"}</div>
+                                    <div style={{ fontSize:11.5, color: theme.mut }}>
+                                      <span style={{ fontFamily:"'Space Grotesk',monospace" }}>{acres != null ? `${acres.toFixed(1)} ac` : "— ac"}</span>{crop ? ` · ${crop}` : ""}
+                                    </div>
+                                  </div>
+                                  {isMerged ? <span style={badgeT(theme.tintBlue, theme.blue)}>merged</span>
+                                  : !name ? <span style={badgeT(theme.tintRed, theme.red)}>skip</span>
+                                  : exists ? <span style={badgeT(theme.tintAmber, theme.amber)}>update</span>
+                                  : <span style={badgeT(theme.tintGreen, theme.onGreen)}>add</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
                         <div style={{ overflowX:"auto" }}>
                           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
                             <thead>
@@ -5894,6 +6044,7 @@ export default function App() {
                             </tbody>
                           </table>
                         </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -5902,13 +6053,13 @@ export default function App() {
                     <button
                       disabled={!csvColMap.nameCol || csvImporting}
                       onClick={runCSVImport}
-                      style={{ background: csvColMap.nameCol ? "#2a5c0f" : "#ccc", color:"#fff", border:"none",
+                      style={isMobile ? { ...addBtnT(!!csvColMap.nameCol && !csvImporting), flex:1, minHeight:46, fontSize:14 } : { background: csvColMap.nameCol ? "#2a5c0f" : "#ccc", color:"#fff", border:"none",
                         borderRadius:6, padding:"9px 18px", cursor: csvColMap.nameCol ? "pointer" : "not-allowed",
                         fontSize:13, fontWeight:700 }}>
                       {csvImporting ? "Importing…" : `Import ${csvRows.length - new Set(csvMergeGroups.flatMap(g=>g.indices)).size + csvMergeGroups.length} rows`}
                     </button>
                     <button onClick={() => { setCsvStage("idle"); setCsvRows([]); setCsvHeaders([]); setCsvMergeGroups([]); setCsvSelected(new Set()); }}
-                      style={{ background:"none", border:"1px solid #ccc", borderRadius:6, padding:"9px 14px",
+                      style={isMobile ? { ...softBtnT, minHeight:46, fontSize:14 } : { background:"none", border:"1px solid #ccc", borderRadius:6, padding:"9px 14px",
                         cursor:"pointer", fontSize:12, color:"#666" }}>
                       Cancel
                     </button>
