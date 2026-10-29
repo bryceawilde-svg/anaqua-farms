@@ -1851,6 +1851,10 @@ export default function App() {
   // gets the module-level originals. Declared before any JSX in App uses them.
   const inp = isMobile ? { ...inpBase, background: theme.input, color: theme.ink, borderColor: theme.inputLine, borderRadius:10 } : inpBase;
   const sel = isMobile ? { ...inp } : selBase;
+  // Mobile helper text under a section title (Account page cards).
+  const noteT = { fontSize:12.5, color: theme.ink2, lineHeight:1.45 };
+  // Mobile secondary button (Rename, Cancel, CSV…).
+  const softBtnT = { background: theme.fill, color: theme.ink2, border:"none", borderRadius:10, padding:"8px 13px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap", fontFamily:"inherit" };
   // Mobile primary "+ Add" button beside an input.
   const addBtnT = (enabled = true) => ({
     background: enabled ? theme.green : theme.fill, color: enabled ? "#fff" : theme.mut, border:"none", borderRadius:10,
@@ -7156,25 +7160,25 @@ export default function App() {
             <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
               <div>
                 <div style={{ ...sectionTitleT, marginBottom:2 }}>👥 {currentOrg?.name}</div>
-                <div style={{ fontSize:11, color:"#888" }}>
+                <div style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.mut : "#888" }}>
                   {session?.user?.email} · {userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : userRole === "applicator" ? "Applicator" : "Viewer"}
                 </div>
               </div>
               {isOwner && (editingOrgName ? (
-                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                <div style={{ display:"flex", gap:6, alignItems:"center", ...(isMobile ? { width:"100%" } : {}) }}>
                   <input value={orgNameDraft} onChange={e => setOrgNameDraft(e.target.value)}
-                    style={{ ...inp, fontSize:12, padding:"4px 8px", width:160 }} />
+                    style={isMobile ? { ...inp, flex:1, minWidth:0, padding:"8px 10px" } : { ...inp, fontSize:12, padding:"4px 8px", width:160 }} />
                   <button onClick={async () => {
                     if (!orgNameDraft.trim()) return;
                     const { error } = await supabase.from("organizations").update({ name: orgNameDraft.trim() }).eq("id", currentOrg.id);
                     if (error) showToast(error.message);
                     else { setCurrentOrg(o => ({ ...o, name: orgNameDraft.trim() })); setEditingOrgName(false); }
-                  }} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
-                  <button onClick={() => setEditingOrgName(false)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
+                  }} style={isMobile ? addBtnT(!!orgNameDraft.trim()) : { background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
+                  <button onClick={() => setEditingOrgName(false)} style={isMobile ? { ...softBtnT, minHeight:42 } : { background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
                 </div>
               ) : (
                 <button onClick={() => { setOrgNameDraft(currentOrg?.name || ""); setEditingOrgName(true); }}
-                  style={{ background:"none", border:"1.5px solid #c8dbb0", borderRadius:5, color:"#2a5c0f", fontSize:12, padding:"4px 10px", cursor:"pointer", fontWeight:600 }}>
+                  style={isMobile ? softBtnT : { background:"none", border:"1.5px solid #c8dbb0", borderRadius:5, color:"#2a5c0f", fontSize:12, padding:"4px 10px", cursor:"pointer", fontWeight:600 }}>
                   Rename
                 </button>
               ))}
@@ -7183,7 +7187,7 @@ export default function App() {
             {isMobile && (
               <button onClick={() => supabase.auth.signOut()} style={{
                 width:"100%", background: theme.card, border:`1.5px solid ${theme.inputLine}`, borderRadius:14,
-                padding:14, fontSize:14, fontWeight:700, color:"#b4452f", cursor:"pointer", marginBottom:10,
+                padding:14, fontSize:14, fontWeight:700, color: theme.red, cursor:"pointer", marginBottom:10,
               }}>Sign out</button>
             )}
 
@@ -7194,7 +7198,7 @@ export default function App() {
                 <span style={{ fontSize:13, fontWeight:600, color: isMobile ? theme.ink : "#333" }}>Dark mode</span>
                 <button onClick={() => setDarkMode(d => !d)} style={{
                   width:46, height:26, borderRadius:13, border:"none", cursor:"pointer", position:"relative",
-                  background: darkMode ? theme.green : "#ccc", transition:"background 0.15s",
+                  background: darkMode ? theme.green : (isMobile ? theme.dash : "#ccc"), transition:"background 0.15s",
                 }}>
                   <span style={{
                     position:"absolute", top:2, left: darkMode ? 22 : 2, width:22, height:22, borderRadius:"50%",
@@ -7203,9 +7207,13 @@ export default function App() {
                 </button>
               </div>
               <div style={{ fontSize:13, fontWeight:600, color: isMobile ? theme.ink : "#333", marginBottom:8 }}>Accent color</div>
-              <div style={{ display:"flex", gap:8 }}>
+              <div style={{ display:"flex", gap: isMobile ? 12 : 8, padding: isMobile ? "0 4px" : 0 }}>
                 {ACCENTS.map(c => (
-                  <button key={c} onClick={() => setAccent(c)} title={c} style={{
+                  // Mobile: selection is a ring in the ink color (a #333 border vanishes in dark mode).
+                  <button key={c} onClick={() => setAccent(c)} title={c} aria-label={`Accent ${c}`} style={isMobile ? {
+                    width:34, height:34, borderRadius:"50%", background:c, cursor:"pointer", border:"none",
+                    boxShadow: accent === c ? `0 0 0 3px ${theme.card}, 0 0 0 5px ${theme.ink}` : "none",
+                  } : {
                     width:30, height:30, borderRadius:"50%", background:c, cursor:"pointer",
                     border: accent === c ? "3px solid #333" : "1.5px solid #ddd",
                   }} />
@@ -7217,16 +7225,20 @@ export default function App() {
             {isOwner && (
               <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
                 <div style={{ ...sectionTitleT, marginBottom:6 }}>Crops</div>
-                <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+                <div style={isMobile ? { ...noteT, marginBottom:10 } : { fontSize:12, color:"#555", marginBottom:10 }}>
                   Check every crop your operation grows — these appear as quick-select buttons on new tickets.
                 </div>
 
                 {orgCrops.length > 0 && (
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:10 }}>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap: isMobile ? 6 : 5, marginBottom:10 }}>
                     {orgCrops.map(crop => (
-                      <span key={crop} style={{ display:"flex", alignItems:"center", gap:3, background:"#e6f5d0", border:"1.5px solid #c8dbb0", borderRadius:5, padding:"3px 8px", fontSize:12, fontWeight:600, color:"#2a5c0f" }}>
+                      <span key={crop} style={isMobile
+                        ? { display:"flex", alignItems:"center", gap:2, background: theme.tintGreen, borderRadius:9, padding:"2px 2px 2px 11px", fontSize:13, fontWeight:700, color: theme.onGreen }
+                        : { display:"flex", alignItems:"center", gap:3, background:"#e6f5d0", border:"1.5px solid #c8dbb0", borderRadius:5, padding:"3px 8px", fontSize:12, fontWeight:600, color:"#2a5c0f" }}>
                         {crop}
-                        <button onClick={() => removeOrgCrop(crop)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:13, padding:"0 0 0 2px", lineHeight:1 }}>×</button>
+                        <button onClick={() => removeOrgCrop(crop)} aria-label={`Remove ${crop}`} style={isMobile
+                          ? { background:"none", border:"none", cursor:"pointer", color: theme.onGreen, opacity:0.7, fontSize:17, width:28, height:28, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }
+                          : { background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:13, padding:"0 0 0 2px", lineHeight:1 }}>×</button>
                       </span>
                     ))}
                   </div>
@@ -7235,7 +7247,7 @@ export default function App() {
                 <div style={{ border:`1.5px solid ${theme.inputLine}`, borderRadius:10, overflow:"hidden", marginBottom:8 }}>
                   <button
                     onClick={() => isMobile && setCropListOpen(o => !o)}
-                    style={{ width:"100%", padding:"8px 12px", background: theme.fill, border:"none", borderBottom:`1px solid ${theme.inputLine}`, display:"flex", justifyContent:"space-between", alignItems:"center", cursor: isMobile ? "pointer" : "default", textAlign:"left" }}
+                    style={{ width:"100%", padding: isMobile ? "11px 12px" : "8px 12px", background: theme.fill, border:"none", borderBottom: isMobile && !cropListOpen ? "none" : `1px solid ${theme.inputLine}`, display:"flex", justifyContent:"space-between", alignItems:"center", cursor: isMobile ? "pointer" : "default", textAlign:"left", fontFamily:"inherit" }}
                   >
                     <span style={{ fontSize:12, fontWeight:700, color: theme.ink2 }}>Select from list</span>
                     <span style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -7248,12 +7260,12 @@ export default function App() {
                       {CROPS_LIST.map(crop => {
                         const active = orgCrops.includes(crop);
                         return (
-                          <label key={crop} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 12px", cursor:"pointer",
+                          <label key={crop} style={{ display:"flex", alignItems:"center", gap: isMobile ? 10 : 8, padding: isMobile ? "10px 12px" : "5px 12px", cursor:"pointer",
                             background: active ? theme.tintGreen : "transparent", borderBottom:`1px solid ${theme.line}` }}>
                             <input type="checkbox" checked={active}
                               onChange={() => active ? removeOrgCrop(crop) : saveOrgCrops([...orgCrops, crop])}
-                              style={{ accentColor: theme.green, flexShrink:0 }} />
-                            <span style={{ fontSize:13, color: active ? theme.green : theme.ink, fontWeight: active ? 600 : 400 }}>{crop}</span>
+                              style={{ accentColor: theme.green, flexShrink:0, ...(isMobile ? { width:18, height:18, margin:0 } : {}) }} />
+                            <span style={{ fontSize: isMobile ? 14 : 13, color: active ? (isMobile ? theme.onGreen : theme.green) : theme.ink, fontWeight: active ? 600 : 400 }}>{crop}</span>
                           </label>
                         );
                       })}
@@ -7278,10 +7290,10 @@ export default function App() {
             {isOwner && (
               <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
                 <div style={{ ...sectionTitleT, marginBottom:6 }}>Unit System</div>
-                <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+                <div style={isMobile ? { ...noteT, marginBottom:10 } : { fontSize:12, color:"#555", marginBottom:10 }}>
                   Sets the measurement system for all members of this org. Data is stored in imperial — metric is a display conversion.
                 </div>
-                <div style={{ display:"flex", gap:6 }}>
+                <div style={{ display:"flex", gap: isMobile ? 8 : 6 }}>
                   {[["imperial","Imperial (US)  —  ac, gal, °F, mph"],["metric","Metric (SI)  —  ha, L, °C, km/h"]].map(([val, label]) => (
                     <button key={val}
                       onClick={async () => {
@@ -7289,7 +7301,10 @@ export default function App() {
                         if (error) showToast("Failed to update: " + error.message);
                         else setCurrentOrg(prev => ({ ...prev, unit_system: val }));
                       }}
-                      style={{ flex:1, padding:"10px 8px", border:"1.5px solid", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit",
+                      style={isMobile ? {
+                        flex:1, padding:"11px 8px", cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit", lineHeight:1.35,
+                        ...pillBtn(currentOrg?.unit_system === val), borderRadius:12,
+                      } : { flex:1, padding:"10px 8px", border:"1.5px solid", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit",
                         borderColor: currentOrg?.unit_system === val ? "#2a5c0f" : "#c8dbb0",
                         background:  currentOrg?.unit_system === val ? "#2a5c0f" : "#f9fdf5",
                         color:       currentOrg?.unit_system === val ? "#fff"    : "#4a7a20" }}>
@@ -7302,9 +7317,9 @@ export default function App() {
 
             {/* Operation Features — opt-in specialty tools */}
             {isOwner && (
-              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
-                <div style={{ ...sectionTitle, marginBottom:6 }}>Operation Features</div>
-                <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+              <div style={{ ...(isMobile ? cardT : card), padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...(isMobile ? sectionTitleT : sectionTitle), marginBottom:6 }}>Operation Features</div>
+                <div style={isMobile ? { ...noteT, marginBottom:10 } : { fontSize:12, color:"#555", marginBottom:10 }}>
                   Turn on specialty tools for your operation. They apply to everyone in this org; turned-off tools stay hidden.
                 </div>
                 {[
@@ -7313,7 +7328,7 @@ export default function App() {
                 ].map(([key, label, desc]) => {
                   const on = !!orgFeatures[key];
                   return (
-                    <label key={key} style={{ display:"flex", alignItems:"flex-start", gap:10, cursor:"pointer",
+                    <label key={key} style={isMobile ? toggleCardT(on, theme.purple, theme.tintPurple, { alignItems:"flex-start", marginBottom:6 }) : { display:"flex", alignItems:"flex-start", gap:10, cursor:"pointer",
                       background: on ? "#f3eefc" : "#f4fbee", border:`1.5px solid ${on ? "#7a4ab0" : "#c8dbb0"}`,
                       borderRadius:7, padding:"12px 14px", marginBottom:6 }}>
                       <input type="checkbox" checked={on}
@@ -7323,10 +7338,10 @@ export default function App() {
                           if (error) showToast("Failed to update: " + error.message);
                           else setCurrentOrg(prev => ({ ...prev, features: next }));
                         }}
-                        style={{ width:20, height:20, accentColor:"#7a4ab0", flexShrink:0, marginTop:1 }}/>
+                        style={{ width:20, height:20, accentColor: isMobile ? theme.purple : "#7a4ab0", flexShrink:0, marginTop:1 }}/>
                       <div>
-                        <div style={{ fontWeight:700, fontSize:14, color: on ? "#4a2a7a" : "#2a5c0f" }}>{label}</div>
-                        <div style={{ fontSize:11, color:"#777", marginTop:2 }}>{desc}</div>
+                        <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (on ? theme.purple : theme.ink) : (on ? "#4a2a7a" : "#2a5c0f") }}>{label}</div>
+                        <div style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.mut : "#777", marginTop:2, lineHeight: isMobile ? 1.4 : undefined }}>{desc}</div>
                       </div>
                     </label>
                   );
@@ -7338,13 +7353,13 @@ export default function App() {
             {isOwner && (
               <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
                 <div style={{ ...sectionTitleT, marginBottom:6 }}>Farm Location</div>
-                <div style={{ fontSize:12, color:"#555", marginBottom:8 }}>
+                <div style={isMobile ? { ...noteT, marginBottom:10 } : { fontSize:12, color:"#555", marginBottom:8 }}>
                   Used for weather auto-fill on tickets. Enter a city, town, or postal code — works worldwide.
                 </div>
                 {currentOrg?.farm_zip && (
-                  <div style={{ fontSize:12, color:"#2a5c0f", fontWeight:600, marginBottom:8 }}>
+                  <div style={{ fontSize: isMobile ? 13 : 12, color: isMobile ? theme.onGreen : "#2a5c0f", fontWeight:600, marginBottom:8 }}>
                     Current: {currentOrg.farm_zip}
-                    <span style={{ fontWeight:400, color:"#888", marginLeft:8 }}>
+                    <span style={{ fontWeight:400, color: isMobile ? theme.mut : "#888", marginLeft:8, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>
                       ({parseFloat(currentOrg.farm_lat).toFixed(4)}, {parseFloat(currentOrg.farm_lng).toFixed(4)})
                     </span>
                   </div>
@@ -7370,7 +7385,7 @@ export default function App() {
               <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                 <div>
                   <div style={{ ...sectionTitleT, marginBottom:2 }}>Organization Plan</div>
-                  <div style={{ fontSize:11, color:"#888" }}>
+                  <div style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.mut : "#888" }}>
                     {currentOrg?.plan === "pro" ? "⭐ Pro — all members have Pro access" : "Basic — upgrade to give all members Pro access"}
                   </div>
                 </div>
@@ -7379,7 +7394,10 @@ export default function App() {
                   const { error } = await supabase.from("organizations").update({ plan: newPlan }).eq("id", currentOrg.id);
                   if (error) showToast(error.message);
                   else { setCurrentOrg(o => ({ ...o, plan: newPlan })); showToast(newPlan === "pro" ? "Upgraded to Pro" : "Downgraded to Basic", "success"); }
-                }} style={{
+                }} style={isMobile ? (currentOrg?.plan === "pro"
+                  ? { ...softBtnT, background: theme.tintAmber, color: theme.amber }
+                  : { ...softBtnT, background: theme.green, color:"#fff" }
+                ) : {
                   background: currentOrg?.plan === "pro" ? "#fff3cc" : "#2a5c0f",
                   color: currentOrg?.plan === "pro" ? "#7a5000" : "#fff",
                   border: currentOrg?.plan === "pro" ? "1.5px solid #f0c040" : "none",
@@ -7479,7 +7497,7 @@ export default function App() {
             {isOwner && (
               <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px" }}>
                 <div style={sectionTitleT}>Invite Someone</div>
-                <div style={{ fontSize:11, color:"#666", marginBottom:10, lineHeight:1.5 }}>
+                <div style={isMobile ? { ...noteT, marginBottom:12 } : { fontSize:11, color:"#666", marginBottom:10, lineHeight:1.5 }}>
                   Enter their email below, then send them the app link. When they sign up, they will automatically join <strong>{currentOrg?.name}</strong> and see all shared data.
                 </div>
                 <div style={isMobile
@@ -7550,7 +7568,10 @@ export default function App() {
                   title="Report to date"/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button onClick={() => downloadCSV(tickets, currentOrg?.name, isMetric, chemicals)} disabled={!tickets.length} style={{
+                <button onClick={() => downloadCSV(tickets, currentOrg?.name, isMetric, chemicals)} disabled={!tickets.length} style={isMobile ? {
+                  ...softBtnT, flex:1, padding:"13px 0", fontSize:14, color: theme.ink, opacity: tickets.length ? 1 : 0.5,
+                  cursor: tickets.length ? "pointer" : "default",
+                } : {
                   flex:1, background: tickets.length ? "#2a5c0f" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
                   cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
@@ -7566,7 +7587,10 @@ export default function App() {
                   });
                   if (!filtered.length) return alert("No tickets in selected date range.");
                   downloadTDAReport(filtered, currentOrg?.name, chemicals);
-                }} disabled={!tickets.length} style={{
+                }} disabled={!tickets.length} style={isMobile ? {
+                  ...softBtnT, flex:1, padding:"13px 0", fontSize:14, background: tickets.length ? theme.header : theme.fill,
+                  color: tickets.length ? "#fff" : theme.mut, cursor: tickets.length ? "pointer" : "default",
+                } : {
                   flex:1, background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
                   cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
@@ -7576,9 +7600,11 @@ export default function App() {
 
             {/* Danger Zone */}
             {isOwner && (
-              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginTop:12, border:"1.5px solid #e0a0a0", background:"#fffafa" }}>
-                <div style={{ ...sectionTitleT, color:"#c0392b", marginBottom:4 }}>⚠ Danger Zone</div>
-                <div style={{ fontSize:12, color:"#c0392b", marginBottom:14, fontWeight:600 }}>
+              <div style={isMobile
+                ? { ...cardT, padding:"10px 12px", marginTop:12, border:`1.5px solid ${theme.red}` }
+                : { ...cardT, padding:"14px 18px", marginTop:12, border:"1.5px solid #e0a0a0", background:"#fffafa" }}>
+                <div style={{ ...sectionTitleT, color: isMobile ? theme.red : "#c0392b", marginBottom:4 }}>⚠ Danger Zone</div>
+                <div style={{ fontSize:12, color: isMobile ? theme.red : "#c0392b", marginBottom:14, fontWeight:600 }}>
                   These actions permanently delete data and cannot be undone.
                 </div>
 
@@ -7587,23 +7613,27 @@ export default function App() {
                   { key:"chemicals", label:"Reset Chemical Library",  desc:"Deletes all chemicals for this org." },
                   { key:"account",   label:"Reset Entire Account",    desc:"Deletes all fields, chemicals, tickets, equipment, applicators, and pests for this org." },
                 ].map(({ key, label, desc }) => (
-                  <div key={key} style={{ marginBottom:12, paddingBottom:12, borderBottom:"1px solid #f0d0d0" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
-                      <div>
-                        <div style={{ fontWeight:700, fontSize:13, color:"#333" }}>{label}</div>
-                        <div style={{ fontSize:12, color:"#888", marginTop:2 }}>{desc}</div>
+                  <div key={key} style={{ marginBottom:12, paddingBottom:12, borderBottom: isMobile ? `1px solid ${theme.divider}` : "1px solid #f0d0d0" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap: isMobile ? "nowrap" : "wrap" }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize: isMobile ? 14 : 13, color: isMobile ? theme.ink : "#333" }}>{label}</div>
+                        <div style={{ fontSize:12, color: isMobile ? theme.mut : "#888", marginTop:2, lineHeight: isMobile ? 1.4 : undefined }}>{desc}</div>
                       </div>
                       <button
                         onClick={() => { setResetAction(resetAction === key ? null : key); setResetConfirm(""); }}
-                        style={{ background:"none", border:"1.5px solid #e0a0a0", borderRadius:5, padding:"5px 12px",
+                        style={isMobile
+                          ? { ...softBtnT, background: theme.tintRed, color: theme.red, flexShrink:0 }
+                          : { background:"none", border:"1.5px solid #e0a0a0", borderRadius:5, padding:"5px 12px",
                           cursor:"pointer", fontSize:12, fontWeight:700, color:"#c0392b", whiteSpace:"nowrap", flexShrink:0 }}>
                         {resetAction === key ? "Cancel" : "Reset…"}
                       </button>
                     </div>
 
                     {resetAction === key && (
-                      <div style={{ marginTop:10, background:"#fff0f0", border:"1px solid #f0b0b0", borderRadius:6, padding:"10px 12px" }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:"#c0392b", marginBottom:8 }}>
+                      <div style={isMobile
+                        ? { marginTop:10, background: theme.tintRed, borderRadius:12, padding:"11px 12px" }
+                        : { marginTop:10, background:"#fff0f0", border:"1px solid #f0b0b0", borderRadius:6, padding:"10px 12px" }}>
+                        <div style={{ fontSize:12, fontWeight:700, color: isMobile ? theme.red : "#c0392b", marginBottom:8 }}>
                           Type <strong>DELETE</strong> to confirm — this cannot be undone.
                         </div>
                         <div style={{ display:"flex", gap:8 }}>
@@ -7611,12 +7641,19 @@ export default function App() {
                             value={resetConfirm}
                             onChange={e => setResetConfirm(e.target.value)}
                             placeholder="Type DELETE"
-                            style={{ ...inp, flex:1, fontSize:13, borderColor: resetConfirm === "DELETE" ? "#c0392b" : "#c8dbb0" }}
+                            style={isMobile
+                              ? { ...inp, flex:1, minWidth:0, borderColor: resetConfirm === "DELETE" ? theme.red : theme.inputLine }
+                              : { ...inp, flex:1, fontSize:13, borderColor: resetConfirm === "DELETE" ? "#c0392b" : "#c8dbb0" }}
                           />
                           <button
                             onClick={executeReset}
                             disabled={resetConfirm !== "DELETE" || resetWorking}
-                            style={{
+                            style={isMobile ? {
+                              ...softBtnT, minHeight:42,
+                              background: resetConfirm === "DELETE" ? theme.red : theme.fill,
+                              color: resetConfirm === "DELETE" ? (darkMode ? "#1a0d0a" : "#fff") : theme.mut,
+                              cursor: resetConfirm === "DELETE" ? "pointer" : "default",
+                            } : {
                               background: resetConfirm === "DELETE" ? "#c0392b" : "#ccc",
                               color:"#fff", border:"none", borderRadius:5, padding:"8px 14px",
                               cursor: resetConfirm === "DELETE" ? "pointer" : "default",
