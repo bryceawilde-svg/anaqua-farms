@@ -1811,6 +1811,9 @@ export default function App() {
   const theme = buildTheme(darkMode, accent);
   useEffect(() => {
     document.body.style.background = theme.canvas;
+    // index.css (which zeroes this) isn't imported, so the browser's default 8px body
+    // margin was eating 16px of a phone's width. Desktop keeps its current spacing.
+    document.body.style.margin = isMobile ? "0" : "";
     // Browser chrome / Android status bar color follows the header it sits above.
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isMobile ? theme.header : "#2a5c0f");
   }, [darkMode, accent, isMobile]);
@@ -4757,6 +4760,8 @@ export default function App() {
                   border: `1px solid ${isOpen ? theme.green : theme.line}`,
                   outline: t.team_view ? `2px solid ${theme.blue}` : "none",
                   borderRadius:14, marginBottom:8,
+                  // An open ticket reaches toward the screen edges for a wider field schedule.
+                  marginLeft: isOpen ? -6 : 0, marginRight: isOpen ? -6 : 0,
                   boxShadow: isOpen ? "0 6px 18px -9px rgba(20,40,26,0.22)" : "0 6px 18px -9px rgba(20,40,26,0.16)",
                   overflow:"hidden", transition:"box-shadow 0.15s"
                 } : {
@@ -4850,14 +4855,14 @@ export default function App() {
                   {/* ── Expanded detail */}
                   {isOpen && (
                     <div style={isMobile
-                      ? { padding:"12px 14px 14px", borderTop:`1px solid ${theme.divider}` }
+                      ? { padding:"10px 10px 12px", borderTop:`1px solid ${theme.divider}` }
                       : { padding:"14px 16px", borderTop:"1.5px solid #eef5e8" }}>
                       {isMobile && isOwner && !allDates && (
                         <button
                           onClick={() => toggleTeamView(t.id, t.team_view)}
                           style={{
-                            width:"100%", padding:11, borderRadius:11, border:"none", cursor:"pointer",
-                            marginBottom:11, fontSize:13, fontWeight:700,
+                            width:"100%", padding:9, borderRadius:11, border:"none", cursor:"pointer",
+                            marginBottom:9, fontSize:13, fontWeight:700,
                             background: t.team_view ? theme.tintGreen : theme.header,
                             color: t.team_view ? theme.onGreen : "#fff",
                           }}
@@ -4865,7 +4870,7 @@ export default function App() {
                       )}
 
                       {/* Summary row */}
-                      <div style={{ display:"flex", gap:8, fontSize:12, color: isMobile ? theme.ink2 : "#555", flexWrap:"wrap", marginBottom:isMobile?12:10 }}>
+                      <div style={{ display:"flex", gap: isMobile ? 5 : 8, fontSize: isMobile ? 11.5 : 12, color: isMobile ? theme.ink2 : "#555", flexWrap:"wrap", marginBottom:isMobile?10:10 }}>
                         {[
                           t.totalAcres        && fmtAcres(t.totalAcres, isMetric),
                           t.galPerAcre        && (isTargetZone(t)
@@ -4874,19 +4879,22 @@ export default function App() {
                           t.equipmentType,
                           t.licensedApplicant,
                         ].filter(Boolean).map((item, i) => (
-                          <span key={i} style={{ background: isMobile ? theme.fill : "#f0f7e8", color: isMobile ? theme.ink2 : "#555", borderRadius: isMobile?7:4, padding: isMobile?"4px 9px":"2px 7px", whiteSpace:"nowrap", fontWeight: isMobile?600:400 }}>{item}</span>
+                          <span key={i} style={{ background: isMobile ? theme.fill : "#f0f7e8", color: isMobile ? theme.ink2 : "#555", borderRadius: isMobile?7:4, padding: isMobile?"3px 8px":"2px 7px", whiteSpace:"nowrap", fontWeight: isMobile?600:400 }}>{item}</span>
                         ))}
                         {(() => {
                           const remAcres = sched.filter(fs => !fs.actualDateEnd).reduce((sum, fs) => sum + (parseFloat(fs.acres) || 0), 0);
                           if (!sched.length || remAcres <= 0) return null;
-                          return <span style={{ background: isMobile ? theme.tintAmber : "#fff3cd", color: theme.amber, borderRadius: isMobile?7:4, padding: isMobile?"4px 9px":"2px 7px", whiteSpace:"nowrap", fontWeight:700 }}>{isMetric ? `${(remAcres * 0.404686).toFixed(1)} ha` : `${remAcres.toFixed(1)} ac`} remaining</span>;
+                          return <span style={{ background: isMobile ? theme.tintAmber : "#fff3cd", color: theme.amber, borderRadius: isMobile?7:4, padding: isMobile?"3px 8px":"2px 7px", whiteSpace:"nowrap", fontWeight:700 }}>{isMetric ? `${(remAcres * 0.404686).toFixed(1)} ha` : `${remAcres.toFixed(1)} ac`} remaining</span>;
                         })()}
                       </div>
 
-                      {/* Field schedule — desktop: table; mobile: one row per field with
-                          tappable Date / Wind / Temp chips (same inline editors, built once). */}
-                      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom: isMobile ? 7 : 5, display: isMobile ? "block" : "none" }}>FIELD SCHEDULE</div>
+                      {/* Field schedule — desktop: table. Mobile: a compact one-line grid per
+                          field (tappable Date / Wind / Temp cells); the active editor opens in a
+                          strip under its row so the row itself never reflows. */}
+                      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:5, display: isMobile ? "block" : "none" }}>FIELD SCHEDULE</div>
                       {(() => {
+                        // status · name · acres · date · wind · temp
+                        const mCols = "14px minmax(0,1fr) 40px 60px 46px 30px";
                         const rows = (t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
                           const editingDate = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualDateEnd";
                           const editingWind = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.windSpeed";
@@ -4895,74 +4903,78 @@ export default function App() {
                           const editDate = () => !editingDate && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualDateEnd" });
                           const editWind = () => !editingWind && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.windSpeed" });
                           const editTemp = () => !editingTemp && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.airTemp" });
-                          const empty = <span style={{ color: isMobile ? theme.mut : "#bbb", fontSize:11 }}>—</span>;
 
-                          const dateCell = editingDate ? (
-                            <input type="date" autoFocus defaultValue={fs.actualDateEnd||""}
-                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:136 } : { ...inp, padding:"1px 4px", fontSize:11, width:110 }}
-                              onBlur={e => { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); }}
-                              onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
-                            />
-                          ) : fs.actualDateEnd ? (
+                          // Display values
+                          const dateVal = fs.actualDateEnd ? (
                             <span style={{ color: isMobile ? theme.ink : "#555" }}>
                               {new Date(fs.actualDateEnd + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" })}
                             </span>
-                          ) : empty;
+                          ) : <span style={{ color: isMobile ? theme.mut : "#bbb", fontSize:11 }}>—</span>;
+                          const windVal = w.windSpeed != null
+                            ? `${isMetric ? (w.windSpeed * 1.60934).toFixed(1) : w.windSpeed}${w.windDir ? ` ${w.windDir}` : ""}`
+                            : "—";
+                          const tempVal = w.airTemp != null
+                            ? (isMetric ? ((w.airTemp - 32) * 5/9).toFixed(1) : w.airTemp)
+                            : "—";
 
-                          const windCell = editingWind ? (
-                            <div style={{ display:"flex", gap:3, justifyContent:"flex-end" }}>
+                          // Inline editors (unchanged behavior: save on blur / Enter, Escape cancels)
+                          const dateEditor = (
+                            <input type="date" autoFocus defaultValue={fs.actualDateEnd||""}
+                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:150 } : { ...inp, padding:"1px 4px", fontSize:11, width:110 }}
+                              onBlur={e => { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); }}
+                              onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                            />
+                          );
+                          const windEditor = (
+                            <div style={{ display:"flex", gap:3, justifyContent: isMobile ? "flex-start" : "flex-end" }}>
                               <input type="number" autoFocus defaultValue={w.windSpeed??""} min="0"
-                                style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:54 } : { ...inp, padding:"1px 4px", fontSize:11, width:46 }}
+                                style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:64 } : { ...inp, padding:"1px 4px", fontSize:11, width:46 }}
                                 onBlur={e => { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
                                 onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                               />
                               <select defaultValue={w.windDir||""}
-                                style={isMobile ? { ...inp, padding:"4px 4px", fontSize:16, width:66 } : { ...inp, padding:"1px 2px", fontSize:11, width:46 }}
+                                style={isMobile ? { ...inp, padding:"4px 4px", fontSize:16, width:72 } : { ...inp, padding:"1px 2px", fontSize:11, width:46 }}
                                 onChange={e => saveActualTime(t, i, "fieldWeather.windDir", e.target.value || null)}>
                                 <option value="">—</option>
                                 {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
                               </select>
                             </div>
-                          ) : w.windSpeed != null ? (
-                            `${isMetric ? (w.windSpeed * 1.60934).toFixed(1) : w.windSpeed}${w.windDir ? ` ${w.windDir}` : ""}`
-                          ) : (isMobile ? empty : "—");
-
-                          const tempCell = editingTemp ? (
+                          );
+                          const tempEditor = (
                             <input type="number" autoFocus defaultValue={w.airTemp??""} min="0"
-                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:56 } : { ...inp, padding:"1px 4px", fontSize:11, width:50 }}
+                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:72 } : { ...inp, padding:"1px 4px", fontSize:11, width:50 }}
                               onBlur={e => { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
                               onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                             />
-                          ) : w.airTemp != null ? (
-                            isMetric ? ((w.airTemp - 32) * 5/9).toFixed(1) : w.airTemp
-                          ) : (isMobile ? empty : "—");
+                          );
 
                           if (isMobile) {
                             const done = !!fs.actualDateEnd;
-                            // Tap target: small label + value; becomes the inline editor while editing.
-                            const chip = (label, content, onTap, editing, unit) => (
-                              <div onClick={onTap} style={{ flex: editing ? "0 0 auto" : 1, minWidth:0, minHeight:34, display:"flex", alignItems:"center", gap:5,
-                                background: editing ? "transparent" : theme.fill, borderRadius:9, padding: editing ? 0 : "0 9px", cursor:"pointer", fontSize:12.5, fontWeight:600, color: theme.ink }}>
-                                {!editing && <span style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", color: theme.mut }}>{label}</span>}
-                                <span style={{ fontFamily:"'Space Grotesk',monospace", whiteSpace:"nowrap", overflow: editing ? "visible" : "hidden", textOverflow:"ellipsis" }}>{content}</span>
-                                {!editing && unit && <span style={{ fontSize:10, color: theme.mut }}>{unit}</span>}
-                              </div>
+                            const editing = editingDate ? ["Date", dateEditor] : editingWind ? [`Wind (${windSpeedLabel(isMetric)})`, windEditor] : editingTemp ? [`Temp (${tempLabel(isMetric)})`, tempEditor] : null;
+                            const cell = (val, onTap, active, align = "center") => (
+                              <div onClick={onTap} style={{ minHeight:30, display:"flex", alignItems:"center", justifyContent: align, padding:"0 4px", borderRadius:7, cursor:"pointer",
+                                background: active ? theme.tintGreen : theme.fill, boxShadow: active ? `inset 0 0 0 1.5px ${theme.green}` : "none",
+                                fontFamily:"'Space Grotesk',monospace", fontSize:12, fontWeight:600, color: theme.ink, whiteSpace:"nowrap", overflow:"hidden" }}>{val}</div>
                             );
                             return (
-                              <div key={fs.id || i} style={{ padding:"9px 0", borderBottom:`1px solid ${theme.divider}` }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:7 }}>
-                                  <span title={done ? "Sprayed" : "Not yet sprayed"} style={{ width:18, height:18, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+                              <div key={fs.id || i} style={{ borderBottom:`1px solid ${theme.divider}` }}>
+                                <div style={{ display:"grid", gridTemplateColumns: mCols, gap:4, alignItems:"center", padding:"3px 0" }}>
+                                  <span title={done ? "Sprayed" : "Not yet sprayed"} style={{ width:14, height:14, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
                                     background: done ? theme.green : "transparent", border: done ? "none" : `1.5px solid ${theme.dash}`, boxSizing:"border-box", color:"#fff" }}>
-                                    {done && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
+                                    {done && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
                                   </span>
-                                  <span style={{ flex:1, minWidth:0, fontSize:14, fontWeight:700, color: done ? theme.ink : theme.ink2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{i+1}. {fs.name}</span>
-                                  <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:13, fontWeight:700, color: theme.ink2, flexShrink:0 }}>{fmtAcresShort(fs.acres, isMetric)}</span>
+                                  <span style={{ minWidth:0, fontSize:13, fontWeight:600, color: done ? theme.ink : theme.ink2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{i+1}. {fs.name}</span>
+                                  <span style={{ textAlign:"right", fontFamily:"'Space Grotesk',monospace", fontSize:12, fontWeight:600, color: theme.ink2 }}>{(parseFloat(fs.acres||0) * (isMetric ? AC_TO_HA : 1)).toFixed(1)}</span>
+                                  {cell(dateVal, editDate, editingDate)}
+                                  {cell(windVal, editWind, editingWind)}
+                                  {cell(tempVal, editTemp, editingTemp)}
                                 </div>
-                                <div style={{ display:"flex", gap:6, flexWrap: (editingDate || editingWind || editingTemp) ? "wrap" : "nowrap" }}>
-                                  {chip("Date", dateCell, editDate, editingDate)}
-                                  {chip("Wind", windCell, editWind, editingWind)}
-                                  {chip("Temp", tempCell, editTemp, editingTemp, w.airTemp != null && !editingTemp ? tempLabel(isMetric) : null)}
-                                </div>
+                                {editing && (
+                                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 0 7px 18px" }}>
+                                    <span style={{ fontSize:10, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", color: theme.mut }}>{editing[0]}</span>
+                                    {editing[1]}
+                                  </div>
+                                )}
                               </div>
                             );
                           }
@@ -4970,14 +4982,24 @@ export default function App() {
                             <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
                               <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
                               <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
-                              <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }} onClick={editDate}>{dateCell}</td>
-                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap", cursor:"pointer" }} onClick={editWind}>{windCell}</td>
-                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", cursor:"pointer" }} onClick={editTemp}>{tempCell}</td>
+                              <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }} onClick={editDate}>{editingDate ? dateEditor : dateVal}</td>
+                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap", cursor:"pointer" }} onClick={editWind}>{editingWind ? windEditor : windVal}</td>
+                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", cursor:"pointer" }} onClick={editTemp}>{editingTemp ? tempEditor : tempVal}</td>
                             </tr>
                           );
                         });
                         return isMobile ? (
-                          <div style={{ marginBottom:14, marginTop:-4 }}>{rows}</div>
+                          <div style={{ marginBottom:12 }}>
+                            <div style={{ display:"grid", gridTemplateColumns: mCols, gap:4, fontSize:9, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", color: theme.mut, paddingBottom:2, borderBottom:`1px solid ${theme.divider}` }}>
+                              <span />
+                              <span>Field</span>
+                              <span style={{ textAlign:"right" }}>{isMetric ? "ha" : "Ac"}</span>
+                              <span style={{ textAlign:"center" }}>Date</span>
+                              <span style={{ textAlign:"center" }}>Wind</span>
+                              <span style={{ textAlign:"center" }}>{tempLabel(isMetric)}</span>
+                            </div>
+                            {rows}
+                          </div>
                         ) : (
                           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                             <thead>
@@ -4997,10 +5019,10 @@ export default function App() {
                           {isMobile ? (
                             <div style={{ marginBottom:14 }}>
                               {t.chemicals.map((c,i) => (
-                                <div key={i} style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:10, padding:"8px 0", borderBottom:`1px solid ${theme.divider}` }}>
-                                  <span style={{ fontSize:14, fontWeight:600, color: theme.ink, minWidth:0 }}>{c.name}</span>
+                                <div key={i} style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:10, padding:"6px 0", borderBottom:`1px solid ${theme.divider}` }}>
+                                  <span style={{ fontSize:13, fontWeight:600, color: theme.ink, minWidth:0 }}>{c.name}</span>
                                   <span style={{ flexShrink:0, whiteSpace:"nowrap" }}>
-                                    <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.ink }}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</span>
+                                    <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:13, fontWeight:700, color: theme.ink }}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</span>
                                     <span style={{ fontSize:11.5, color: theme.mut, marginLeft:4 }}>{c.unit}/ac</span>
                                   </span>
                                 </div>
