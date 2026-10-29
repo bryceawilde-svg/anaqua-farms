@@ -14,7 +14,7 @@ const ME_ICON = L.divIcon({
   iconAnchor: [9, 9],
 });
 
-export default function ApplicatorMapView({ fields, libraryFields = [], focusFieldId, completedFieldIds = [], onFieldClick, height = 280 }) {
+export default function ApplicatorMapView({ fields, libraryFields = [], focusFieldId, completedFieldIds = [], onFieldClick, height = 280, borderRadius = 6 }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
   const layersRef    = useRef({});  // ticket field id → L.geoJSON layer
@@ -170,8 +170,10 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
     : locStatus === "unavailable" ? "Can't get your location right now." : null;
 
   return (
-    <div style={{ position: "relative" }}>
-      <div ref={containerRef} style={{ height, width: "100%", borderRadius: 6, overflow: "hidden" }} />
+    // isolation: Leaflet's panes/controls use z-index up to 1000; contain them so the
+    // map can't paint over the app's fixed header and bottom nav when scrolled.
+    <div style={{ position: "relative", isolation: "isolate" }}>
+      <div ref={containerRef} style={{ height, width: "100%", borderRadius, overflow: "hidden" }} />
       <button type="button" onClick={onLocateClick}
         title="Show my location" aria-label="Show my location"
         style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, width: 44, height: 44,

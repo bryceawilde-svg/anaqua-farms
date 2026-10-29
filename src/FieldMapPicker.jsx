@@ -139,7 +139,8 @@ export default function FieldMapPicker({ fields, selectedFields, onAdd, onRemove
     <div>
       <div
         ref={containerRef}
-        style={{ height: 360, borderRadius: 6, border: "1.5px solid #c8dbb0", overflow: "hidden", position: "relative" }}
+        // isolation keeps Leaflet's z-indexes (up to 1000) under the app's fixed header / nav
+        style={{ height: 360, borderRadius: 6, border: "1.5px solid #c8dbb0", overflow: "hidden", position: "relative", isolation: "isolate" }}
       />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>

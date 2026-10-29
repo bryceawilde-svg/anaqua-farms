@@ -367,11 +367,36 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     ? { borderRadius:18, border:`1px solid ${t_.line}`, overflow:"hidden", background:t_.card, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)" }
     : { borderRadius:8, border:"1.5px solid #c8dbb0", overflow:"hidden", background:"#fff" };
   const boxHeadStyle = isMobile
-    ? { padding:"8px 14px", background:t_.fill, borderBottom:`1px solid ${t_.divider}`, fontSize:12, fontWeight:800, color:t_.mut, letterSpacing:"0.06em" }
+    ? { padding:"7px 12px", background:t_.fill, borderBottom:`1px solid ${t_.divider}`, fontSize:11.5, fontWeight:800, color:t_.mut, letterSpacing:"0.06em" }
     : { padding:"8px 14px", background:"#f0f7e8", borderBottom:"1px solid #c8dbb0", fontSize:12, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.06em" };
 
+  // Mobile: boxes run the full content width (the page already has side padding).
+  const boxMargin = isMobile ? "8px 0 0" : "10px 12px 0";
+  const remainingAc = pendingFields.reduce((sum, f) => sum + (parseFloat(f.acres) || 0), 0).toFixed(1);
+  const backToQueue = () => { setSelectedTicket(null); setFocusFieldId(null); setReorderMode(false); setTapOrder([]); };
+  const sync = async () => { setSyncing(true); await onRefresh?.(); setSyncing(false); };
+  const iconBtn = { width: 40, height: 40, flexShrink: 0, borderRadius: 11, border: "none", background: t_.fill, color: t_.onGreen,
+    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, padding: 0 };
+
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 40 }}>
+    <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: isMobile ? 16 : 40 }}>
+      {isMobile ? (
+        // One compact row: back · ticket title + remaining · sync
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 0 4px" }}>
+          <button onClick={backToQueue} aria-label="Back to queue" style={iconBtn}>‹</button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 800, fontSize: 16, color: t_.ink, fontFamily: "'Space Grotesk',monospace" }}>No.{ticketNum}</span>
+              {t.crop && <span style={{ fontWeight: 700, fontSize: 14, color: t_.ink }}>{t.crop}</span>}
+              {isTargetZone(t) && <TargetZoneBadge ticket={t} size={10} />}
+            </div>
+            <div style={{ fontSize: 12, color: t_.mut }}>
+              {pendingFields.length} field{pendingFields.length !== 1 ? "s" : ""} left · <span style={{ fontFamily: "'Space Grotesk',monospace" }}>{remainingAc} ac</span>
+            </div>
+          </div>
+          <button onClick={sync} disabled={syncing} title="Sync latest data" aria-label="Sync latest data" style={iconBtn}>⟳</button>
+        </div>
+      ) : (<>
       {/* Back bar — full-width tap target */}
       <div style={{ display: "flex", alignItems: "center", borderBottom: isMobile ? `1px solid ${t_.line}` : "1px solid #c8dbb0" }}>
         <div
@@ -401,9 +426,21 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
           </div>
         </div>
       </div>
+      </>)}
 
-      {/* Machine settings */}
-      {(t.galPerAcre || t.gal_per_acre || t.pressure || t.tankSize || t.tank_size) && (
+      {/* Machine settings — mobile: one line of chips; desktop: boxed */}
+      {isMobile && (t.galPerAcre || t.gal_per_acre || t.pressure || t.tankSize || t.tank_size) && (
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
+          {[
+            (t.galPerAcre || t.gal_per_acre) && `${t.galPerAcre || t.gal_per_acre} gal/ac`,
+            t.pressure && `${t.pressure} PSI`,
+            (t.tankSize || t.tank_size) && `${t.tankSize || t.tank_size} gal tank`,
+          ].filter(Boolean).map(v => (
+            <span key={v} style={{ background: t_.card, border: `1px solid ${t_.line}`, borderRadius: 8, padding: "4px 9px", fontSize: 12.5, fontWeight: 700, color: t_.ink, fontFamily: "'Space Grotesk',monospace", whiteSpace: "nowrap" }}>{v}</span>
+          ))}
+        </div>
+      )}
+      {!isMobile && (t.galPerAcre || t.gal_per_acre || t.pressure || t.tankSize || t.tank_size) && (
         <div style={{ margin: "10px 12px 0", ...boxStyle }}>
           <div style={boxHeadStyle}>MACHINE SETTINGS</div>
           <div style={{ padding: "10px 14px", display: "flex", gap: 24, flexWrap: "wrap" }}>
@@ -422,20 +459,21 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
         </div>
       )}
 
-      {/* Map */}
-      <div style={{ margin: "10px 12px 0" }}>
+      {/* Map — mobile: bleeds to the screen edges (cancels the page's 10px side padding) and is taller */}
+      <div style={{ margin: isMobile ? "8px -10px 0" : "10px 12px 0" }}>
         <ApplicatorMapView
           fields={enriched}
           libraryFields={fieldLibrary}
           onFieldClick={(id) => { if (pendingFields.some(f => f.id === id)) setFocusFieldId(id); }}
           focusFieldId={focusFieldId}
           completedFieldIds={completedFields.map(f => f.id)}
-          height={250}
+          height={isMobile ? "min(52vh, 440px)" : 250}
+          borderRadius={isMobile ? 0 : 6}
         />
       </div>
 
       {/* Fields to spray */}
-      <div style={{ margin: "10px 12px 0", ...boxStyle }}>
+      <div style={{ margin: boxMargin, ...boxStyle }}>
         <div style={{ ...boxHeadStyle, background: reorderMode ? (isMobile ? t_.tintAmber : "#fffbe8") : boxHeadStyle.background, color: reorderMode ? (isMobile ? t_.amber : "#7a5000") : boxHeadStyle.color, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <span>
             {reorderMode
@@ -444,7 +482,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
           </span>
           {pendingFields.length > 1 && !reorderMode && (
             <button onClick={enterReorder}
-              style={{ padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+              style={{ padding: isMobile ? "5px 10px" : "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
                 border: isMobile ? `1.5px solid ${t_.inputLine}` : "1.5px solid #c8dbb0", borderRadius: 4,
                 background: isMobile ? t_.card : "#fff", color: isMobile ? t_.onGreen : "#4a7a20" }}>
               ⇅ Prioritize
@@ -493,10 +531,10 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                 transition: "background 0.1s",
               }}
             >
-              <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ padding: isMobile ? "7px 10px" : "10px 14px", display: "flex", alignItems: "center", gap: isMobile ? 8 : 10 }}>
                 {/* Number circle: shows tap sequence in reorder mode */}
                 <div style={{
-                  width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                  width: isMobile ? 24 : 26, height: isMobile ? 24 : 26, borderRadius: "50%", flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontWeight: 800, fontSize: 13,
                   background: reorderMode
@@ -550,7 +588,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
 
       {/* Completed fields — collapsible */}
       {completedFields.length > 0 && (
-        <div style={{ margin: "10px 12px 0", ...boxStyle }}>
+        <div style={{ margin: boxMargin, ...boxStyle }}>
           <button
             onClick={() => setCompletedExpanded(e => !e)}
             style={{
@@ -567,7 +605,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
             const origIdx = enriched.indexOf(f);
             const schedIdx = schedule.findIndex(fs => fs.id === f.id);
             return (
-              <div key={f.id} style={{ padding: "10px 14px", borderTop: isMobile ? `1px solid ${t_.divider}` : "1px solid #eee", display: "flex", alignItems: "center", gap: 10 }}>
+              <div key={f.id} style={{ padding: isMobile ? "8px 12px" : "10px 14px", borderTop: isMobile ? `1px solid ${t_.divider}` : "1px solid #eee", display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 24, height: 24, borderRadius: isMobile ? 7 : "50%", background: isMobile ? t_.tintGreen : "#bbb", color: isMobile ? t_.onGreen : "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
                   ✓
                 </div>
@@ -594,7 +632,9 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                       onSaveFieldSchedule(t.id, updated);
                     }}
                     title="Reset field to pending"
-                    style={{ background: "none", border: "1px solid #e0a0a0", borderRadius: 4, padding: "4px 8px", cursor: "pointer", fontSize: 11, color: "#c0392b", whiteSpace: "nowrap" }}
+                    style={isMobile
+                      ? { background: t_.tintRed || "#fbece8", border: "none", borderRadius: 9, padding: "6px 10px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: t_.red || "#b4452f", whiteSpace: "nowrap" }
+                      : { background: "none", border: "1px solid #e0a0a0", borderRadius: 4, padding: "4px 8px", cursor: "pointer", fontSize: 11, color: "#c0392b", whiteSpace: "nowrap" }}
                   >↩ Reset</button>
                 )}
               </div>
@@ -605,7 +645,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
 
       {/* Chemicals */}
       {chems.length > 0 && (
-        <div style={{ margin: "10px 12px 0", ...boxStyle }}>
+        <div style={{ margin: boxMargin, ...boxStyle }}>
           <div style={{ ...boxHeadStyle, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span>PRODUCTS</span>
             <button
@@ -616,7 +656,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
             >🖨 Ticket</button>
           </div>
           {chems.map((c, i) => (
-            <div key={i} style={{ padding: "9px 14px", borderBottom: isMobile ? `1px solid ${t_.divider}` : "1px solid #eef5e8", fontSize: 13, fontWeight: 700, color: isMobile ? t_.ink : "#1a1a1a" }}>
+            <div key={i} style={{ padding: isMobile ? "7px 12px" : "9px 14px", borderBottom: isMobile ? `1px solid ${t_.divider}` : "1px solid #eef5e8", fontSize: 13, fontWeight: 700, color: isMobile ? t_.ink : "#1a1a1a" }}>
               {c.name}
             </div>
           ))}
@@ -624,9 +664,9 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       )}
 
       {/* Conditions */}
-      <div style={{ margin: "10px 12px 0", ...boxStyle }}>
+      <div style={{ margin: boxMargin, ...boxStyle }}>
         <div style={boxHeadStyle}>CONDITIONS</div>
-        <div style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: 13 }}>
+        <div style={{ padding: isMobile ? "8px 12px" : "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: 13 }}>
           {[
             ["Wind",       t.windSpeed ? `${t.windSpeed} mph ${t.windDir || ""}` : "—"],
             ["Temp",       t.airTemp   ? `${t.airTemp}°F` : "—"],

@@ -128,7 +128,8 @@ export default function BoundaryAssignMap({ features, matches, fieldLibrary, onA
 
   return (
     <div>
-      <div style={{ position: "relative" }}>
+      {/* isolation keeps Leaflet's z-indexes (up to 1000) under the app's fixed header / nav */}
+      <div style={{ position: "relative", isolation: "isolate" }}>
         <div ref={containerRef} style={{ height: 460, borderRadius: 6, border: "1.5px solid #c8dbb0", overflow: "hidden" }} />
 
         {/* Assignment panel — floats top-right over the map */}
