@@ -1496,8 +1496,8 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
   const headT  = isMobile ? { fontSize:14, fontWeight:800, color: theme.ink, marginBottom:10 } : sectionTitle;
   const cardC  = isMobile ? { background: theme.card, border:`1px solid ${theme.line}`, borderRadius:14 } : card;
   const numF   = isMobile ? "'Space Grotesk',monospace" : "inherit";
-  const ink    = isMobile ? theme.onGreen : "#2a5c0f";
-  const warn   = isMobile ? theme.amber : "#c07000";
+  const ink    = theme.onGreen;
+  const warn   = theme.amber;
 
   return (
     <>
@@ -1513,7 +1513,7 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
         width:  isMobile ? "auto" : 420,
         maxHeight: isMobile ? "88vh" : 620,
         zIndex: 1001,
-        background: isMobile ? theme.canvas : "#fff",
+        background: theme.canvas,
         borderRadius: isMobile ? "26px 26px 0 0" : 10,
         boxShadow: isMobile ? "0 -12px 40px rgba(0,0,0,0.28)" : "0 8px 40px rgba(0,0,0,0.22)",
         border: isMobile ? "none" : "1.5px solid #c8dbb0",
@@ -1560,7 +1560,7 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
         <div style={{ flex:1, overflowY:"auto", padding: isMobile ? "2px 16px calc(22px + env(safe-area-inset-bottom))" : "12px 14px" }}>
           <div style={headT}>Fields left to spray</div>
           {rows.length === 0 ? (
-            <div style={{ fontSize:12, color: isMobile ? theme.mut : "#888", marginBottom:12 }}>No fields on this ticket.</div>
+            <div style={{ fontSize:12, color: theme.mut, marginBottom:12 }}>No fields on this ticket.</div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap: isMobile ? 7 : 6, marginBottom: isMobile ? 16 : 12 }}>
               {rows.map((fs, i) => {
@@ -1573,11 +1573,11 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
                     borderRadius: isMobile ? 12 : 7, padding: isMobile ? "11px 12px" : "10px 12px",
                   }}>
                     <input type="checkbox" checked={on} onChange={() => toggle(i)}
-                      style={{ width:20, height:20, accentColor: isMobile ? theme.green : "#2a5c0f", flexShrink:0, margin:0 }} />
+                      style={{ width:20, height:20, accentColor: theme.green, flexShrink:0, margin:0 }} />
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize: isMobile ? 14 : 13, fontWeight:700, color: isMobile ? (on ? theme.ink : theme.ink2) : (on ? "#2a5c0f" : "#999"),
                         overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{fs.name}</div>
-                      <div style={{ fontSize:11, color: isMobile ? theme.mut : "#888" }}>
+                      <div style={{ fontSize:11, color: theme.mut }}>
                         {fmtAcresShort(fs.acres, isMetric)}
                         {isSprayed(fs) && (isMobile
                           ? <span style={{ marginLeft:6, background: theme.tintGreen, color: theme.onGreen, borderRadius:5, padding:"1px 6px", fontSize:10, fontWeight:700 }}>Sprayed</span>
@@ -1600,7 +1600,7 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
           {/* Remaining — live, independent of the Calculate button */}
           <div style={{ ...cardC, marginBottom:12, padding:"11px 14px", textAlign:"center" }}>
             <div style={statLabel}>Remaining</div>
-            <div style={{ fontSize: isMobile ? 30 : 26, fontWeight:700, lineHeight:1.15, fontFamily: numF, color: remRaw < 0 ? warn : (isMobile ? theme.ink : "#2a5c0f") }}>
+            <div style={{ fontSize: isMobile ? 30 : 26, fontWeight:700, lineHeight:1.15, fontFamily: numF, color: remRaw < 0 ? warn : (theme.ink) }}>
               {toDisp(remRaw).toFixed(1)} {areaUnit}
             </div>
             {overEntered && (
@@ -1622,7 +1622,7 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
             }}>Calculate</button>
 
           {!result ? (
-            <div style={{ fontSize:12, color: isMobile ? theme.mut : "#aaa", textAlign:"center", padding:"8px 0 4px" }}>
+            <div style={{ fontSize:12, color: theme.mut, textAlign:"center", padding:"8px 0 4px" }}>
               {checkedIdx.size === 0
                 ? "Check the fields you have left to spray."
                 : "Tap Calculate for chemical amounts."}
@@ -1634,24 +1634,24 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
               {result.perLoadAc > 0 ? (
                 <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:9 }}>
                   {result.loadCount > 0 && (
-                    <span style={{ background: isMobile ? theme.tintGreen : "#f0f7e8", borderRadius: isMobile ? 7 : 4, padding: isMobile ? "4px 9px" : "3px 8px", fontSize:11, color: isMobile ? theme.onGreen : "#2a5c0f", fontWeight:700, whiteSpace:"nowrap" }}>
+                    <span style={{ background: theme.tintGreen, borderRadius: isMobile ? 7 : 4, padding: isMobile ? "4px 9px" : "3px 8px", fontSize:11, color: theme.onGreen, fontWeight:700, whiteSpace:"nowrap" }}>
                       {result.loadCount} full load{result.loadCount > 1 ? "s" : ""} &middot; {volFmt(result.tankGal)}
                     </span>
                   )}
                   {result.hasLeftover && (
-                    <span style={{ background: isMobile ? theme.tintAmber : "#fff3cd", borderRadius: isMobile ? 7 : 4, padding: isMobile ? "4px 9px" : "3px 8px", fontSize:11, color: isMobile ? theme.amber : "#856404", fontWeight:700, whiteSpace:"nowrap" }}>
+                    <span style={{ background: theme.tintAmber, borderRadius: isMobile ? 7 : 4, padding: isMobile ? "4px 9px" : "3px 8px", fontSize:11, color: theme.amber, fontWeight:700, whiteSpace:"nowrap" }}>
                       1 partial &middot; {toDisp(result.leftoverAc).toFixed(1)} {areaUnit} &middot; {volFmt(result.leftoverWater)}
                     </span>
                   )}
                 </div>
               ) : (
-                <div style={{ fontSize:11, color: isMobile ? theme.mut : "#888", marginBottom:9 }}>
+                <div style={{ fontSize:11, color: theme.mut, marginBottom:9 }}>
                   No tank size on this ticket — totals only.
                 </div>
               )}
 
               {result.chems.length === 0 && (
-                <div style={{ fontSize:12, color: isMobile ? theme.mut : "#888", marginBottom:9 }}>No chemicals on this ticket.</div>
+                <div style={{ fontSize:12, color: theme.mut, marginBottom:9 }}>No chemicals on this ticket.</div>
               )}
 
               {result.chems.map((c, i) => (
@@ -1661,8 +1661,8 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
                   {/* Product left, total right — the left/right split ChemicalRow uses (:1274) */}
                   <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize: isMobile ? 14 : 13, fontWeight:700, color: isMobile ? theme.ink : "#2a5c0f" }}>{c.name}</div>
-                      <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#999" }}>
+                      <div style={{ fontSize: isMobile ? 14 : 13, fontWeight:700, color: theme.ink }}>{c.name}</div>
+                      <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut }}>
                         {c.rate > 0 ? `${c.rate.toFixed(2)} ${c.unit}/ac` : "no rate on ticket"}
                       </div>
                     </div>
@@ -1671,22 +1671,22 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
                       <div style={{ fontSize: isMobile ? 21 : 20, fontWeight:700, color: ink, lineHeight:1.1, fontFamily: numF }}>{c.totalFmt}</div>
                       {/* Exact oz under the rounded figure, as ChemicalRow does (:1286) */}
                       {c.roundQtr && c.totalRaw > 0 && (
-                        <div style={{ fontSize:9, color: isMobile ? theme.mut : "#aaa" }}>{Math.round(c.totalRaw)} oz exact</div>
+                        <div style={{ fontSize:9, color: theme.mut }}>{Math.round(c.totalRaw)} oz exact</div>
                       )}
                     </div>
                   </div>
                   {/* Only worth breaking down once there's a full load: with
                       loadCount 0 the total IS the single partial load. */}
                   {c.rate > 0 && result.loadCount > 0 && (
-                    <div style={{ marginTop:6, paddingTop:6, borderTop: `1px dashed ${isMobile ? theme.dash : "#c8dbb0"}`, display:"flex", gap:16, flexWrap:"wrap" }}>
+                    <div style={{ marginTop:6, paddingTop:6, borderTop: `1px dashed ${theme.dash}`, display:"flex", gap:16, flexWrap:"wrap" }}>
                       <div>
                         <div style={statLabel}>Per full load &times;{result.loadCount}</div>
                         <div style={{ fontSize:14, fontWeight:700, color: ink, fontFamily: numF }}>{c.fullFmt}</div>
                       </div>
                       {c.leftoverFmt && (
                         <div>
-                          <div style={{ ...statLabel, color: isMobile ? theme.amber : "#e07020" }}>Partial ({toDisp(result.leftoverAc).toFixed(1)} {areaUnit})</div>
-                          <div style={{ fontSize:14, fontWeight:700, color: isMobile ? theme.amber : "#e07020", fontFamily: numF }}>{c.leftoverFmt}</div>
+                          <div style={{ ...statLabel, color: theme.amber }}>Partial ({toDisp(result.leftoverAc).toFixed(1)} {areaUnit})</div>
+                          <div style={{ fontSize:14, fontWeight:700, color: theme.amber, fontFamily: numF }}>{c.leftoverFmt}</div>
                         </div>
                       )}
                     </div>
@@ -1698,7 +1698,7 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, on
                 <div>
                   <div style={isMobile ? statLabel : { fontSize:11, fontWeight:800, color:"#3a6b1a", textTransform:"uppercase", letterSpacing:"0.08em" }}>Water / carrier</div>
                   {isTargetZone(ticket) && (
-                    <div style={{ fontSize: isMobile ? 10 : 9, color: isMobile ? theme.purple : "#4a2a7a", fontWeight:700, marginTop:2 }}>
+                    <div style={{ fontSize: isMobile ? 10 : 9, color: theme.purple, fontWeight:700, marginTop:2 }}>
                       at {fmtGpa(calcGpa(ticket).toFixed(2), isMetric)} effective
                     </div>
                   )}
@@ -1755,6 +1755,9 @@ function normalizeTicket(tk) {
 // ── Main App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const isMobile        = useIsMobile();
+  // Desktop under 1100px: the office sidebar collapses to an icon rail.
+  const isNarrowDesk    = useIsMobile(1100);
+  const sideW           = isNarrowDesk ? 76 : 236;
 
   // ── Auth state
   const [session,      setSession]      = useState(null);
@@ -1812,48 +1815,46 @@ export default function App() {
   useEffect(() => {
     document.body.style.background = theme.canvas;
     // index.css (which zeroes this) isn't imported, so the browser's default 8px body
-    // margin was eating 16px of a phone's width. Desktop keeps its current spacing.
-    document.body.style.margin = isMobile ? "0" : "";
+    // margin would eat a phone's width and offset the desktop sidebar.
+    document.body.style.margin = "0";
     // Browser chrome / Android status bar color follows the header it sits above.
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isMobile ? theme.header : "#2a5c0f");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.header);
   }, [darkMode, accent, isMobile]);
   // Mobile Library sub-nav: "equip" and "people" both live under view==="equipMgr",
   // this just tracks which half of that view to show on mobile.
   const [libTab,        setLibTab]        = useState("chems");
   const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [addPersonDraft,setAddPersonDraft]= useState({ name:"", licensed:true, license:"" });
-  // Mobile-themed card/section/label chrome — falls back to the original desktop
-  // styles untouched when not on mobile, so this is a no-op for the desktop layout.
-  const cardT = isMobile ? {
-    background: theme.card, border: `1.5px solid ${theme.line}`, borderRadius:18,
-    padding:15, marginBottom:18,
+  // Themed card/section/label chrome, shared by the phone layout and the desktop office layout.
+  const cardT = {
+    background: theme.card, border: `${isMobile ? 1.5 : 1}px solid ${theme.line}`, borderRadius: isMobile ? 18 : 16,
+    padding: isMobile ? 15 : "18px 20px", marginBottom: 18,
     boxShadow: darkMode
       ? "0 8px 22px -8px rgba(0,0,0,0.55)"
-      : "0 8px 20px -8px rgba(20,40,26,0.28)",
-  } : card;
-  const sectionTitleT = isMobile ? {
-    fontSize:14, fontWeight:800, color: theme.ink, marginBottom:12,
-  } : sectionTitle;
-  // Mobile sets the whole `border` shorthand (overriding the call site's
-  // border:"1.5px solid") — mixing it with borderWidth trips React's style warning.
-  const pillBtn = (active) => isMobile ? {
+      : isMobile ? "0 8px 20px -8px rgba(20,40,26,0.28)" : "0 6px 18px -9px rgba(20,40,26,0.16)",
+  };
+  const sectionTitleT = { fontSize: isMobile ? 14 : 15, fontWeight:800, color: theme.ink, marginBottom:12 };
+  // Sets the whole `border` shorthand (overriding the call site's border:"1.5px solid")
+  // — mixing it with borderWidth trips React's style warning.
+  const pillBtn = (active) => ({
     border:      `${active ? 2 : 1.5}px solid ${active ? theme.green : "transparent"}`,
     background:  active ? theme.tintGreen : theme.fill,
     color:       active ? theme.green     : theme.ink2,
     borderRadius: 10,
-  } : {
-    borderColor: active ? "#2a5c0f" : "#c8dbb0",
-    background:  active ? "#2a5c0f" : "#f9fdf5",
-    color:       active ? "#fff"    : "#3a6b1a",
+  });
+  const labelT = {
+    fontSize: isMobile ? 9.5 : 10, fontWeight:700, letterSpacing:"0.06em", color: theme.mut,
+    display:"block", marginBottom: isMobile ? 4 : 5, textTransform:"uppercase",
   };
-  const labelT = isMobile ? {
-    fontSize:9.5, fontWeight:700, letterSpacing:"0.06em", color: theme.mut,
-    display:"block", marginBottom:4, textTransform:"uppercase",
-  } : labelStyle;
-  // Mobile inputs take the theme's fill/border (legible in dark mode); desktop
-  // gets the module-level originals. Declared before any JSX in App uses them.
-  const inp = isMobile ? { ...inpBase, background: theme.input, color: theme.ink, borderColor: theme.inputLine, borderRadius:10 } : inpBase;
-  const sel = isMobile ? { ...inp } : selBase;
+  // Themed inputs (legible in dark mode). Phones keep 16px so iOS doesn't zoom on focus.
+  // Declared before any JSX in App uses them.
+  const inp = { ...inpBase, background: theme.input, color: theme.ink, borderColor: theme.inputLine, borderRadius:10,
+    ...(isMobile ? null : { fontSize:14, padding:"9px 11px" }) };
+  const sel = { ...inp };
+  // Desktop table header / cell (shadow the module-level originals).
+  const th = { padding:"10px 12px", background:"transparent", color: theme.mut, fontSize:10.5, fontWeight:800, textAlign:"left",
+    letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:`1px solid ${theme.divider}`, whiteSpace:"nowrap" };
+  const td = { padding:"10px 12px", borderBottom:`1px solid ${theme.divider}`, verticalAlign:"middle", color: theme.ink };
   // Mobile helper text under a section title (Account page cards).
   const noteT = { fontSize:12.5, color: theme.ink2, lineHeight:1.45 };
   // Mobile secondary button (Rename, Cancel, CSV…).
@@ -2112,15 +2113,15 @@ export default function App() {
       p.startsWith("**") && p.endsWith("**") ? <strong key={`${keyPrefix}-${j}`}>{p.slice(2,-2)}</strong> : p
     );
     // Mobile reads from the theme so replies stay legible in dark mode.
-    const body = isMobile ? theme.ink : "#333";
+    const body = theme.ink;
     const fs   = isMobile ? 13.5 : 12;
     return text.split("\n").map((line, i) => {
       if (line.startsWith("## "))
-        return <div key={i} style={{ fontSize:13, fontWeight:800, color: isMobile ? theme.onGreen : "#2a5c0f", letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:`1.5px solid ${isMobile ? theme.line : "#c8dbb0"}`, paddingBottom:3, marginTop:12, marginBottom:4 }}>{line.slice(3)}</div>;
+        return <div key={i} style={{ fontSize:13, fontWeight:800, color: theme.onGreen, letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:`1.5px solid ${theme.line}`, paddingBottom:3, marginTop:12, marginBottom:4 }}>{line.slice(3)}</div>;
       if (line.startsWith("### "))
-        return <div key={i} style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: isMobile ? theme.ink : "#3a6b1a", marginTop:8, marginBottom:2 }}>{line.slice(4)}</div>;
+        return <div key={i} style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: theme.ink, marginTop:8, marginBottom:2 }}>{line.slice(4)}</div>;
       if (line.startsWith("---"))
-        return <hr key={i} style={{ border:"none", borderTop:`1px solid ${isMobile ? theme.line : "#c8dbb0"}`, margin:"8px 0" }} />;
+        return <hr key={i} style={{ border:"none", borderTop:`1px solid ${theme.line}`, margin:"8px 0" }} />;
       if (line.startsWith("* ") || line.startsWith("- "))
         return <div key={i} style={{ fontSize: fs, color: body, paddingLeft:14, position:"relative", marginBottom:2, lineHeight: isMobile ? 1.5 : undefined }}><span style={{ position:"absolute", left:2 }}>•</span>{inlineBold(line.slice(2), i)}</div>;
       if (/^\d+\.\s/.test(line))
@@ -3309,7 +3310,7 @@ export default function App() {
             onKeyDown={e => e.key==="Enter" && (authView==="login" ? handleSignIn() : handleSignUp())}
             style={entryInput} />
           {authError && (
-            <div style={{ fontSize: isMobile ? 13 : 12, color: authError.includes("Check your email") ? (isMobile ? theme.onGreen : "#2a5c0f") : "#c0392b", lineHeight:1.5 }}>
+            <div style={{ fontSize: isMobile ? 13 : 12, color: authError.includes("Check your email") ? (theme.onGreen) : "#c0392b", lineHeight:1.5 }}>
               {authError}
             </div>
           )}
@@ -3319,7 +3320,7 @@ export default function App() {
             {authWorking ? "…" : authView==="login" ? "Sign In" : "Create Account"}
           </button>
         </div>
-        <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#aaa", textAlign:"center", marginTop:14, lineHeight:1.6 }}>
+        <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut, textAlign:"center", marginTop:14, lineHeight:1.6 }}>
           Your records are isolated from other users.
         </div>
       </div>
@@ -3371,7 +3372,7 @@ export default function App() {
             style={entryBtn(orgWorking || !newOrgName.trim())}>
             {orgWorking ? "Creating…" : "Create Organization"}
           </button>
-          <button onClick={() => supabase.auth.signOut()} style={{ background:"none", border:"none", color: isMobile ? theme.mut : "#999", fontSize: isMobile ? 13 : 12, padding: isMobile ? "6px 0" : 0, cursor:"pointer", fontFamily:"inherit" }}>
+          <button onClick={() => supabase.auth.signOut()} style={{ background:"none", border:"none", color: theme.mut, fontSize: isMobile ? 13 : 12, padding: isMobile ? "6px 0" : 0, cursor:"pointer", fontFamily:"inherit" }}>
             Sign out
           </button>
         </div>
@@ -3393,35 +3394,52 @@ export default function App() {
     if (error) showToast(error.message);
     else setOrgMembers(prev => prev.filter(x => x.id !== m.id));
   };
-  const navTabs = isViewer
-    ? [["applicator","📋 Applications"]]
-    : [["applicator","📱 Applicator"],["log","📋 Saved"],["chemMgr","🧪 Chems"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]];
+  // Desktop office sidebar. Equipment and People are the two halves of view "equipMgr" (libTab).
+  const navIcon = (d) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
+  );
+  // Desktop Tickets table: no. · crop · fields · acres · applicator · date · status · queue
+  const deskTicketCols = "52px 130px minmax(0,1fr) 76px minmax(0,170px) 64px 96px 34px";
+  const queuedCount = tickets.filter(t => t.team_view && t.queue_status !== "completed").length;
+  const deskNav = [
+    { key:"log", label:"Tickets", go:() => setView("log"), active: view === "log" || view === "form",
+      icon: navIcon(<><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></>) },
+    { key:"applicator", label: isViewer ? "Applications" : "Cab", go:() => setView("applicator"), active: view === "applicator", badge: queuedCount,
+      icon: navIcon(<><path d="M3 16V6h11v10M14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></>) },
+    { key:"fieldMgr", label:"Fields", go:() => setView("fieldMgr"), active: view === "fieldMgr",
+      icon: navIcon(<><path d="M3 20h18M5 20V9l7-5 7 5v11"/><path d="M9 20v-5h6v5"/></>) },
+    { key:"chemMgr", label:"Chemicals", go:() => setView("chemMgr"), active: view === "chemMgr",
+      icon: navIcon(<><path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/><path d="M7 14h10"/></>) },
+    { key:"equip", label:"Equipment", go:() => { setView("equipMgr"); setLibTab("equip"); }, active: view === "equipMgr" && libTab !== "people",
+      icon: navIcon(<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8M4.6 9a1.6 1.6 0 00-.3-1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></>) },
+    { key:"people", label:"People", go:() => { setView("equipMgr"); setLibTab("people"); }, active: view === "equipMgr" && libTab === "people",
+      icon: navIcon(<><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 5.5a3 3 0 010 5.4M18 20c0-2.6-1-4.2-2.5-5"/></>) },
+  ].filter(n => !isViewer || n.key === "applicator");
+  const userEmail = session?.user?.email || "";
+  const userName = userEmail.split("@")[0] || "Account";
+  const userInitials = userName.slice(0, 2).toUpperCase();
+  const roleLabel = userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : userRole === "applicator" ? "Applicator" : "Viewer";
+  const nextTicketNo = String(Math.max(0, ...tickets.map(t => t.ticketNumber || 0)) + 1).padStart(3, "0");
+  const newTicket = () => { setForm(blank()); setEditingId(null); setView("form"); };
+  const cancelForm = () => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); };
+  const deskPage = view === "form" ? [editingId ? "Edit Ticket" : "New Ticket",
+        editingId ? `Editing · No. ${String(tickets.find(t => t.id === editingId)?.ticketNumber || "").padStart(3, "0")}` : `Draft · No. ${nextTicketNo}`]
+    : view === "log" ? ["Tickets", `${currentOrg?.name || "Anaqua Farms"} · ${tickets.length} record${tickets.length !== 1 ? "s" : ""}`]
+    : view === "applicator" ? [isViewer ? "Applications" : "Cab", `${queuedCount} queued · live application queue`]
+    : view === "fieldMgr" ? ["Fields", "Field library, boundaries & imports"]
+    : view === "chemMgr" ? ["Chemicals", "Chemical library & target pests"]
+    : view === "equipMgr" ? (libTab === "people" ? ["People", "Licensed applicators & operators"] : ["Equipment", "Sprayers & application rates"])
+    : view === "team" ? ["Account", "Profile, members & organization"]
+    : ["BoomLog", ""];
 
   return (
-    <div style={{ minHeight:"100vh", background: isMobile ? theme.canvas : "#f0f7e8", fontFamily:"'Hanken Grotesk',system-ui,sans-serif", paddingBottom: isMobile ? 78 : 0, overflowX: isMobile ? "hidden" : undefined }}>
-
-      {/* Floating "+" — desktop only; mobile uses the bottom nav's center button */}
-      {!isMobile && view === "log" && (
-        <button
-          onClick={() => { setForm(f => ({ ...f, date: new Date().toISOString().slice(0,10) })); setEditingId(null); setView("form"); }}
-          title="New Ticket"
-          style={{
-            position:"fixed", bottom:90, right:20, zIndex:1000,
-            width:48, height:48, borderRadius:"50%",
-            background:"linear-gradient(135deg,#2a6610,#3a8a1a)",
-            color:"#fff", border:"none", cursor:"pointer",
-            fontSize:32, fontWeight:300, lineHeight:1,
-            boxShadow:"0 4px 16px rgba(0,0,0,0.25)",
-            display:"flex", alignItems:"center", justifyContent:"center",
-          }}
-        >+</button>
-      )}
+    <div style={{ minHeight:"100vh", background: theme.canvas, color: theme.ink, fontFamily:"'Hanken Grotesk',system-ui,sans-serif", paddingBottom: isMobile ? 78 : 0, paddingLeft: isMobile ? 0 : sideW, overflowX: isMobile ? "hidden" : undefined }}>
 
       {toast && (
         <div style={{
-          position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:9999,
-          background: toast.type === "error" ? "#c0392b" : "#2a8a10",
-          color:"#fff", borderRadius:8, padding:"12px 20px", fontSize:14, fontWeight:700,
+          position:"fixed", bottom:24, left: isMobile ? "50%" : `calc(50% + ${sideW / 2}px)`, transform:"translateX(-50%)", zIndex:9999,
+          background: toast.type === "error" ? theme.red : theme.header,
+          color:"#fff", borderRadius:12, padding:"12px 20px", fontSize:14, fontWeight:700,
           boxShadow:"0 4px 20px rgba(0,0,0,0.25)", display:"flex", alignItems:"center", gap:10,
           maxWidth:"90vw"
         }}>
@@ -3490,42 +3508,93 @@ export default function App() {
           )}
         </div>
       ) : (
-      <div style={{ background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)", padding: isMobile ? "12px 14px 0" : "18px 28px 0", boxShadow:"0 3px 16px rgba(0,0,0,0.18)" }}>
-        <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:6 }}>
-          <div>
-            <div style={{ color:"#fff", fontSize:isMobile?16:22, fontWeight:700, lineHeight:1.2 }}>BoomLog</div>
+      // Desktop "office" shell: fixed sidebar + sticky topbar (design handoff, BoomLog Office).
+      <>
+      <aside style={{ position:"fixed", top:0, bottom:0, left:0, width: sideW, zIndex:100, boxSizing:"border-box",
+        background:`linear-gradient(180deg, ${theme.side} 0%, ${theme.side2} 100%)`,
+        display:"flex", flexDirection:"column", padding: isNarrowDesk ? "20px 10px" : "20px 14px", overflowY:"auto" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:11, padding: isNarrowDesk ? "6px 0 22px" : "6px 8px 22px", justifyContent: isNarrowDesk ? "center" : "flex-start" }}>
+          <div style={{ width:38, height:38, borderRadius:11, background: theme.green, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 16V6h11v10M14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {!isMobile && <span style={{ color:"#a8d878", fontSize:11 }}>{isPro ? "⭐ Pro" : "Basic"}</span>}
-            <button onClick={() => supabase.auth.signOut()} style={{
-              background:"none", border:"1.5px solid #a8d878", borderRadius:5,
-              color:"#a8d878", fontSize:11, padding:"4px 10px", cursor:"pointer", fontWeight:600, fontFamily:"inherit"
-            }}>Sign Out</button>
-          </div>
+          {!isNarrowDesk && (
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:16, fontWeight:800, color:"#fff", letterSpacing:"-0.01em" }}>BoomLog</div>
+              <div style={{ fontSize:10.5, color: theme.sideMut, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>Office · {currentOrg?.name || "Anaqua Farms"}</div>
+            </div>
+          )}
         </div>
-        {/* Tab nav: desktop only — mobile uses the bottom nav bar instead */}
-        {!isMobile && <div style={{ display:"flex", gap:2, overflowX:"auto", marginTop:0, paddingBottom:0, WebkitOverflowScrolling:"touch" }}>
-          {navTabs.map(([v,l]) => {
-            return (
-              <button key={v} onClick={() => setView(v)}
-                style={{
-                  padding: isMobile ? "8px 12px" : "8px 16px",
-                  border:"none", cursor: "pointer",
-                  fontSize: isMobile ? 12 : 13,
-                  fontWeight:700,
-                  borderRadius:"6px 6px 0 0", fontFamily:"inherit",
-                  background: view===v ? "#f0f7e8" : "rgba(255,255,255,0.12)",
-                  color: view===v ? "#2a5c0f" : "#d8f0b8",
-                  borderBottom: view===v ? "3px solid #4aaa1a" : "3px solid transparent",
-                  whiteSpace:"nowrap", flexShrink:0,
-                }}>{l}</button>
-            );
-          })}
-        </div>}
-      </div>
+        {!isNarrowDesk && <div style={{ fontSize:9.5, fontWeight:800, letterSpacing:"0.1em", color: theme.sideMut, padding:"6px 10px 7px" }}>MANAGE</div>}
+        <nav style={{ display:"flex", flexDirection:"column", gap:3 }}>
+          {deskNav.map(n => (
+            <button key={n.key} onClick={n.go} title={isNarrowDesk ? n.label : undefined} aria-label={n.label}
+              aria-current={n.active ? "page" : undefined}
+              style={{ position:"relative", display:"flex", alignItems:"center", gap:11, width:"100%", padding: isNarrowDesk ? "11px 0" : "10px 11px",
+                justifyContent: isNarrowDesk ? "center" : "flex-start", borderRadius:10, border:"none", cursor:"pointer", fontFamily:"inherit",
+                fontSize:13.5, fontWeight: n.active ? 700 : 600,
+                background: n.active ? "rgba(255,255,255,0.12)" : "transparent",
+                color: n.active ? "#fff" : theme.sideInk,
+                boxShadow: n.active ? `inset 3px 0 0 ${theme.sideHi}` : "none" }}>
+              <span style={{ display:"flex", width:20, justifyContent:"center" }}>{n.icon}</span>
+              {!isNarrowDesk && <span style={{ flex:1, textAlign:"left" }}>{n.label}</span>}
+              {n.badge > 0 && (
+                <span style={isNarrowDesk
+                  ? { position:"absolute", top:5, right:10, background:"#cf6a3a", color:"#fff", fontSize:9, fontWeight:800, borderRadius:6, padding:"0 5px", lineHeight:"14px" }
+                  : { background:"#cf6a3a", color:"#fff", fontSize:10, fontWeight:800, borderRadius:7, padding:"1px 7px" }}>{n.badge}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        {/* Account chip — opens Account (viewers have no Account page, so theirs signs out) */}
+        <button onClick={() => isViewer ? supabase.auth.signOut() : setView("team")}
+          title={isViewer ? "Sign out" : "Account"} aria-label={isViewer ? "Sign out" : "Account"}
+          style={{ marginTop:"auto", display:"flex", alignItems:"center", gap:10, width:"100%", padding: isNarrowDesk ? "11px 0" : "11px 10px",
+            justifyContent: isNarrowDesk ? "center" : "flex-start", border:"none", borderTop:"1px solid rgba(255,255,255,0.08)", borderRadius:10,
+            background: view === "team" ? "rgba(255,255,255,0.08)" : "transparent", cursor:"pointer", fontFamily:"inherit" }}>
+          <div style={{ width:34, height:34, borderRadius:10, background: theme.green, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, flexShrink:0 }}>{userInitials}</div>
+          {!isNarrowDesk && (<>
+            <div style={{ flex:1, minWidth:0, textAlign:"left" }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{userName}</div>
+              <div style={{ fontSize:10.5, color: theme.sideMut, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{roleLabel} · {isViewer ? "Sign out" : (currentOrg?.name || "")}</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.sideMut} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </>)}
+        </button>
+      </aside>
+
+      <header style={{ position:"sticky", top:0, zIndex:90, height:68, boxSizing:"border-box", background: theme.card, borderBottom:`1px solid ${theme.line}`,
+        display:"flex", alignItems:"center", gap:14, padding:"0 28px" }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:19, fontWeight:800, letterSpacing:"-0.01em", color: theme.ink }}>{deskPage[0]}</div>
+          {deskPage[1] && <div style={{ fontSize:12, color: theme.mut, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{deskPage[1]}</div>}
+        </div>
+        {isPro && !isViewer && (
+          <button onClick={() => setChatOpen(o => !o)} title="Application Sector Advisor" aria-label="Open advisor chat"
+            style={{ display:"flex", alignItems:"center", gap:7, background: chatOpen ? theme.tintGreen : theme.fill, color: chatOpen ? theme.onGreen : theme.ink2,
+              border:`1px solid ${theme.line}`, borderRadius:11, padding:"10px 14px", fontSize:13.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z" />
+            </svg>
+            Advisor
+          </button>
+        )}
+        {view === "form" ? (
+          <button onClick={cancelForm}
+            style={{ background: theme.card, color: theme.ink2, border:`1px solid ${theme.line}`, borderRadius:11, padding:"10px 16px", fontSize:13.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+            Cancel
+          </button>
+        ) : !isViewer && ["log","applicator"].includes(view) ? (
+          <button onClick={newTicket}
+            style={{ display:"flex", alignItems:"center", gap:7, background: theme.green, color:"#fff", border:"none", borderRadius:11, padding:"11px 16px", fontSize:13.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            New ticket
+          </button>
+        ) : null}
+      </header>
+      </>
       )}
 
-      <div style={{ maxWidth:880, margin:"0 auto", paddingTop: isMobile ? headerH + 12 : 24, paddingLeft: isMobile ? 10 : 16, paddingRight: isMobile ? 10 : 16, paddingBottom: isMobile ? 80 : 40 }}>
+      <div style={{ maxWidth: isMobile ? 880 : 1180, margin:"0 auto", paddingTop: isMobile ? headerH + 12 : 24, paddingLeft: isMobile ? 10 : 28, paddingRight: isMobile ? 10 : 28, paddingBottom: isMobile ? 80 : 48 }}>
 
         {/* ══ APPLICATOR VIEW ══════════════════════════════════════════════════════ */}
         {view === "applicator" && (
@@ -3581,7 +3650,7 @@ export default function App() {
                   <span style={{ fontSize:11, color:"#c03020", fontWeight:600 }}>⚠ {wxError}</span>
                 )}
                 {!wxLoading && !wxError && form.windSpeed && (
-                  <span style={{ fontSize:11, color: isMobile ? theme.onGreen : "#2a8a10", fontWeight:600 }}>
+                  <span style={{ fontSize:11, color: theme.onGreen, fontWeight:600 }}>
                     ✓ {fmtWindSpeed(form.windSpeed, isMetric)} {form.windDir}, {fmtTemp(form.airTemp, isMetric)}
                   </span>
                 )}
@@ -3615,7 +3684,7 @@ export default function App() {
                     padding: isMobile ? "5px 7px" : "6px 10px",
                     background:"#e6f5d0", display:"flex", alignItems:"center", minHeight: isMobile ? 28 : 32
                   }}>
-                    <span style={{ fontSize: isMobile ? 16 : 14, fontWeight:700, color: isMobile ? theme.onGreen : "#2a5c0f", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{endTime}</span>
+                    <span style={{ fontSize: isMobile ? 16 : 14, fontWeight:700, color: theme.onGreen, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{endTime}</span>
                   </div>
                 </div>
                 <div style={isMobile ? { order:3, minWidth:0 } : undefined}>
@@ -3975,8 +4044,8 @@ export default function App() {
                 ) : (
                   <div style={{ position:"relative" }}>
                     <div style={{
-                      border: `1.5px solid ${isMobile ? theme.inputLine : "#c8dbb0"}`, borderRadius: isMobile ? 10 : 5, padding:"5px 8px",
-                      background: isMobile ? theme.input : "#f9fdf5", display:"flex", flexWrap:"wrap", alignItems:"center", gap:2, minHeight:40,
+                      border: `1.5px solid ${theme.inputLine}`, borderRadius: isMobile ? 10 : 5, padding:"5px 8px",
+                      background: theme.input, display:"flex", flexWrap:"wrap", alignItems:"center", gap:2, minHeight:40,
                       cursor:"text"
                     }} onClick={() => setShowDrop(true)}>
                       <input
@@ -3992,21 +4061,21 @@ export default function App() {
                       <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowDrop(false)} />
                       <div style={{
                         position:"absolute", top:"100%", left:0, right:0, zIndex:99,
-                        background: isMobile ? theme.card : "#fff", border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
+                        background: theme.card, border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
                         boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight: isMobile ? 260 : 200, overflowY:"auto", marginTop: isMobile ? 4 : 0
                       }}>
                         {filteredFields.length === 0 ? (
-                          <div style={{ padding:"10px 12px", fontSize:13, color: isMobile ? theme.mut : "#999" }}>
+                          <div style={{ padding:"10px 12px", fontSize:13, color: theme.mut }}>
                             {fieldSearch ? "No matching fields" : "All fields selected or library empty"}
                           </div>
                         ) : filteredFields.map(f => (
                           <div key={f.id} onClick={() => addField(f)}
-                            style={{ padding: isMobile ? "12px 13px" : "8px 12px", cursor:"pointer", fontSize: isMobile ? 14 : 13, color: isMobile ? theme.ink : undefined, borderBottom: `1px solid ${isMobile ? theme.divider : "#eef5e8"}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}
-                            onMouseEnter={e => e.currentTarget.style.background = isMobile ? theme.fill : "#f0f7e8"}
+                            style={{ padding: isMobile ? "12px 13px" : "8px 12px", cursor:"pointer", fontSize: isMobile ? 14 : 13, color: isMobile ? theme.ink : undefined, borderBottom: `1px solid ${theme.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                            onMouseEnter={e => e.currentTarget.style.background = theme.fill}
                             onMouseLeave={e => e.currentTarget.style.background="transparent"}
                           >
                             <span>{f.name}</span>
-                            <span style={{ color: isMobile ? theme.onGreen : "#4aaa1a", fontWeight:700, fontSize:12, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{fmtAcresShort(f.acres, isMetric)}</span>
+                            <span style={{ color: theme.onGreen, fontWeight:700, fontSize:12, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{fmtAcresShort(f.acres, isMetric)}</span>
                           </div>
                         ))}
                       </div>
@@ -4184,10 +4253,10 @@ export default function App() {
                 <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
                   <input type="checkbox" checked={!!form.targetZone}
                     onChange={e => setForm(f => ({ ...f, targetZone: e.target.checked, targetZonePct: f.targetZonePct || "28" }))}
-                    style={{ width:20, height:20, accentColor: isMobile ? theme.purple : "#7a4ab0", flexShrink:0 }}/>
+                    style={{ width:20, height:20, accentColor: theme.purple, flexShrink:0 }}/>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.targetZone ? theme.purple : theme.ink) : (form.targetZone ? "#4a2a7a" : "#2a5c0f") }}>Target Zone</div>
-                    <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888" }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
+                    <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
                   </div>
                 </label>
                 {form.targetZone && (
@@ -4195,10 +4264,10 @@ export default function App() {
                     <input type="number" value={form.targetZonePct}
                       onChange={e => set("targetZonePct", e.target.value)}
                       style={isMobile ? { ...inp, width:80, borderRadius:10, background: theme.input, color: theme.ink, borderColor: theme.inputLine } : { ...inp, width:80 }} min="1" max="99" step="0.1" placeholder="28"/>
-                    <span style={{ fontSize:13, color: isMobile ? theme.purple : "#4a2a7a", fontWeight:600 }}>% less than broadcast</span>
+                    <span style={{ fontSize:13, color: theme.purple, fontWeight:600 }}>% less than broadcast</span>
                     {parseFloat(form.galPerAcre) > 0 && parseFloat(form.targetZonePct) > 0 && parseFloat(form.targetZonePct) < 100 && (
-                      <span style={{ fontSize:12, color: isMobile ? theme.ink2 : "#666" }}>
-                        {form.galPerAcre} gal/ac → <strong style={{ color: isMobile ? theme.purple : "#4a2a7a" }}>{calcGpa(form).toFixed(2)} gal/ac</strong> effective
+                      <span style={{ fontSize:12, color: theme.ink2 }}>
+                        {form.galPerAcre} gal/ac → <strong style={{ color: theme.purple }}>{calcGpa(form).toFixed(2)} gal/ac</strong> effective
                       </span>
                     )}
                   </div>
@@ -4213,10 +4282,10 @@ export default function App() {
                   borderRadius:7, padding:"12px 14px" }}>
                   <input type="checkbox" checked={form.primeBoom}
                     onChange={e => set("primeBoom", e.target.checked)}
-                    style={{ width:20, height:20, accentColor: isMobile ? theme.amber : "#c08000", flexShrink:0 }}/>
+                    style={{ width:20, height:20, accentColor: theme.amber, flexShrink:0 }}/>
                   <div>
                     <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.primeBoom ? theme.amber : theme.ink) : (form.primeBoom ? "#7a5000" : "#2a5c0f") }}>Prime</div>
-                    <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888" }}>20 gal before start</div>
+                    <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut }}>20 gal before start</div>
                   </div>
                 </label>
                 <label style={isMobile ? toggleCardT(form.flushCleanout, theme.blue, theme.tintBlue) : { display:"flex", alignItems:"center", gap:10, cursor:"pointer",
@@ -4225,10 +4294,10 @@ export default function App() {
                   borderRadius:7, padding:"12px 14px" }}>
                   <input type="checkbox" checked={form.flushCleanout}
                     onChange={e => set("flushCleanout", e.target.checked)}
-                    style={{ width:20, height:20, accentColor: isMobile ? theme.blue : "#1a6a8a", flexShrink:0 }}/>
+                    style={{ width:20, height:20, accentColor: theme.blue, flexShrink:0 }}/>
                   <div>
                     <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.flushCleanout ? theme.blue : theme.ink) : (form.flushCleanout ? "#0e3a5c" : "#2a5c0f") }}>Flush</div>
-                    <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888" }}>Rinse when done</div>
+                    <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut }}>Rinse when done</div>
                   </div>
                 </label>
               </div>
@@ -4446,12 +4515,12 @@ export default function App() {
                     <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowChemDrop(s=>({...s,__main__:false}))} />
                     <div style={{
                       position:"absolute", bottom:"100%", left:0, right:0, zIndex:99,
-                      background: isMobile ? theme.card : "#fff", border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
+                      background: theme.card, border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
                       boxShadow:"0 -4px 16px rgba(0,0,0,0.12)", maxHeight:220, overflowY:"auto",
                       marginBottom:4
                     }}>
                       {filtered.length === 0 ? (
-                        <div style={{ padding:"10px 12px", fontSize:13, color: isMobile ? theme.mut : "#999" }}>
+                        <div style={{ padding:"10px 12px", fontSize:13, color: theme.mut }}>
                           {q ? "No matching chemicals" : "All chemicals already added or library empty"}
                         </div>
                       ) : filtered.map(c => (
@@ -4468,11 +4537,11 @@ export default function App() {
                             color: isMobile ? theme.ink : undefined,
                             display:"flex", justifyContent:"space-between", alignItems:"center"
                           }}
-                          onMouseEnter={e => e.currentTarget.style.background = isMobile ? theme.fill : "#f0f7e8"}
+                          onMouseEnter={e => e.currentTarget.style.background = theme.fill}
                           onMouseLeave={e => e.currentTarget.style.background="transparent"}
                         >
                           <span style={{ fontWeight:600 }}>{c.name}</span>
-                          <span style={{ fontSize:11, color: isMobile ? theme.mut : "#888" }}>{c.formType}</span>
+                          <span style={{ fontSize:11, color: theme.mut }}>{c.formType}</span>
                         </div>
                       ))}
                     </div>
@@ -4686,12 +4755,11 @@ export default function App() {
           <div style={isMobile ? { margin:"0 -6px" } : undefined}>
 
             {tickets.length === 0 ? (
-              <div style={isMobile
-                ? { textAlign:"center", padding:"36px 24px", color: theme.mut, fontSize:13.5, lineHeight:1.5, border:`1.5px dashed ${theme.dash}`, borderRadius:16, margin:"4px 2px" }
-                : { textAlign:"center", padding:60, color:"#999", fontSize:14 }}>
+              <div style={{ textAlign:"center", padding: isMobile ? "36px 24px" : "56px 24px", color: theme.mut, fontSize:13.5, lineHeight:1.5, border:`1.5px dashed ${theme.dash}`, borderRadius:16, margin:"4px 2px" }}>
+                <div style={{ fontSize:15, fontWeight:800, color: theme.ink, marginBottom:4 }}>No tickets yet</div>
                 {isMobile
-                  ? <><div style={{ fontSize:15, fontWeight:800, color: theme.ink, marginBottom:4 }}>No tickets yet</div>Tap <span style={{ fontWeight:700, color: theme.onGreen }}>+</span> below to create your first one.</>
-                  : "No tickets yet. Create one using the New Ticket tab."}
+                  ? <>Tap <span style={{ fontWeight:700, color: theme.onGreen }}>+</span> below to create your first one.</>
+                  : <>Use <span style={{ fontWeight:700, color: theme.onGreen }}>New ticket</span> at the top right to create your first one.</>}
               </div>
             ) : (() => {
               // Filter tickets by field name and/or chemical name
@@ -4705,46 +4773,55 @@ export default function App() {
               return (
                 <>
                   {/* Search bar */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 12 : 16, maxWidth: isMobile ? undefined : 640 }}>
                     <div style={{ position:"relative" }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={theme.mut} strokeWidth="2.2" strokeLinecap="round"
-                        style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                        style={{ position:"absolute", left: isMobile ? 9 : 12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
                         <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
                       </svg>
                       <input
                         value={logFieldSearch}
                         onChange={e => setLogFieldSearch(e.target.value)}
                         placeholder={isMobile ? "Field…" : "Search by field…"}
-                        style={{ ...inp, paddingLeft:28, fontSize: isMobile ? 16 : 13 }}
+                        style={{ ...inp, paddingLeft: isMobile ? 28 : 32, fontSize: isMobile ? 16 : 13.5, background: isMobile ? theme.input : theme.card }}
                       />
                     </div>
                     <div style={{ position:"relative" }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={theme.mut} strokeWidth="2.2" strokeLinecap="round"
-                        style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                        style={{ position:"absolute", left: isMobile ? 9 : 12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
                         <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
                       </svg>
                       <input
                         value={logChemSearch}
                         onChange={e => setLogChemSearch(e.target.value)}
                         placeholder={isMobile ? "Chemical…" : "Search by chemical…"}
-                        style={{ ...inp, paddingLeft:28, fontSize: isMobile ? 16 : 13 }}
+                        style={{ ...inp, paddingLeft: isMobile ? 28 : 32, fontSize: isMobile ? 16 : 13.5, background: isMobile ? theme.input : theme.card }}
                       />
                     </div>
                   </div>
                   {(fq || cq) && (
-                    <div style={{ fontSize: isMobile ? 12.5 : 12, color: isMobile ? theme.ink2 : "#888", marginBottom: isMobile ? 10 : 8, display:"flex", alignItems:"center", gap:8, justifyContent: isMobile ? "space-between" : "flex-start" }}>
+                    <div style={{ fontSize: isMobile ? 12.5 : 12, color: theme.ink2, marginBottom: isMobile ? 10 : 8, display:"flex", alignItems:"center", gap:8, justifyContent: isMobile ? "space-between" : "flex-start" }}>
                       {filtered.length} of {tickets.length} ticket{tickets.length!==1?"s":""} match
                       <button onClick={() => { setLogFieldSearch(""); setLogChemSearch(""); }}
-                        style={isMobile ? { ...softBtnT, padding:"5px 11px", fontSize:12 } : { background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:11 }}>
+                        style={{ ...softBtnT, padding:"5px 11px", fontSize:12 }}>
                         ✕ clear
                       </button>
                     </div>
                   )}
                   {filtered.length === 0 ? (
-                    <div style={{ textAlign:"center", padding:40, color: isMobile ? theme.mut : "#999", fontSize:13 }}>
+                    <div style={{ textAlign:"center", padding:40, color: theme.mut, fontSize:13 }}>
                       No tickets match your search.
                     </div>
-                  ) : filtered.map(t => {
+                  ) : <div style={isMobile ? undefined : { background: theme.card, border:`1px solid ${theme.line}`, borderRadius:16, overflow:"hidden",
+                        boxShadow: darkMode ? "0 8px 22px -8px rgba(0,0,0,0.55)" : "0 6px 18px -9px rgba(20,40,26,0.16)" }}>
+                  {!isMobile && (
+                    <div style={{ display:"grid", gridTemplateColumns: deskTicketCols, gap:12, padding:"12px 18px", borderBottom:`1px solid ${theme.divider}`,
+                      fontSize:10.5, fontWeight:800, letterSpacing:"0.06em", color: theme.mut, textTransform:"uppercase" }}>
+                      <span>No.</span><span>Crop</span><span>Fields</span><span style={{ textAlign:"right" }}>{isMetric ? "Hectares" : "Acres"}</span>
+                      <span>Applicator</span><span>Date</span><span>Status</span><span />
+                    </div>
+                  )}
+                  {filtered.map(t => {
               const isOpen = expandedTicket === t.id;
               const ticketNum = String(t.ticketNumber || "?").padStart(3, "0");
               const pestStr   = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest||"");
@@ -4765,12 +4842,9 @@ export default function App() {
                   boxShadow: isOpen ? "0 6px 18px -9px rgba(20,40,26,0.22)" : "0 6px 18px -9px rgba(20,40,26,0.16)",
                   overflow:"hidden", transition:"box-shadow 0.15s"
                 } : {
-                  background:"#fff",
-                  border: `1.5px solid ${isOpen ? "#2a5c0f" : "#c8dbb0"}`,
-                  outline: t.team_view ? `3px solid #1a6bbf` : "none",
-                  borderRadius:8, marginBottom:10,
-                  boxShadow: isOpen ? "0 2px 12px rgba(42,92,15,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
-                  overflow:"hidden", transition:"box-shadow 0.15s"
+                  borderBottom:`1px solid ${theme.divider}`,
+                  boxShadow: isOpen ? `inset 3px 0 0 ${theme.green}` : "none",
+                  background: isOpen ? theme.fieldTint : "transparent",
                 }}>
 
                   {/* ── Collapsed row — always visible, tap to toggle */}
@@ -4816,39 +4890,53 @@ export default function App() {
                       setExpandedTicket(next);
                       if (calcTicketId && calcTicketId !== next) setCalcTicketId(null);
                     }}
-                    style={{
-                      display:"flex", alignItems:"center", gap:10, padding:"12px 16px",
-                      cursor:"pointer", userSelect:"none",
-                      background: isOpen ? "#f0f7e8" : "#fff"
-                    }}>
-                    <div style={{
-                      background:"#2a5c0f", color:"#fff", borderRadius:5,
-                      padding:"3px 8px", fontSize:13, fontWeight:800, fontFamily:"monospace",
-                      flexShrink:0
-                    }}>#{ticketNum}</div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                        {t.crop && <span style={{ fontSize:12, color:"#2a5c0f", fontWeight:600 }}>{t.crop}</span>}
-                        <TargetZoneBadge ticket={t} />
-                        {allDates && <span style={{ fontSize:10, fontWeight:700, background:"#d4edda", color:"#1a6b2f", borderRadius:4, padding:"1px 6px" }}>Completed</span>}
-                        {!allDates && anyDate && <span style={{ fontSize:10, fontWeight:700, background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 6px" }}>In Progress</span>}
-                      </div>
-                      <div style={{ fontSize:11, color:"#666", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                        {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"}
-                      </div>
-                    </div>
-                    {isOwner && !allDates && (
-                      <button
-                        onClick={e => { e.stopPropagation(); toggleTeamView(t.id, t.team_view); }}
-                        title={t.team_view ? "Remove from queue" : "Add to queue"}
-                        style={{
-                          width:32, height:32, borderRadius:6, border:"none", cursor:"pointer", flexShrink:0,
-                          background: t.team_view ? "#1a6bbf" : "#e8f0ff",
-                          color:      t.team_view ? "#fff"    : "#1a6bbf",
-                          fontSize: 20, fontWeight: 900, display:"flex", alignItems:"center", justifyContent:"center",
-                        }}
-                      >{t.team_view ? "✓" : "+"}</button>
-                    )}
+                    onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = theme.fieldTint; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    style={{ display:"grid", gridTemplateColumns: deskTicketCols, gap:12, alignItems:"center", padding:"12px 18px", cursor:"pointer", userSelect:"none" }}>
+                    <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.onGreen }}>{ticketNum}</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
+                      <span style={{ fontSize:13.5, fontWeight:700, color: theme.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.crop || "—"}</span>
+                      {isTargetZone(t) && (
+                        <span title="Spot sprayed: loads and tank mix are calculated on the target zone rate"
+                          style={{ background: theme.tintPurple, color: theme.purple, borderRadius:6, padding:"2px 6px", fontSize:9.5, fontWeight:800, whiteSpace:"nowrap" }}>◎ SPOT</span>
+                      )}
+                    </span>
+                    <span title={t.selectedFields?.map(f=>f.name).join(", ")} style={{ fontSize:13, color: theme.ink2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", minWidth:0 }}>
+                      {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"}
+                    </span>
+                    <span style={{ textAlign:"right", fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.ink }}>
+                      {t.totalAcres ? (parseFloat(t.totalAcres) * (isMetric ? AC_TO_HA : 1)).toFixed(1) : "—"}
+                    </span>
+                    <span style={{ fontSize:13, color: theme.ink2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", minWidth:0 }}>{t.licensedApplicant || t.nonLicensedApplicant || "—"}</span>
+                    <span style={{ fontSize:13, color: theme.ink2, whiteSpace:"nowrap" }}>
+                      {t.date ? new Date(t.date + "T12:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year: t.date.slice(0,4) === String(new Date().getFullYear()) ? undefined : "2-digit" }) : "—"}
+                    </span>
+                    <span style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
+                      {statusPill
+                        ? <span style={{ background: statusPill.bg, color: statusPill.color, borderRadius:7, padding:"3px 8px", fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>{statusPill.label}</span>
+                        : <span style={{ background: theme.fill, color: theme.mut, borderRadius:7, padding:"3px 8px", fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>Planned</span>}
+                    </span>
+                    <span style={{ display:"flex", justifyContent:"flex-end" }}>
+                      {isOwner && !allDates ? (
+                        <button
+                          onClick={e => { e.stopPropagation(); toggleTeamView(t.id, t.team_view); }}
+                          title={t.team_view ? "In cab queue — click to remove" : "Add to cab queue"}
+                          aria-label={t.team_view ? "Remove from cab queue" : "Add to cab queue"}
+                          style={{
+                            width:30, height:30, borderRadius:9, border:"none", cursor:"pointer", padding:0,
+                            background: t.team_view ? theme.green : theme.fill,
+                            color:      t.team_view ? "#fff"      : theme.ink2,
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                          }}
+                        >
+                          {t.team_view
+                            ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>
+                            : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 16V6h11v10M14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg>}
+                        </button>
+                      ) : t.team_view ? (
+                        <span title="In cab queue" style={{ color: theme.green, fontSize:11, fontWeight:800 }}>● CAB</span>
+                      ) : null}
+                    </span>
                   </div>
                   )}
 
@@ -4856,7 +4944,7 @@ export default function App() {
                   {isOpen && (
                     <div style={isMobile
                       ? { padding:"10px 10px 12px", borderTop:`1px solid ${theme.divider}` }
-                      : { padding:"14px 16px", borderTop:"1.5px solid #eef5e8" }}>
+                      : { padding:"4px 18px 18px 82px" }}>
                       {isMobile && isOwner && !allDates && (
                         <button
                           onClick={() => toggleTeamView(t.id, t.team_view)}
@@ -4870,7 +4958,7 @@ export default function App() {
                       )}
 
                       {/* Summary row */}
-                      <div style={{ display:"flex", gap: isMobile ? 5 : 8, fontSize: isMobile ? 11.5 : 12, color: isMobile ? theme.ink2 : "#555", flexWrap:"wrap", marginBottom:isMobile?10:10 }}>
+                      <div style={{ display:"flex", gap: isMobile ? 5 : 6, fontSize: isMobile ? 11.5 : 12, color: theme.ink2, flexWrap:"wrap", marginBottom: isMobile ? 10 : 14 }}>
                         {[
                           t.totalAcres        && fmtAcres(t.totalAcres, isMetric),
                           t.galPerAcre        && (isTargetZone(t)
@@ -4879,19 +4967,21 @@ export default function App() {
                           t.equipmentType,
                           t.licensedApplicant,
                         ].filter(Boolean).map((item, i) => (
-                          <span key={i} style={{ background: isMobile ? theme.fill : "#f0f7e8", color: isMobile ? theme.ink2 : "#555", borderRadius: isMobile?7:4, padding: isMobile?"3px 8px":"2px 7px", whiteSpace:"nowrap", fontWeight: isMobile?600:400 }}>{item}</span>
+                          <span key={i} style={{ background: isMobile ? theme.fill : theme.card, border: isMobile ? "none" : `1px solid ${theme.line}`, color: theme.ink2, borderRadius:7, padding:"3px 8px", whiteSpace:"nowrap", fontWeight:600 }}>{item}</span>
                         ))}
                         {(() => {
                           const remAcres = sched.filter(fs => !fs.actualDateEnd).reduce((sum, fs) => sum + (parseFloat(fs.acres) || 0), 0);
                           if (!sched.length || remAcres <= 0) return null;
-                          return <span style={{ background: isMobile ? theme.tintAmber : "#fff3cd", color: theme.amber, borderRadius: isMobile?7:4, padding: isMobile?"3px 8px":"2px 7px", whiteSpace:"nowrap", fontWeight:700 }}>{isMetric ? `${(remAcres * 0.404686).toFixed(1)} ha` : `${remAcres.toFixed(1)} ac`} remaining</span>;
+                          return <span style={{ background: theme.tintAmber, color: theme.amber, borderRadius:7, padding:"3px 8px", whiteSpace:"nowrap", fontWeight:700 }}>{isMetric ? `${(remAcres * 0.404686).toFixed(1)} ha` : `${remAcres.toFixed(1)} ac`} remaining</span>;
                         })()}
                       </div>
 
+                      <div style={isMobile ? undefined : { display:"grid", gridTemplateColumns:"minmax(0,1.55fr) minmax(0,1fr)", gap:28, alignItems:"start", marginBottom:16 }}>
+                      <div>
                       {/* Field schedule — desktop: table. Mobile: a compact one-line grid per
                           field (tappable Date / Wind / Temp cells); the active editor opens in a
                           strip under its row so the row itself never reflows. */}
-                      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:5, display: isMobile ? "block" : "none" }}>FIELD SCHEDULE</div>
+                      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:5 }}>FIELD SCHEDULE</div>
                       {(() => {
                         // status · name · acres · date · wind · temp
                         const mCols = "14px minmax(0,1fr) 40px 60px 46px 30px";
@@ -4906,10 +4996,10 @@ export default function App() {
 
                           // Display values
                           const dateVal = fs.actualDateEnd ? (
-                            <span style={{ color: isMobile ? theme.ink : "#555" }}>
+                            <span style={{ color: theme.ink }}>
                               {new Date(fs.actualDateEnd + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" })}
                             </span>
-                          ) : <span style={{ color: isMobile ? theme.mut : "#bbb", fontSize:11 }}>—</span>;
+                          ) : <span style={{ color: theme.mut, fontSize:11 }}>—</span>;
                           const windVal = w.windSpeed != null
                             ? `${isMetric ? (w.windSpeed * 1.60934).toFixed(1) : w.windSpeed}${w.windDir ? ` ${w.windDir}` : ""}`
                             : "—";
@@ -4920,7 +5010,7 @@ export default function App() {
                           // Inline editors (unchanged behavior: save on blur / Enter, Escape cancels)
                           const dateEditor = (
                             <input type="date" autoFocus defaultValue={fs.actualDateEnd||""}
-                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:150 } : { ...inp, padding:"1px 4px", fontSize:11, width:110 }}
+                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:150 } : { ...inp, padding:"3px 6px", fontSize:13, width:136 }}
                               onBlur={e => { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); }}
                               onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                             />
@@ -4928,12 +5018,12 @@ export default function App() {
                           const windEditor = (
                             <div style={{ display:"flex", gap:3, justifyContent: isMobile ? "flex-start" : "flex-end" }}>
                               <input type="number" autoFocus defaultValue={w.windSpeed??""} min="0"
-                                style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:64 } : { ...inp, padding:"1px 4px", fontSize:11, width:46 }}
+                                style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:64 } : { ...inp, padding:"3px 6px", fontSize:13, width:56 }}
                                 onBlur={e => { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
                                 onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                               />
                               <select defaultValue={w.windDir||""}
-                                style={isMobile ? { ...inp, padding:"4px 4px", fontSize:16, width:72 } : { ...inp, padding:"1px 2px", fontSize:11, width:46 }}
+                                style={isMobile ? { ...inp, padding:"4px 4px", fontSize:16, width:72 } : { ...inp, padding:"3px 4px", fontSize:13, width:62 }}
                                 onChange={e => saveActualTime(t, i, "fieldWeather.windDir", e.target.value || null)}>
                                 <option value="">—</option>
                                 {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
@@ -4942,7 +5032,7 @@ export default function App() {
                           );
                           const tempEditor = (
                             <input type="number" autoFocus defaultValue={w.airTemp??""} min="0"
-                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:72 } : { ...inp, padding:"1px 4px", fontSize:11, width:50 }}
+                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:72 } : { ...inp, padding:"3px 6px", fontSize:13, width:62 }}
                               onBlur={e => { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
                               onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                             />
@@ -4978,13 +5068,22 @@ export default function App() {
                               </div>
                             );
                           }
+                          // Desktop: a not-yet-sprayed field is dimmed (design handoff); editable cells get a hover fill.
+                          const done = !!fs.actualDateEnd;
+                          const cellT = { padding:"7px 8px", textAlign:"right", borderBottom:`1px solid ${theme.divider}`, cursor:"pointer", whiteSpace:"nowrap",
+                            fontFamily:"'Space Grotesk',monospace", fontSize:13, color: theme.ink };
+                          const hov = { onMouseEnter: e => { e.currentTarget.style.background = theme.fill; }, onMouseLeave: e => { e.currentTarget.style.background = "transparent"; } };
                           return (
-                            <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
-                              <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
-                              <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
-                              <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }} onClick={editDate}>{editingDate ? dateEditor : dateVal}</td>
-                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap", cursor:"pointer" }} onClick={editWind}>{editingWind ? windEditor : windVal}</td>
-                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", cursor:"pointer" }} onClick={editTemp}>{editingTemp ? tempEditor : tempVal}</td>
+                            <tr key={fs.id || i}>
+                              <td style={{ padding:"7px 8px 7px 0", borderBottom:`1px solid ${theme.divider}`, fontSize:13, fontWeight:600, color: theme.ink, opacity: done ? 1 : 0.55 }}>
+                                <span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", marginRight:8, verticalAlign:"middle",
+                                  background: done ? theme.green : "transparent", border: done ? "none" : `1.5px solid ${theme.dash}`, boxSizing:"border-box" }} />
+                                {i+1}. {fs.name}
+                              </td>
+                              <td style={{ ...cellT, cursor:"default", color: theme.ink2, opacity: done ? 1 : 0.55 }}>{(parseFloat(fs.acres||0) * (isMetric ? AC_TO_HA : 1)).toFixed(1)}</td>
+                              <td style={cellT} onClick={editDate} {...hov}>{editingDate ? dateEditor : dateVal}</td>
+                              <td style={cellT} onClick={editWind} {...hov}>{editingWind ? windEditor : windVal}</td>
+                              <td style={cellT} onClick={editTemp} {...hov}>{editingTemp ? tempEditor : tempVal}</td>
                             </tr>
                           );
                         });
@@ -5001,22 +5100,23 @@ export default function App() {
                             {rows}
                           </div>
                         ) : (
-                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
+                          <table style={{ width:"100%", borderCollapse:"collapse", background: theme.card, borderRadius:12, overflow:"hidden", boxShadow:`0 0 0 1px ${theme.line}` }}>
                             <thead>
-                              <tr>{["Field","Acres","App. Date","Wind","Temp"].map(h => (
-                                <th key={h} style={{ textAlign: h==="Field"?"left":"right", color:"#4a7a20", fontSize:10, fontWeight:700, paddingBottom:3, borderBottom:"1px solid #c8dbb0" }}>{h}</th>
+                              <tr>{["Field", isMetric ? "Hectares" : "Acres", "App. Date", `Wind (${windSpeedLabel(isMetric)})`, `Temp (${tempLabel(isMetric)})`].map((h, hi) => (
+                                <th key={h} style={{ ...th, padding:"8px", textAlign: hi === 0 ? "left" : "right", paddingLeft: hi === 0 ? 12 : 8 }}>{h}</th>
                               ))}</tr>
                             </thead>
                             <tbody>{rows}</tbody>
                           </table>
                         );
                       })()}
+                      </div>
+                      <div>
 
                       {/* Chemicals */}
                       {t.chemicals.length > 0 && (
                         <>
-                          {isMobile && <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:3 }}>TANK MIX</div>}
-                          {isMobile ? (
+                          <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:3 }}>TANK MIX</div>
                             <div style={{ marginBottom:14 }}>
                               {t.chemicals.map((c,i) => (
                                 <div key={i} style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:10, padding:"6px 0", borderBottom:`1px solid ${theme.divider}` }}>
@@ -5028,40 +5128,24 @@ export default function App() {
                                 </div>
                               ))}
                             </div>
-                          ) : (
-                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
-                            <thead>
-                              <tr>{["Chemical","Rate/Acre","Unit"].map(h => (
-                                <th key={h} style={isMobile
-                                  ? { padding:"4px 0", background:"transparent", color: theme.mut, fontSize:10, fontWeight:700, textAlign:"left", letterSpacing:"0.04em", borderBottom:`1px solid ${theme.divider}` }
-                                  : { ...th, fontSize:10, padding:"4px 6px" }}>{h}</th>
-                              ))}</tr>
-                            </thead>
-                            <tbody>
-                              {t.chemicals.map((c,i) => (
-                                <tr key={i}>
-                                  <td style={isMobile ? { padding:"6px 0", borderBottom:`1px solid ${theme.divider}`, color: theme.ink, fontWeight:600 } : td}>{c.name}</td>
-                                  <td style={isMobile ? { padding:"6px 0", borderBottom:`1px solid ${theme.divider}`, color: theme.ink2, fontFamily:"'Space Grotesk',monospace" } : td}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</td>
-                                  <td style={isMobile ? { padding:"6px 0", borderBottom:`1px solid ${theme.divider}`, color: theme.ink2 } : td}>{c.unit}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          )}
                         </>
                       )}
 
                       {t.notes && (
-                        <div style={isMobile ? {
-                          fontSize:13, color: theme.ink2, lineHeight:1.45, background: theme.fill,
+                        <div style={{
+                          fontSize:13, color: theme.ink2, lineHeight:1.45, background: isMobile ? theme.fill : theme.card,
+                          border: isMobile ? "none" : `1px solid ${theme.line}`,
                           borderRadius:10, padding:"9px 11px", marginBottom:14,
-                        } : { fontSize:12, color:"#666", marginBottom:10 }}>
-                          {isMobile ? t.notes : `Notes: ${t.notes}`}
+                        }}>
+                          {!isMobile && <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:3 }}>NOTES</div>}
+                          {t.notes}
                         </div>
                       )}
+                      </div>
+                      </div>
 
                       {/* Actions */}
-                      <div style={isMobile ? { display:"flex", gap:8 } : { display:"flex", justifyContent:"flex-start", gap:8, flexWrap:"wrap" }}>
+                      <div style={isMobile ? { display:"flex", gap:8 } : { display:"flex", justifyContent:"flex-start", gap:8, flexWrap:"wrap", alignItems:"stretch" }}>
                         <button onClick={() => {
                           setForm({
                             ...blank(),
@@ -5091,12 +5175,9 @@ export default function App() {
                           setExpandedTicket(null);
                           setCalcTicketId(null);
                           setView("form");
-                        }} style={isMobile ? {
-                          flex:1, padding:11, borderRadius:11, border:`1.5px solid ${theme.inputLine}`,
-                          background: theme.card, color: theme.onGreen, fontSize:13, fontWeight:700, cursor:"pointer",
-                        } : {
-                          background:"#e8f5dc", color:"#2a5c0f", border:"1.5px solid #c8dbb0", borderRadius:5,
-                          padding:"7px 14px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
+                        }} style={{
+                          flex: isMobile ? 1 : "none", padding: isMobile ? 11 : "9px 18px", borderRadius:11, border:`1.5px solid ${theme.inputLine}`,
+                          background: theme.card, color: theme.onGreen, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
                         }}>Copy mix</button>
                         <button onClick={() => {
                           printTicket(
@@ -5107,12 +5188,9 @@ export default function App() {
                             currentOrg?.name,
                             isMetric
                           );
-                        }} style={isMobile ? {
-                          flex:1, padding:11, borderRadius:11, border:"none", cursor:"pointer",
-                          background: theme.btnDark, color:"#fff", fontSize:13, fontWeight:700,
-                        } : {
-                          background:"linear-gradient(135deg,#1a4a8a,#0e2a5c)", color:"#fff", border:"none", borderRadius:5,
-                          padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
+                        }} style={{
+                          flex: isMobile ? 1 : "none", padding: isMobile ? 11 : "9px 20px", borderRadius:11, border:"none", cursor:"pointer",
+                          background: theme.btnDark, color:"#fff", fontSize:13, fontWeight:700, fontFamily:"inherit",
                         }}>Print</button>
                         <button onClick={() => {
                           setForm({
@@ -5136,24 +5214,18 @@ export default function App() {
                           setExpandedTicket(null);
                           setCalcTicketId(null);
                           setView("form");
-                        }} style={isMobile ? {
-                          flex:1, padding:11, borderRadius:11, border:`1.5px solid ${theme.inputLine}`,
-                          background: theme.card, color: theme.ink, fontSize:13, fontWeight:700, cursor:"pointer",
-                        } : {
-                          background:"#2a5c0f", color:"#fff", border:"none", borderRadius:5,
-                          padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700
+                        }} style={{
+                          flex: isMobile ? 1 : "none", padding: isMobile ? 11 : "9px 22px", borderRadius:11, cursor:"pointer", fontFamily:"inherit",
+                          border: isMobile ? `1.5px solid ${theme.inputLine}` : "none",
+                          background: isMobile ? theme.card : theme.green, color: isMobile ? theme.ink : "#fff", fontSize:13, fontWeight:700,
                         }}>Edit</button>
                         <button
                           onClick={() => setCalcTicketId(t.id)}
                           title="Partial load calculator"
                           aria-label="Partial load calculator"
-                          style={isMobile ? {
+                          style={{
                             background: theme.tintGreen, color: theme.onGreen, border:"none", borderRadius:11,
-                            cursor:"pointer", width:44, minHeight:44, alignSelf:"stretch",
-                            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, padding:0
-                          } : {
-                            background:"#f0f7e8", color:"#2a5c0f", border:"1.5px solid #c8dbb0", borderRadius:5,
-                            cursor:"pointer", width: isMobile ? 44 : 36, height: isMobile ? 44 : 36,
+                            cursor:"pointer", width: isMobile ? 44 : 40, minHeight: isMobile ? 44 : 38, alignSelf:"stretch",
                             display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, padding:0
                           }}>
                           {/* Inline SVG: 🖩 (U+1F5A9) renders as tofu on iOS/Android and 🧮 is an abacus */}
@@ -5176,6 +5248,7 @@ export default function App() {
                 </div>
               );
             })}
+                  </div>}
                 </>
               );
             })()}
@@ -5696,7 +5769,7 @@ export default function App() {
                                     }}>
                                       {dropResults.map(f => {
                                         const on = matchedField?.id === f.id;
-                                        const hover = isMobile ? theme.fill : "#f0f7e8";
+                                        const hover = theme.fill;
                                         return (
                                         <div key={f.id}
                                           onClick={() => {
@@ -5704,14 +5777,14 @@ export default function App() {
                                             setFmDropState(null);
                                           }}
                                           style={{ padding: isMobile ? "11px 12px" : "6px 10px", cursor:"pointer", fontSize: isMobile ? 14 : 12,
-                                            borderBottom: `1px solid ${isMobile ? theme.divider : "#eef5e8"}`, color: isMobile ? theme.ink : undefined,
+                                            borderBottom: `1px solid ${theme.divider}`, color: isMobile ? theme.ink : undefined,
                                             display:"flex", justifyContent:"space-between", alignItems:"center",
-                                            background: on ? (isMobile ? theme.tintGreen : "#e6f5d0") : "transparent" }}
+                                            background: on ? (theme.tintGreen) : "transparent" }}
                                           onMouseEnter={e => { if (!on) e.currentTarget.style.background = hover; }}
                                           onMouseLeave={e => { if (!on) e.currentTarget.style.background="transparent"; }}
                                         >
                                           <span style={{ fontWeight: on ? 700 : 400 }}>{f.name}</span>
-                                          <span style={{ color: isMobile ? theme.mut : "#888", fontSize:11, whiteSpace:"nowrap", marginLeft:8 }}>
+                                          <span style={{ color: theme.mut, fontSize:11, whiteSpace:"nowrap", marginLeft:8 }}>
                                             {f.crop && <span style={isMobile
                                               ? { ...badgeT(theme.tintGreen, theme.onGreen), fontSize:10, padding:"1px 5px", marginRight:4 }
                                               : { background:"#e6f5d0",color:"#2a5c0f",borderRadius:3,padding:"1px 4px",fontWeight:700,fontSize:10,marginRight:4 }}>{f.crop}</span>}
@@ -5720,14 +5793,14 @@ export default function App() {
                                         </div>
                                         );
                                       })}
-                                      {dropResults.length === 0 && <div style={{ padding:"8px 10px", fontSize:12, color: isMobile ? theme.mut : "#aaa" }}>No fields found</div>}
+                                      {dropResults.length === 0 && <div style={{ padding:"8px 10px", fontSize:12, color: theme.mut }}>No fields found</div>}
                                       <div
                                         onClick={() => {
                                           setFmMatches(prev => ({ ...prev, [fmid]: { ...prev[fmid], fieldId:"__new__", confirmed:true, status:"unmatched" } }));
                                           setFmDropState(null);
                                         }}
-                                        style={{ padding: isMobile ? "11px 12px" : "6px 10px", cursor:"pointer", fontSize: isMobile ? 14 : 12, color: isMobile ? theme.blue : "#1a4a8a", fontWeight:600, borderTop: `1px solid ${isMobile ? theme.line : "#eee"}` }}
-                                        onMouseEnter={e => e.currentTarget.style.background = isMobile ? theme.tintBlue : "#f0f5ff"}
+                                        style={{ padding: isMobile ? "11px 12px" : "6px 10px", cursor:"pointer", fontSize: isMobile ? 14 : 12, color: theme.blue, fontWeight:600, borderTop: `1px solid ${theme.line}` }}
+                                        onMouseEnter={e => e.currentTarget.style.background = theme.tintBlue}
                                         onMouseLeave={e => e.currentTarget.style.background="transparent"}
                                       >＋ Create as new field</div>
                                     </div>
@@ -5738,7 +5811,7 @@ export default function App() {
                           })();
 
                           const boundary = willSkip
-                            ? <span style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888", fontStyle:"italic" }}>skip</span>
+                            ? <span style={{ fontSize: isMobile ? 11 : 10, color: theme.mut, fontStyle:"italic" }}>skip</span>
                             : hasBoundary
                               ? <span style={isMobile ? badgeT(theme.tintAmber, theme.amber) : { background:"#fff3cd", color:"#856404", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>replace</span>
                               : <span style={isMobile ? badgeT(theme.tintGreen, theme.onGreen) : { background:"#d4edda", color:"#155724", borderRadius:3, padding:"1px 6px", fontSize:10, fontWeight:700 }}>add</span>;
@@ -5809,7 +5882,7 @@ export default function App() {
                               Fill missing only — skip fields that already have a boundary
                             </label>
                             {fmFillMissingOnly && skipCount > 0 && (
-                              <span style={{ fontSize:11, color: isMobile ? theme.mut : "#888" }}>{skipCount} field{skipCount !== 1 ? "s" : ""} will be skipped</span>
+                              <span style={{ fontSize:11, color: theme.mut }}>{skipCount} field{skipCount !== 1 ? "s" : ""} will be skipped</span>
                             )}
                           </div>
                         );
@@ -5821,7 +5894,7 @@ export default function App() {
                           ⚠ Review {unconfirmed} {isMobile ? "amber-outlined card" : "yellow row"}{unconfirmed !== 1 ? "s" : ""} before importing
                         </div>
                       )}
-                      {fmImportError && <div style={{ color: isMobile ? theme.red : "#c0392b", fontSize: isMobile ? 13 : 12, marginBottom:8 }}>{fmImportError}</div>}
+                      {fmImportError && <div style={{ color: theme.red, fontSize: isMobile ? 13 : 12, marginBottom:8 }}>{fmImportError}</div>}
 
                       <div style={isMobile ? { display:"flex", flexDirection:"column", gap:8 } : { display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
                         <button
@@ -5856,8 +5929,8 @@ export default function App() {
                   {fmStage === "result" && fmResult && (
                     <div>
                       <div style={{ marginBottom:12 }}>
-                        <div style={{ color: isMobile ? theme.onGreen : "#2a7a1f", fontWeight:700, fontSize: isMobile ? 14 : 13 }}>✓ {fmResult.updated} boundaries imported to existing fields</div>
-                        <div style={{ color: isMobile ? theme.blue : "#1a4a8a", fontWeight:700, fontSize: isMobile ? 14 : 13 }}>✓ {fmResult.created} new fields created</div>
+                        <div style={{ color: theme.onGreen, fontWeight:700, fontSize: isMobile ? 14 : 13 }}>✓ {fmResult.updated} boundaries imported to existing fields</div>
+                        <div style={{ color: theme.blue, fontWeight:700, fontSize: isMobile ? 14 : 13 }}>✓ {fmResult.created} new fields created</div>
                       </div>
                       {isMobile ? (
                         <div style={{ background: theme.fill, borderRadius:12, marginBottom:12, maxHeight:320, overflowY:"auto" }}>
@@ -5939,8 +6012,8 @@ export default function App() {
                     ].map(({ key, label, required, hint }) => (
                       <div key={key}>
                         <label style={isMobile ? { ...labelT, marginBottom:5 } : { ...labelT, fontSize:11 }}>
-                          {label}{required && <span style={{ color: isMobile ? theme.red : "#c0392b" }}> *</span>}
-                          {hint && <span style={{ fontWeight:400, color: isMobile ? theme.mut : "#aaa", marginLeft:5, fontSize:10, textTransform: isMobile ? "none" : undefined }}>{hint}</span>}
+                          {label}{required && <span style={{ color: theme.red }}> *</span>}
+                          {hint && <span style={{ fontWeight:400, color: theme.mut, marginLeft:5, fontSize:10, textTransform: isMobile ? "none" : undefined }}>{hint}</span>}
                         </label>
                         <select value={csvColMap[key]}
                           onChange={e => setCsvColMap(m => ({ ...m, [key]: e.target.value }))}
@@ -5967,7 +6040,7 @@ export default function App() {
                       <div style={isMobile
                         ? { background: theme.tintAmber, border:`1.5px solid ${theme.amber}`, borderRadius:14, padding:"11px 12px", marginBottom:12 }
                         : { background:"#fffbe8", border:"1.5px solid #e0c040", borderRadius:6, padding:"10px 14px", marginBottom:12 }}>
-                        <div style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: isMobile ? theme.amber : "#7a5000", marginBottom: isMobile ? 10 : 8, lineHeight: isMobile ? 1.4 : undefined }}>
+                        <div style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: theme.amber, marginBottom: isMobile ? 10 : 8, lineHeight: isMobile ? 1.4 : undefined }}>
                           ⚠ {unknownCrops.length} crop name{unknownCrops.length > 1 ? "s" : ""} not in the standard list — map each one or add as custom.
                         </div>
                         {unknownCrops.map(raw => (
@@ -5975,7 +6048,7 @@ export default function App() {
                             <code style={isMobile
                               ? { ...badgeT(theme.card, theme.amber), fontSize:13, fontFamily:"'Space Grotesk',monospace" }
                               : { background:"#fff3cd", borderRadius:3, padding:"2px 6px", fontSize:12, color:"#856404", whiteSpace:"nowrap" }}>{raw}</code>
-                            <span style={{ fontSize:11, color: isMobile ? theme.amber : "#888" }}>→</span>
+                            <span style={{ fontSize:11, color: theme.amber }}>→</span>
                             <select
                               value={csvCropMap[raw] ?? "__keep__"}
                               onChange={e => setCsvCropMap(prev => ({ ...prev, [raw]: e.target.value === "__keep__" ? undefined : e.target.value }))}
@@ -6024,7 +6097,7 @@ export default function App() {
                           <div key={gi} style={isMobile
                             ? { background: theme.tintBlue, border:`1.5px solid ${theme.blue}`, borderRadius:12, padding:"9px 11px", marginBottom:8, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }
                             : { background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:5, padding:"6px 10px", marginBottom:6, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                            <span style={{ fontSize: isMobile ? 12.5 : 11, color: isMobile ? theme.blue : "#1a3a6a", fontWeight:700 }}>Merged group {gi+1}:</span>
+                            <span style={{ fontSize: isMobile ? 12.5 : 11, color: theme.blue, fontWeight:700 }}>Merged group {gi+1}:</span>
                             <select value={g.name} onChange={e => setCsvMergeGroups(prev => prev.map((x,i) => i===gi ? {...x, name: e.target.value} : x))}
                               style={isMobile ? { ...sel, flex:"1 1 100%", order:3, padding:"8px 10px" } : { ...inp, fontSize:11, padding:"2px 4px" }}>
                               {g.indices.map(idx => {
@@ -6032,7 +6105,7 @@ export default function App() {
                                 return n ? <option key={idx} value={n}>{n}</option> : null;
                               })}
                             </select>
-                            <span style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.ink2 : "#555", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{g.acres.toFixed(1)} ac combined</span>
+                            <span style={{ fontSize: isMobile ? 12 : 11, color: theme.ink2, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{g.acres.toFixed(1)} ac combined</span>
                             <button onClick={() => setCsvMergeGroups(prev => prev.filter((_,i) => i!==gi))} aria-label={`Undo merged group ${gi+1}`}
                               style={isMobile ? { ...delBtnT, background: theme.card, marginLeft:"auto" } : { background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:13, marginLeft:"auto" }}>×</button>
                           </div>
@@ -6315,7 +6388,7 @@ export default function App() {
                 <div style={isMobile
                   ? { background: theme.tintBlue, border:`1.5px solid ${theme.blue}`, borderRadius:14, padding:"12px 13px", marginBottom:10 }
                   : { background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:6, padding:"10px 14px", marginBottom:10 }}>
-                  <div style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: isMobile ? theme.blue : "#1a3a6a", marginBottom: isMobile ? 10 : 8, lineHeight: isMobile ? 1.4 : undefined }}>
+                  <div style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: theme.blue, marginBottom: isMobile ? 10 : 8, lineHeight: isMobile ? 1.4 : undefined }}>
                     Merge {fieldMergeIds.size} fields — boundaries will be unioned, acres recalculated from geometry
                   </div>
                   <div style={isMobile
@@ -7402,7 +7475,7 @@ export default function App() {
                 </div>
               )}
               {pestLibrary.length === 0
-                ? <p style={{ color: isMobile ? theme.mut : "#aaa", fontSize:13 }}>No pests in library yet.</p>
+                ? <p style={{ color: theme.mut, fontSize:13 }}>No pests in library yet.</p>
                 : (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                     {pestLibrary.map(p => (
@@ -7432,7 +7505,7 @@ export default function App() {
             <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
               <div>
                 <div style={{ ...sectionTitleT, marginBottom:2 }}>👥 {currentOrg?.name}</div>
-                <div style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.mut : "#888" }}>
+                <div style={{ fontSize: isMobile ? 12 : 11, color: theme.mut }}>
                   {session?.user?.email} · {userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : userRole === "applicator" ? "Applicator" : "Viewer"}
                 </div>
               </div>
@@ -7467,10 +7540,10 @@ export default function App() {
             <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
               <div style={{ ...sectionTitleT, marginBottom:10 }}>Appearance</div>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:600, color: isMobile ? theme.ink : "#333" }}>Dark mode</span>
+                <span style={{ fontSize:13, fontWeight:600, color: theme.ink }}>Dark mode</span>
                 <button onClick={() => setDarkMode(d => !d)} style={{
                   width:46, height:26, borderRadius:13, border:"none", cursor:"pointer", position:"relative",
-                  background: darkMode ? theme.green : (isMobile ? theme.dash : "#ccc"), transition:"background 0.15s",
+                  background: darkMode ? theme.green : (theme.dash), transition:"background 0.15s",
                 }}>
                   <span style={{
                     position:"absolute", top:2, left: darkMode ? 22 : 2, width:22, height:22, borderRadius:"50%",
@@ -7478,7 +7551,7 @@ export default function App() {
                   }} />
                 </button>
               </div>
-              <div style={{ fontSize:13, fontWeight:600, color: isMobile ? theme.ink : "#333", marginBottom:8 }}>Accent color</div>
+              <div style={{ fontSize:13, fontWeight:600, color: theme.ink, marginBottom:8 }}>Accent color</div>
               <div style={{ display:"flex", gap: isMobile ? 12 : 8, padding: isMobile ? "0 4px" : 0 }}>
                 {ACCENTS.map(c => (
                   // Mobile: selection is a ring in the ink color (a #333 border vanishes in dark mode).
@@ -7610,10 +7683,10 @@ export default function App() {
                           if (error) showToast("Failed to update: " + error.message);
                           else setCurrentOrg(prev => ({ ...prev, features: next }));
                         }}
-                        style={{ width:20, height:20, accentColor: isMobile ? theme.purple : "#7a4ab0", flexShrink:0, marginTop:1 }}/>
+                        style={{ width:20, height:20, accentColor: theme.purple, flexShrink:0, marginTop:1 }}/>
                       <div>
                         <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (on ? theme.purple : theme.ink) : (on ? "#4a2a7a" : "#2a5c0f") }}>{label}</div>
-                        <div style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.mut : "#777", marginTop:2, lineHeight: isMobile ? 1.4 : undefined }}>{desc}</div>
+                        <div style={{ fontSize: isMobile ? 12 : 11, color: theme.mut, marginTop:2, lineHeight: isMobile ? 1.4 : undefined }}>{desc}</div>
                       </div>
                     </label>
                   );
@@ -7629,9 +7702,9 @@ export default function App() {
                   Used for weather auto-fill on tickets. Enter a city, town, or postal code — works worldwide.
                 </div>
                 {currentOrg?.farm_zip && (
-                  <div style={{ fontSize: isMobile ? 13 : 12, color: isMobile ? theme.onGreen : "#2a5c0f", fontWeight:600, marginBottom:8 }}>
+                  <div style={{ fontSize: isMobile ? 13 : 12, color: theme.onGreen, fontWeight:600, marginBottom:8 }}>
                     Current: {currentOrg.farm_zip}
-                    <span style={{ fontWeight:400, color: isMobile ? theme.mut : "#888", marginLeft:8, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>
+                    <span style={{ fontWeight:400, color: theme.mut, marginLeft:8, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>
                       ({parseFloat(currentOrg.farm_lat).toFixed(4)}, {parseFloat(currentOrg.farm_lng).toFixed(4)})
                     </span>
                   </div>
@@ -7657,7 +7730,7 @@ export default function App() {
               <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                 <div>
                   <div style={{ ...sectionTitleT, marginBottom:2 }}>Organization Plan</div>
-                  <div style={{ fontSize: isMobile ? 12 : 11, color: isMobile ? theme.mut : "#888" }}>
+                  <div style={{ fontSize: isMobile ? 12 : 11, color: theme.mut }}>
                     {currentOrg?.plan === "pro" ? "⭐ Pro — all members have Pro access" : "Basic — upgrade to give all members Pro access"}
                   </div>
                 </div>
@@ -7818,9 +7891,9 @@ export default function App() {
                     Send Invite
                   </button>
                 </div>
-                <div style={{ marginTop:12, background: isMobile ? theme.fill : "#f0f7e8", borderRadius: isMobile ? 10 : 6, padding:"10px 12px", fontSize: isMobile ? 12 : 11, color: isMobile ? theme.ink2 : "#444" }}>
+                <div style={{ marginTop:12, background: theme.fill, borderRadius: isMobile ? 10 : 6, padding:"10px 12px", fontSize: isMobile ? 12 : 11, color: theme.ink2 }}>
                   <strong>App link to share:</strong>{" "}
-                  <a href="https://boomlog.app" target="_blank" rel="noopener noreferrer" style={{ color: isMobile ? theme.onGreen : "#2a5c0f" }}>
+                  <a href="https://boomlog.app" target="_blank" rel="noopener noreferrer" style={{ color: theme.onGreen }}>
                     boomlog.app
                   </a>
                 </div>
@@ -7834,7 +7907,7 @@ export default function App() {
                 <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
                   style={isMobile ? { ...inp, padding:"8px 8px", flex:1, minWidth:0 } : { border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
                   title="Report from date"/>
-                <span style={{ fontSize:12, color: isMobile ? theme.mut : "#888", flexShrink:0 }}>–</span>
+                <span style={{ fontSize:12, color: theme.mut, flexShrink:0 }}>–</span>
                 <input type="date" value={tdaTo} onChange={e=>setTdaTo(e.target.value)}
                   style={isMobile ? { ...inp, padding:"8px 8px", flex:1, minWidth:0 } : { border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
                   title="Report to date"/>
@@ -7875,8 +7948,8 @@ export default function App() {
               <div style={isMobile
                 ? { ...cardT, padding:"10px 12px", marginTop:12, border:`1.5px solid ${theme.red}` }
                 : { ...cardT, padding:"14px 18px", marginTop:12, border:"1.5px solid #e0a0a0", background:"#fffafa" }}>
-                <div style={{ ...sectionTitleT, color: isMobile ? theme.red : "#c0392b", marginBottom:4 }}>⚠ Danger Zone</div>
-                <div style={{ fontSize:12, color: isMobile ? theme.red : "#c0392b", marginBottom:14, fontWeight:600 }}>
+                <div style={{ ...sectionTitleT, color: theme.red, marginBottom:4 }}>⚠ Danger Zone</div>
+                <div style={{ fontSize:12, color: theme.red, marginBottom:14, fontWeight:600 }}>
                   These actions permanently delete data and cannot be undone.
                 </div>
 
@@ -7888,8 +7961,8 @@ export default function App() {
                   <div key={key} style={{ marginBottom:12, paddingBottom:12, borderBottom: isMobile ? `1px solid ${theme.divider}` : "1px solid #f0d0d0" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap: isMobile ? "nowrap" : "wrap" }}>
                       <div style={{ minWidth:0 }}>
-                        <div style={{ fontWeight:700, fontSize: isMobile ? 14 : 13, color: isMobile ? theme.ink : "#333" }}>{label}</div>
-                        <div style={{ fontSize:12, color: isMobile ? theme.mut : "#888", marginTop:2, lineHeight: isMobile ? 1.4 : undefined }}>{desc}</div>
+                        <div style={{ fontWeight:700, fontSize: isMobile ? 14 : 13, color: theme.ink }}>{label}</div>
+                        <div style={{ fontSize:12, color: theme.mut, marginTop:2, lineHeight: isMobile ? 1.4 : undefined }}>{desc}</div>
                       </div>
                       <button
                         onClick={() => { setResetAction(resetAction === key ? null : key); setResetConfirm(""); }}
@@ -7905,7 +7978,7 @@ export default function App() {
                       <div style={isMobile
                         ? { marginTop:10, background: theme.tintRed, borderRadius:12, padding:"11px 12px" }
                         : { marginTop:10, background:"#fff0f0", border:"1px solid #f0b0b0", borderRadius:6, padding:"10px 12px" }}>
-                        <div style={{ fontSize:12, fontWeight:700, color: isMobile ? theme.red : "#c0392b", marginBottom:8 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color: theme.red, marginBottom:8 }}>
                           Type <strong>DELETE</strong> to confirm — this cannot be undone.
                         </div>
                         <div style={{ display:"flex", gap:8 }}>
@@ -7965,31 +8038,6 @@ export default function App() {
 
       {/* ── Floating Sector Chat (Pro only) ──────────────────────────── */}
 
-      {/* Floating bubble — hidden when chat is open, the calculator is up, or on mobile (bottom nav takes that space) */}
-      {isPro && !isViewer && !chatOpen && !calcTicketId && !isMobile && (
-        <button
-          onClick={() => setChatOpen(true)}
-          title="Application Sector Advisor"
-          style={{
-            position: "fixed",
-            bottom: isMobile ? 16 : 28,
-            right: isMobile ? 16 : 28,
-            zIndex: 1000,
-            width: isMobile ? 52 : 58,
-            height: isMobile ? 52 : 58,
-            borderRadius: "50%",
-            background: "linear-gradient(135deg,#2a5c0f,#4aaa1a)",
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
-            fontSize: isMobile ? 22 : 26,
-            boxShadow: "0 4px 18px rgba(42,92,15,0.45)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-          aria-label="Open advisor chat"
-        >💬</button>
-      )}
-
       {isPro && !isViewer && chatOpen && isMobile && (
         <div onClick={() => setChatOpen(false)} style={{ position:"fixed", inset:0, zIndex:999, background:"rgba(10,20,14,0.45)" }} />
       )}
@@ -8001,55 +8049,25 @@ export default function App() {
           display: "flex", flexDirection: "column", overflow: "hidden",
           fontFamily: "'Hanken Grotesk',system-ui,sans-serif",
         } : {
-          position: "fixed",
-          bottom: isMobile ? 0 : 96,
-          right: isMobile ? 0 : 28,
-          width: isMobile ? "100vw" : 380,
-          height: isMobile ? "90vh" : 520,
-          zIndex: 1000,
-          background: "#fff",
-          borderRadius: isMobile ? "16px 16px 0 0" : 10,
-          boxShadow: "0 8px 40px rgba(0,0,0,0.22)",
-          border: "1.5px solid #c8dbb0",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          fontFamily: "'Georgia','Times New Roman',serif",
+          // Desktop: a panel docked to the right, under the topbar.
+          position: "fixed", top: 84, right: 24, bottom: 24, width: 400, zIndex: 1000,
+          background: theme.canvas, border: `1px solid ${theme.line}`, borderRadius: 18,
+          boxShadow: "0 18px 50px -12px rgba(10,30,18,0.35)",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+          fontFamily: "'Hanken Grotesk',system-ui,sans-serif",
         }}>
           {/* Header */}
-          {isMobile ? (
-            <div style={{ padding:"10px 16px 12px", flexShrink:0, borderBottom:`1px solid ${theme.line}` }}>
-              <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 12px" }} />
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-                <div>
-                  <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.06em", color: theme.mut, textTransform:"uppercase" }}>AI advisor</div>
-                  <div style={{ fontSize:18, fontWeight:800, color: theme.ink }}>Application Sector Advisor</div>
-                </div>
-                <button onClick={() => setChatOpen(false)} aria-label="Close"
-                  style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:19, lineHeight:1, cursor:"pointer", flexShrink:0 }}>×</button>
+          <div style={{ padding: isMobile ? "10px 16px 12px" : "14px 16px", flexShrink:0, borderBottom:`1px solid ${theme.line}`, background: isMobile ? "transparent" : theme.card }}>
+            {isMobile && <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 12px" }} />}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+              <div>
+                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.06em", color: theme.mut, textTransform:"uppercase" }}>AI advisor</div>
+                <div style={{ fontSize: isMobile ? 18 : 16, fontWeight:800, color: theme.ink }}>Application Sector Advisor</div>
               </div>
+              <button onClick={() => setChatOpen(false)} aria-label="Close"
+                style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:19, lineHeight:1, cursor:"pointer", flexShrink:0 }}>×</button>
             </div>
-          ) : (
-          <div style={{
-            background: "linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)",
-            padding: "12px 14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexShrink: 0,
-          }}>
-            <div>
-              <div style={{ color: "#a8d878", fontSize: 9, letterSpacing: "0.15em", fontWeight: 700, textTransform: "uppercase" }}>AI ADVISOR</div>
-              <div style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>Application Sector Advisor</div>
-            </div>
-            <button
-              onClick={() => setChatOpen(false)}
-              style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", fontSize: 18,
-                cursor: "pointer", lineHeight: 1, padding: "4px 9px", borderRadius: 6, fontWeight: 700 }}
-              aria-label="Close"
-            >✕</button>
           </div>
-          )}
 
           {/* Messages */}
           <div style={{
@@ -8057,7 +8075,7 @@ export default function App() {
             display: "flex", flexDirection: "column", gap: 10,
           }}>
             {chatMessages.length === 0 && (
-              <div style={{ color: isMobile ? theme.mut : "#888", fontSize: 13, textAlign: "center", marginTop: 32, lineHeight: 1.8, padding: "0 16px" }}>
+              <div style={{ color: theme.mut, fontSize: 13, textAlign: "center", marginTop: 32, lineHeight: 1.8, padding: "0 16px" }}>
                 Ask about your records — fields sprayed, chemicals used, dates, rates, and more.
               </div>
             )}
@@ -8065,23 +8083,20 @@ export default function App() {
               <div key={i} style={{ alignSelf: msg.role === "user" ? "flex-end" : "flex-start", maxWidth: "90%" }}>
                 {msg.role === "user" ? (
                   <div style={{
-                    background: isMobile ? theme.green : "#2a5c0f", color: "#fff",
-                    borderRadius: isMobile ? "18px 18px 4px 18px" : "16px 16px 2px 16px",
+                    background: theme.green, color: "#fff",
+                    borderRadius: "18px 18px 4px 18px",
                     padding: "9px 14px", fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
                   }}>{msg.content}</div>
                 ) : (
-                  <div style={isMobile ? {
+                  <div style={{
                     background: theme.card, border: `1px solid ${theme.line}`,
                     borderRadius: "4px 18px 18px 18px", padding: "11px 13px",
-                  } : {
-                    background: "#f4fbee", border: "1.5px solid #c8dbb0",
-                    borderRadius: "2px 16px 16px 16px", padding: "10px 12px",
                   }}>{renderReportMarkdown(msg.content)}</div>
                 )}
               </div>
             ))}
             {chatLoading && (
-              <div style={{ alignSelf: "flex-start", color: isMobile ? theme.mut : "#888", fontSize: 13, fontStyle: "italic", padding: "4px 8px" }}>
+              <div style={{ alignSelf: "flex-start", color: theme.mut, fontSize: 13, fontStyle: "italic", padding: "4px 8px" }}>
                 Thinking…
               </div>
             )}
@@ -8090,16 +8105,15 @@ export default function App() {
 
           {/* Input row — send button inside the pill */}
           <div style={{
-            borderTop: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0",
+            borderTop: `1px solid ${theme.line}`,
             padding: isMobile ? "10px 12px calc(14px + env(safe-area-inset-bottom))" : "10px 12px",
             flexShrink: 0,
-            background: isMobile ? theme.card : "#f9fdf5",
+            background: theme.card,
           }}>
             <div style={{
               display: "flex", alignItems: "center",
-              background: isMobile ? theme.input : "#fff", border: isMobile ? `1.5px solid ${theme.inputLine}` : "2px solid #2a5c0f",
+              background: theme.input, border: `1.5px solid ${theme.inputLine}`,
               borderRadius: 14, overflow: "hidden",
-              boxShadow: isMobile ? "none" : "0 1px 6px rgba(42,92,15,0.10)",
             }}>
               <input
                 value={chatInput}
@@ -8109,17 +8123,17 @@ export default function App() {
                 disabled={chatLoading}
                 style={{
                   flex: 1, border: "none", outline: "none",
-                  fontSize: 16, padding: "12px 14px",
+                  fontSize: isMobile ? 16 : 14, padding: "12px 14px",
                   background: "transparent", fontFamily: "inherit",
-                  color: isMobile ? theme.ink : undefined,
+                  color: theme.ink,
                 }}
               />
               <button
                 onClick={submitSectorChat}
                 disabled={!chatInput.trim() || chatLoading}
                 style={{
-                  background: !chatInput.trim() || chatLoading ? (isMobile ? theme.fill : "#aaa") : (isMobile ? theme.green : "#2a5c0f"),
-                  color: isMobile && (!chatInput.trim() || chatLoading) ? theme.mut : "#fff", border: "none",
+                  background: !chatInput.trim() || chatLoading ? (theme.fill) : (theme.green),
+                  color: !chatInput.trim() || chatLoading ? theme.mut : "#fff", border: "none",
                   borderRadius: 10, margin: 5,
                   width: 44, height: 44, flexShrink: 0,
                   cursor: !chatInput.trim() || chatLoading ? "default" : "pointer",
@@ -8128,7 +8142,7 @@ export default function App() {
                 }}
               >➤</button>
             </div>
-            <div style={{ fontSize: 10, color: isMobile ? theme.mut : "#aaa", textAlign: "center", marginTop: 5 }}>
+            <div style={{ fontSize: 10, color: theme.mut, textAlign: "center", marginTop: 5 }}>
               AI can make mistakes. Verify important information.
             </div>
           </div>
