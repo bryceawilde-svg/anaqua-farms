@@ -1052,7 +1052,7 @@ const card = { border:"1.5px solid #c8dbb0", borderRadius:8, padding:"14px 16px"
 const sectionTitle = { fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10, borderBottom:"2px solid #c8dbb0", paddingBottom:4 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function FieldTag({ field, onRemove, onAcresChange, isMobile = false }) {
+function FieldTag({ field, onRemove, onAcresChange, isMobile = false, theme = DEFAULT_THEME }) {
   const [editing, setEditing] = React.useState(false);
   const [val, setVal]         = React.useState("");
   const origAcres = field._origAcres ?? field.acres;
@@ -1075,11 +1075,11 @@ function FieldTag({ field, onRemove, onAcresChange, isMobile = false }) {
 
   return (
     <span style={{
-      display:"inline-flex", alignItems:"center", gap:4,
-      background: modified ? "#fff3cc" : "#d4e8c2",
-      color:"#2a5c0f", borderRadius:5,
-      border: modified ? "1.5px solid #c8a000" : "1.5px solid transparent",
-      padding:"3px 7px", fontSize:12, fontWeight:600, margin:"2px 3px 2px 0"
+      display:"inline-flex", alignItems:"center", gap:5,
+      background: modified ? theme.tintAmber : theme.tintGreen,
+      color: theme.onGreen, borderRadius:8,
+      border: `1.5px solid ${modified ? theme.amber : "transparent"}`,
+      padding:"4px 8px", fontSize:12.5, fontWeight:600, margin:"2px 4px 2px 0"
     }}>
       <span>{field.name}</span>
       {editing ? (
@@ -1093,9 +1093,9 @@ function FieldTag({ field, onRemove, onAcresChange, isMobile = false }) {
           type="number" min="0.1" step="0.1"
           style={{
             width: isMobile ? 64 : 54, fontSize: isMobile ? 16 : 12, fontWeight:700,
-            border:"1.5px solid #2a5c0f", borderRadius:3,
-            padding:"1px 4px", background:"#fff", color:"#2a5c0f",
-            outline:"none"
+            border:`1.5px solid ${theme.green}`, borderRadius:6,
+            padding:"1px 4px", background: theme.input, color: theme.ink,
+            outline:"none", fontFamily:"inherit"
           }}
         />
       ) : (
@@ -1104,15 +1104,15 @@ function FieldTag({ field, onRemove, onAcresChange, isMobile = false }) {
           title={modified ? `Original: ${origAcres} ac — tap to edit` : "Tap to edit acres"}
           style={{
             opacity: modified ? 1 : 0.72, fontSize:11,
-            cursor:"pointer", borderBottom:"1px dashed #2a5c0f",
-            color: modified ? "#8a6000" : "#2a5c0f",
+            cursor:"pointer", borderBottom:`1px dashed ${modified ? theme.amber : theme.onGreen}`,
+            color: modified ? theme.amber : theme.onGreen, fontFamily:"'Space Grotesk',monospace",
             fontWeight: modified ? 700 : 600
           }}
         >({parseFloat(field.acres).toFixed(2)} ac{modified ? " ✎" : ""})</span>
       )}
-      <button onClick={onRemove} style={{
+      <button onClick={onRemove} aria-label={`Remove ${field.name}`} style={{
         background:"none", border:"none", cursor:"pointer",
-        color:"#2a5c0f", fontWeight:700, fontSize:13, lineHeight:1, padding:0, marginLeft:1
+        color: theme.onGreen, fontWeight:700, fontSize:15, lineHeight:1, padding:0, marginLeft:1
       }}>×</button>
     </span>
   );
@@ -1293,103 +1293,79 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
     );
   }
 
+  // Desktop: one wide row — name + controls on the left, the tank amounts on the right.
+  const segT = (on) => ({ padding:"5px 11px", border:"none", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"inherit",
+    background: on ? t_.card : "transparent", color: on ? t_.ink : t_.mut, boxShadow: on ? "0 1px 3px rgba(0,0,0,0.14)" : "none" });
+  const chipT = (on, fg, bg) => ({ padding:"5px 10px", borderRadius:8, border:"none", cursor:"pointer", fontSize:11.5, fontWeight:700, fontFamily:"inherit",
+    background: on ? bg : t_.fill, color: on ? fg : t_.mut });
+  const amtLabel = { fontSize:9.5, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase" };
   return (
-    <div style={{
-      border:"1.5px solid #c8dbb0", borderRadius:8, padding:"10px 12px",
-      background:"#f9fdf5", display:"grid", gridTemplateColumns:"1fr 1fr", gap:0
-    }}>
-      {/* LEFT HALF: name + rate controls + options */}
-      <div style={{ display:"flex", flexDirection:"column", gap:7, paddingRight:12, borderRight:"1px solid #d8ecc0" }}>
-        {/* Chemical name + remove */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:4 }}>
-          <span style={{
-            fontWeight:700, fontSize:14, color:"#1a3c08",
-            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1
-          }}>
-            {selected?.name || "—"}
+    <div style={{ border:`1.5px solid ${t_.inputLine}`, borderRadius:14, padding:"12px 16px", background: t_.card,
+      display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(150px,210px)", gap:18, alignItems:"center" }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:10, minWidth:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+          <span style={{ minWidth:26, height:26, padding:"0 4px", boxSizing:"border-box", borderRadius:7, background: t_.tintBlue, color: t_.blue, fontSize:9.5, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            {selected?.formType || "—"}
           </span>
-          <button onClick={onRemove} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:20, padding:"0 2px", lineHeight:1, flexShrink:0 }}>×</button>
+          <span style={{ flex:1, fontSize:14.5, fontWeight:700, color: t_.ink, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{selected?.name || "—"}</span>
+          <button onClick={onRemove} aria-label={`Remove ${selected?.name || "chemical"}`} title="Remove"
+            style={{ background: t_.fill, border:"none", color: t_.red || t_.mut, fontSize:17, lineHeight:1, cursor:"pointer", width:28, height:28, borderRadius:8, flexShrink:0 }}>×</button>
         </div>
-
-        {/* Rate input + stacked mode chips + unit */}
-        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-          {inputMode === "rate" ? (
-            <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
-              style={{...inp, width:76}} placeholder="0" type="number" min="0" step="0.1"/>
-          ) : (
-            <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
-              style={{...inp, width:76}} placeholder="0" type="number" min="0" step="0.01"/>
+        <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:2, background: t_.fill, borderRadius:10, padding:3 }}>
+            <button onClick={() => onChange("inputMode","rate")} style={segT(inputMode==="rate")}>Rate / ac</button>
+            <button onClick={() => onChange("inputMode","galtank")} style={segT(inputMode==="galtank")}>{galtankLabel}</button>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+            {inputMode === "rate" ? (
+              <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
+                style={{ width:84, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:"7px 8px", fontSize:15, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace", outline:"none" }}
+                placeholder="0" type="number" min="0" step="0.1"/>
+            ) : (
+              <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
+                style={{ width:84, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:"7px 8px", fontSize:15, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace", outline:"none" }}
+                placeholder="0" type="number" min="0" step="0.01"/>
+            )}
+            <div>
+              <div style={{ fontSize:12, color: t_.ink2, fontWeight:600 }}>{inputMode === "rate" ? `${baseUnit}/ac` : galtankLabel}</div>
+              {inputMode === "galtank" && galtankLabelRate && (
+                <div style={{ fontSize:10.5, color: t_.mut }}>= {parseFloat(galtankLabelRate).toFixed(2)} {baseUnit}/ac</div>
+              )}
+            </div>
+          </div>
+          {isOzUnit && (
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+              <button onClick={() => onChange("roundQtrGal", !roundQtr)} style={chipT(roundQtr, t_.blue, t_.tintBlue)} aria-pressed={roundQtr}>↑ Round to ¼ gal</button>
+              {!selected?.containerSize && (
+                <button onClick={() => onChange("jug2_5gal", !jug2_5)} style={chipT(jug2_5, t_.amber, t_.tintAmber)} aria-pressed={jug2_5}>2.5 gal jugs</button>
+              )}
+              {roundQtr && roundedEffectiveRate && (
+                <span style={{ fontSize:11, color: t_.blue, fontWeight:700 }}>↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac</span>
+              )}
+            </div>
           )}
-          <div style={{ display:"flex", flexDirection:"column", gap:3, flexShrink:0 }}>
-            <button onClick={() => onChange("inputMode","rate")}
-              style={{ padding:"2px 7px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
-                borderColor: inputMode==="rate" ? "#2a5c0f" : "#c8dbb0",
-                background:  inputMode==="rate" ? "#2a5c0f" : "#f9fdf5",
-                color:       inputMode==="rate" ? "#fff"    : "#3a6b1a" }}>Rate/Acre</button>
-            <button onClick={() => onChange("inputMode","galtank")}
-              style={{ padding:"2px 7px", border:"1.5px solid", borderRadius:4, cursor:"pointer", fontSize:10, fontWeight:700,
-                borderColor: inputMode==="galtank" ? "#2a5c0f" : "#c8dbb0",
-                background:  inputMode==="galtank" ? "#2a5c0f" : "#f9fdf5",
-                color:       inputMode==="galtank" ? "#fff"    : "#3a6b1a" }}>{galtankLabel}</button>
-          </div>
-          <div style={{ flexShrink:0 }}>
-            <div style={{ fontSize:10, color:"#555" }}>{inputMode === "rate" ? `${baseUnit}/ac` : galtankLabel}</div>
-            {inputMode === "galtank" && galtankLabelRate && (
-              <div style={{ fontSize:9, color:"#6aaa30" }}>={parseFloat(galtankLabelRate).toFixed(2)} {baseUnit}/ac</div>
-            )}
-          </div>
         </div>
-
-        {/* Options: ¼ gal, 2.5 gal jugs, rounded feedback */}
-        {isOzUnit && (
-          <div style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center" }}>
-            <label style={{ display:"inline-flex", alignItems:"center", gap:3, cursor:"pointer",
-              padding:"2px 6px", borderRadius:5, userSelect:"none",
-              border:`1.5px solid ${roundQtr ? "#1a6a8a" : "#c8dbb0"}`,
-              background: roundQtr ? "#e8f4ff" : "#f9fdf5" }}>
-              <input type="checkbox" checked={roundQtr} onChange={e => onChange("roundQtrGal", e.target.checked)}
-                style={{ accentColor:"#1a6a8a", width:11, height:11, margin:0, cursor:"pointer" }}/>
-              <span style={{ fontSize:10, fontWeight:700, color: roundQtr ? "#0e3a5c" : "#777" }}>¼ gal</span>
-            </label>
-            {!selected?.containerSize && (
-              <label style={{ display:"inline-flex", alignItems:"center", gap:3, cursor:"pointer",
-                padding:"2px 6px", borderRadius:5, userSelect:"none",
-                border:`1.5px solid ${jug2_5 ? "#7a3a9a" : "#c8dbb0"}`,
-                background: jug2_5 ? "#f5eeff" : "#f9fdf5" }}>
-                <input type="checkbox" checked={jug2_5} onChange={e => onChange("jug2_5gal", e.target.checked)}
-                  style={{ accentColor:"#7a3a9a", width:11, height:11, margin:0, cursor:"pointer" }}/>
-                <span style={{ fontSize:10, fontWeight:700, color: jug2_5 ? "#5a1a7a" : "#777" }}>2.5 gal jugs</span>
-              </label>
-            )}
-            {roundQtr && roundedEffectiveRate && (
-              <span style={{ fontSize:9, color:"#1a6a8a", fontWeight:700 }}>
-                ↳ {parseFloat(roundedEffectiveRate).toFixed(2)} {baseUnit}/ac
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* RIGHT HALF: full tank calculations */}
-      <div style={{ paddingLeft:12, display:"flex", flexDirection:"column", justifyContent:"center" }}>
+      <div style={{ borderLeft:`1px solid ${t_.divider || t_.inputLine}`, paddingLeft:16, minWidth:0 }}>
         {lessThanOneTank ? (
           <>
-            <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>This Load</div>
-            <div style={{ fontWeight:700, color:"#e07020", fontSize:20, lineHeight:1.1 }}>{partialDisplay || tankDisplay}</div>
-            {(containerLabelPartial || containerLabel) && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:2 }}>{containerLabelPartial || containerLabel}</div>}
+            <div style={{ ...amtLabel, color: t_.amber }}>This load</div>
+            <div style={{ fontFamily:"'Space Grotesk',monospace", fontWeight:700, color: t_.amber, fontSize:20, lineHeight:1.15 }}>{partialDisplay || tankDisplay}</div>
+            {(containerLabelPartial || containerLabel) && <div style={{ fontSize:11, color: t_.mut, fontWeight:600, marginTop:2 }}>📦 {containerLabelPartial || containerLabel}</div>}
           </>
         ) : (
           <>
-            <div style={{ fontSize:9, color:"#888", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>Full Tank</div>
-            <div style={{ fontWeight:700, color:"#2a5c0f", fontSize:20, lineHeight:1.1 }}>{tankDisplay}</div>
-            {roundQtr && isOzUnit && tankRaw > 0 && <div style={{ fontSize:9, color:"#aaa" }}>{Math.round(tankRaw)} oz</div>}
-            {dryOzSubline && <div style={{ fontSize:10, color:"#888" }}>{dryOzSubline}</div>}
-            {containerLabel && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700, marginTop:2 }}>{containerLabel}</div>}
+            <div style={{ ...amtLabel, color: t_.mut }}>Full tank</div>
+            <div style={{ fontFamily:"'Space Grotesk',monospace", fontWeight:700, color: t_.onGreen, fontSize:20, lineHeight:1.15 }}>{tankDisplay}</div>
+            {roundQtr && isOzUnit && tankRaw > 0 && <div style={{ fontSize:10.5, color: t_.mut }}>{Math.round(tankRaw)} oz</div>}
+            {dryOzSubline && <div style={{ fontSize:11, color: t_.mut }}>{dryOzSubline}</div>}
+            {containerLabel && <div style={{ fontSize:11, color: t_.mut, fontWeight:600, marginTop:2 }}>📦 {containerLabel}</div>}
             {partialDisplay && (
-              <div style={{ marginTop:5, paddingTop:5, borderTop:"1px dashed #c8dbb0" }}>
-                <div style={{ fontSize:9, color:"#e07020", fontWeight:700, textTransform:"uppercase" }}>Partial ({partialAc.toFixed(1)} ac)</div>
-                <div style={{ fontWeight:700, color:"#e07020", fontSize:15 }}>{partialDisplay}</div>
-                {containerLabelPartial && <div style={{ fontSize:10, color:"#7a3a9a", fontWeight:700 }}>{containerLabelPartial}</div>}
+              <div style={{ marginTop:6, paddingTop:6, borderTop:`1px dashed ${t_.inputLine}` }}>
+                <div style={{ ...amtLabel, color: t_.amber }}>Partial ({partialAc.toFixed(1)} ac)</div>
+                <div style={{ fontFamily:"'Space Grotesk',monospace", fontWeight:700, color: t_.amber, fontSize:15 }}>{partialDisplay}</div>
+                {containerLabelPartial && <div style={{ fontSize:11, color: t_.mut, fontWeight:600 }}>📦 {containerLabelPartial}</div>}
               </div>
             )}
           </>
@@ -1758,6 +1734,8 @@ export default function App() {
   // Desktop under 1100px: the office sidebar collapses to an icon rail.
   const isNarrowDesk    = useIsMobile(1100);
   const sideW           = isNarrowDesk ? 76 : 236;
+  // New Ticket form: two columns (details | tank setup) once the content area is wide enough.
+  const formTwoCol      = !useIsMobile(980);
 
   // ── Auth state
   const [session,      setSession]      = useState(null);
@@ -3421,6 +3399,14 @@ export default function App() {
   const roleLabel = userRole === "owner" ? "Owner" : userRole === "member" ? "Member" : userRole === "applicator" ? "Applicator" : "Viewer";
   const nextTicketNo = String(Math.max(0, ...tickets.map(t => t.ticketNumber || 0)) + 1).padStart(3, "0");
   const newTicket = () => { setForm(blank()); setEditingId(null); setView("form"); };
+  const deleteEditingTicket = async () => {
+    if (!window.confirm("Delete this ticket? This cannot be undone.")) return;
+    const { error } = await supabase.from("tickets").delete().eq("id", editingId);
+    if (error) { showToast("Failed to delete ticket: " + error.message); return; }
+    setTickets(t => t.filter(x => x.id !== editingId));
+    setForm(blank()); setEditingId(null); setManualTank(false);
+    setView("log");
+  };
   const cancelForm = () => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); };
   const deskPage = view === "form" ? [editingId ? "Edit Ticket" : "New Ticket",
         editingId ? `Editing · No. ${String(tickets.find(t => t.id === editingId)?.ticketNumber || "").padStart(3, "0")}` : `Draft · No. ${nextTicketNo}`]
@@ -3624,48 +3610,42 @@ export default function App() {
         {/* ══ NEW TICKET ══════════════════════════════════════════════════════════ */}
         {view === "form" && (
           <div>
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={formTwoCol ? { display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(330px,390px)", gap:20, alignItems:"start" } : undefined}>
+            <div>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Application Info</div>
               {/* Weather fetch button */}
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: isMobile ? 8 : 12, flexWrap:"wrap" }}>
-                <button onClick={fetchWeather} disabled={wxLoading} style={isMobile ? {
+                <button onClick={fetchWeather} disabled={wxLoading} style={{
                   background: theme.tintBlue, color: theme.blue, border:"none", borderRadius:10,
-                  padding:"8px 12px", cursor: wxLoading ? "default" : "pointer", opacity: wxLoading ? 0.7 : 1,
+                  padding: isMobile ? "8px 12px" : "9px 14px", cursor: wxLoading ? "default" : "pointer", opacity: wxLoading ? 0.7 : 1,
                   fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6, fontFamily:"inherit",
-                } : {
-                  background: wxLoading ? "#aaa" : "linear-gradient(135deg,#1a6a8a,#0e3a5c)",
-                  color:"#fff", border:"none", borderRadius:7,
-                  padding: isMobile ? "7px 12px" : "10px 18px",
-                  cursor: wxLoading ? "default" : "pointer",
-                  fontSize: isMobile ? 12 : 14, fontWeight:700,
-                  display:"flex", alignItems:"center", gap:6,
-                  boxShadow:"0 2px 8px rgba(14,58,92,0.20)"
                 }}>
                   {wxLoading
-                    ? <><span style={{ fontSize: isMobile ? 13 : 16 }}>⏳</span> {isMobile ? "Getting…" : "Getting weather…"}</>
-                    : <><span style={{ fontSize: isMobile ? 13 : 16 }}>📍</span> {isMobile ? "Weather" : "Get Current Weather"}</>
+                    ? <><span style={{ fontSize:13 }}>⏳</span> {isMobile ? "Getting…" : "Getting weather…"}</>
+                    : <><span style={{ fontSize:13 }}>📍</span> {isMobile ? "Weather" : "Get current weather"}</>
                   }
                 </button>
                 {wxError && (
-                  <span style={{ fontSize:11, color:"#c03020", fontWeight:600 }}>⚠ {wxError}</span>
+                  <span style={{ fontSize:11.5, color: theme.red, fontWeight:600 }}>⚠ {wxError}</span>
                 )}
                 {!wxLoading && !wxError && form.windSpeed && (
-                  <span style={{ fontSize:11, color: theme.onGreen, fontWeight:600 }}>
+                  <span style={{ fontSize: isMobile ? 11 : 12, color: theme.onGreen, fontWeight:600 }}>
                     ✓ {fmtWindSpeed(form.windSpeed, isMetric)} {form.windDir}, {fmtTemp(form.airTemp, isMetric)}
                   </span>
                 )}
               </div>
               {(() => {
-                const ci = isMobile ? { ...inp, fontSize:16, padding:"8px 10px", minHeight:42 } : inp;
-                const cs = isMobile ? { ...sel, fontSize:16, padding:"8px 10px", minHeight:42 } : sel;
-                const cl = isMobile ? { ...labelT, fontSize:9 } : labelStyle;
+                const ci = isMobile ? { ...inp, fontSize:16, padding:"8px 10px", minHeight:42 } : { ...inp, minHeight:40 };
+                const cs = isMobile ? { ...sel, fontSize:16, padding:"8px 10px", minHeight:42 } : { ...sel, minHeight:40 };
+                const cl = isMobile ? { ...labelT, fontSize:9 } : labelT;
                 const endTime = form.timeStart && form.selectedFields.length
                   ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)
                   : "—";
                 return (<>
               {/* Mobile: two columns at 16px (iOS zooms the page on inputs under 16px).
                   `order` pairs Wind with Wind Dir and moves the read-only Est. End last. */}
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : rGrid(2,6,false), gap: isMobile ? 8 : 10, marginBottom: isMobile ? 8 : 12 }}>
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 8 : 12 }}>
                 <div style={isMobile ? { order:1, minWidth:0 } : undefined}>
                   <label style={cl}>Date</label>
                   <input type="date" value={form.date} onChange={e => set("date",e.target.value)} style={ci}/>
@@ -3676,15 +3656,11 @@ export default function App() {
                 </div>
                 <div style={isMobile ? { order:6, minWidth:0 } : undefined}>
                   <label style={cl}>Est. End</label>
-                  <div style={isMobile ? {
-                    border:"1.5px solid transparent", borderRadius:10, padding:"8px 10px", boxSizing:"border-box",
-                    background: theme.tintGreen, display:"flex", alignItems:"center", minHeight:42,
-                  } : {
-                    border:"1.5px solid #a8d870", borderRadius:5,
-                    padding: isMobile ? "5px 7px" : "6px 10px",
-                    background:"#e6f5d0", display:"flex", alignItems:"center", minHeight: isMobile ? 28 : 32
+                  <div style={{
+                    border:"1.5px solid transparent", borderRadius:10, padding: isMobile ? "8px 10px" : "8px 11px", boxSizing:"border-box",
+                    background: theme.tintGreen, display:"flex", alignItems:"center", minHeight: isMobile ? 42 : 40,
                   }}>
-                    <span style={{ fontSize: isMobile ? 16 : 14, fontWeight:700, color: theme.onGreen, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{endTime}</span>
+                    <span style={{ fontSize: isMobile ? 16 : 14, fontWeight:700, color: theme.onGreen, fontFamily:"'Space Grotesk',monospace" }}>{endTime}</span>
                   </div>
                 </div>
                 <div style={isMobile ? { order:3, minWidth:0 } : undefined}>
@@ -3704,7 +3680,7 @@ export default function App() {
                 </div>
               </div>
               {/* Equipment / Applicator — mobile: equipment full width, the two applicators below */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: isMobile ? 8 : 10, marginBottom:14 }}>
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 14 : 4 }}>
                 <div style={isMobile ? { gridColumn:"1 / -1" } : undefined}>
                   <label style={cl}>Equipment</label>
                   <select value={form.equipmentType} onChange={e => set("equipmentType",e.target.value)} style={cs}>
@@ -3738,19 +3714,19 @@ export default function App() {
             </div>
 
             {/* Crop / Site — its own card */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, marginBottom:10 } : sectionTitleT}>Crop / Site</div>
               <div style={{ marginBottom:0 }}>
                 {/* Mobile: equal-width grid, so a crop that wraps onto its own row doesn't stretch across the card */}
                 <div style={isMobile
                   ? { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(96px, 1fr))", gap:6 }
-                  : { display:"flex", gap:6, flexWrap:"wrap" }}>
+                  : { display:"flex", gap:8, flexWrap:"wrap" }}>
                   {[...new Set([...orgCrops, ...fieldLibrary.map(f=>f.crop).filter(Boolean)])].filter(Boolean).sort().map(crop => (
                     <button key={crop} type="button"
                       onClick={() => set("crop", crop)}
                       style={{
-                        flex:"1 1 auto", padding:"10px 8px", border:"1.5px solid",
-                        borderRadius:6, cursor:"pointer", fontSize:14, fontWeight:700,
+                        flex: isMobile ? "1 1 auto" : "0 0 auto", padding: isMobile ? "10px 8px" : "8px 16px", border:"1.5px solid",
+                        borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 13.5, fontWeight:700,
                         fontFamily:"inherit", transition:"all 0.12s",
                         ...pillBtn(form.crop===crop),
                       }}
@@ -3761,9 +3737,9 @@ export default function App() {
             </div>
 
             {/* Target Pest / Weed / Disease — its own card */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, marginBottom:2 } : sectionTitleT}>Target Pest / Weed / Disease</div>
-              {isMobile && <div style={{ fontSize:11.5, color:theme.mut, marginBottom:11 }}>Recent — tap to toggle</div>}
+              <div style={{ fontSize:11.5, color:theme.mut, marginBottom:11, marginTop: isMobile ? 0 : -8 }}>Recent — {isMobile ? "tap" : "click"} to toggle</div>
               <div style={{ marginBottom:0 }}>
                 {(() => {
                   // Last 6 unique pests used across ticket history
@@ -3816,7 +3792,7 @@ export default function App() {
                       }
                     }}
                     placeholder="Add pest / weed / disease…"
-                    style={{ ...inp, flex:1, fontSize:16 }}
+                    style={{ ...inp, flex:1, fontSize: isMobile ? 16 : 14 }}
                   />
                   <datalist id="pest-suggestions">
                     {pestLibrary.filter(p => !(form.targetPest||[]).includes(p.name)).map(p => (
@@ -3832,22 +3808,23 @@ export default function App() {
                       addPest(name);
                       setPestInput("");
                     }}
-                    style={isMobile ? addBtnT() : { padding:"6px 14px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}
+                    style={isMobile ? addBtnT() : { ...addBtnT(), minHeight:40 }}
                   >+ Add</button>
                 </div>
                 {!isMobile && (form.targetPest||[]).length > 0 && (
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:10 }}>
                     {(form.targetPest||[]).map(p => (
-                      <span key={p} style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#2a5c0f", color:"#fff", borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700 }}>
+                      <span key={p} style={{ display:"inline-flex", alignItems:"center", gap:5, background: theme.green, color:"#fff", borderRadius:20, padding:"4px 11px", fontSize:12, fontWeight:700 }}>
                         {p}
                         <button type="button" onClick={() => { set("targetPest", (form.targetPest||[]).filter(x=>x!==p)); setAiSuggestions([]); }}
-                          style={{ background:"none", border:"none", color:"rgba(255,255,255,0.7)", cursor:"pointer", fontSize:13, lineHeight:1, padding:0 }}>×</button>
+                          aria-label={`Remove ${p}`}
+                          style={{ background:"none", border:"none", color:"rgba(255,255,255,0.75)", cursor:"pointer", fontSize:14, lineHeight:1, padding:0 }}>×</button>
                       </span>
                     ))}
                   </div>
                 )}
                 {!isMobile && (form.targetPest||[]).length > 0 && isPro && (
-                  <div style={{ marginTop:8 }}>
+                  <div style={{ marginTop:12 }}>
                     <button
                       disabled={aiSuggestLoading}
                       onClick={async () => {
@@ -3869,12 +3846,12 @@ export default function App() {
                         }
                       }}
                       style={{
-                        background: aiSuggestLoading ? "#aaa" : "#1a5c3a",
-                        color:"#fff", border:"none", borderRadius:6,
-                        padding:"6px 14px", cursor: aiSuggestLoading ? "default" : "pointer",
-                        fontSize:12, fontWeight:700,
+                        background: aiSuggestLoading ? theme.fill : theme.tintGreen,
+                        color: aiSuggestLoading ? theme.mut : theme.onGreen, border:"none", borderRadius:10,
+                        padding:"8px 14px", cursor: aiSuggestLoading ? "default" : "pointer",
+                        fontSize:12.5, fontWeight:700, fontFamily:"inherit",
                       }}
-                    >{aiSuggestLoading ? "Suggesting…" : "Suggest Chemicals"}</button>
+                    >{aiSuggestLoading ? "Suggesting…" : "✦ Suggest chemicals"}</button>
                     {aiSuggestions.length > 0 && (
                       <div style={{ marginTop:8, display:"flex", flexWrap:"wrap", gap:6 }}>
                         {aiSuggestions.map(s => {
@@ -3887,9 +3864,9 @@ export default function App() {
                               onClick={() => { if (!alreadyAdded) addChemRow(chem.id); }}
                               title={s.reason}
                               style={{
-                                padding:"4px 10px", borderRadius:5, border:"1.5px solid #1a5c3a",
-                                background: alreadyAdded ? "#e6f5d0" : "#f0fff8",
-                                color: alreadyAdded ? "#888" : "#1a5c3a",
+                                padding:"5px 11px", borderRadius:9, border:`1.5px solid ${alreadyAdded ? "transparent" : theme.green}`,
+                                background: alreadyAdded ? theme.fill : theme.card,
+                                color: alreadyAdded ? theme.mut : theme.onGreen,
                                 fontSize:12, fontWeight:700,
                                 cursor: alreadyAdded ? "default" : "pointer",
                                 fontFamily:"inherit",
@@ -3905,7 +3882,7 @@ export default function App() {
             </div>
 
             {/* Fields — its own card */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={{ marginBottom:14 }}>
                 {/* Label row with toggle */}
                 {isMobile && (
@@ -3917,36 +3894,32 @@ export default function App() {
                     </div>
                   </div>
                 )}
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-                  <label style={{ ...labelT, marginBottom:0, display: isMobile ? "none" : "block" }}>
-                    Fields
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: isMobile ? 4 : 12 }}>
+                  <div style={{ display: isMobile ? "none" : "flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ ...sectionTitleT, marginBottom:0 }}>Fields</span>
                     {form.crop && (
-                      <span style={{ marginLeft:6, background:"#e6f5d0", color:"#2a5c0f", borderRadius:3, padding:"1px 6px", fontSize:11, fontWeight:700 }}>
+                      <span style={{ background: theme.tintGreen, color: theme.onGreen, borderRadius:6, padding:"2px 8px", fontSize:11, fontWeight:700 }}>
                         {form.crop} only
                       </span>
                     )}
                     {form.selectedFields.length > 0 && (
-                      <span style={{ marginLeft:8, color:"#2a5c0f", fontWeight:400, fontSize:11 }}>
-                        — {form.selectedFields.length} selected · <strong>{isMetric ? `${(parseFloat(totalAcresDisplay||0)*AC_TO_HA).toFixed(2)} ha` : `${totalAcresDisplay} ac`}</strong>
+                      <span style={{ color: theme.mut, fontSize:12.5 }}>
+                        <span style={{ fontWeight:700, color: theme.onGreen, fontFamily:"'Space Grotesk',monospace" }}>{form.selectedFields.length}</span> selected ·{" "}
+                        <span style={{ fontWeight:700, color: theme.onGreen, fontFamily:"'Space Grotesk',monospace" }}>{isMetric ? `${(parseFloat(totalAcresDisplay||0)*AC_TO_HA).toFixed(2)} ha` : `${totalAcresDisplay} ac`}</span>
                       </span>
                     )}
-                  </label>
+                  </div>
                   <div style={{ display:"flex", gap: isMobile ? 6 : 2, alignItems:"center" }}>
-                    <div style={isMobile ? { display:"flex", background: theme.fill, borderRadius:10, padding:3, gap:2 } : { display:"contents" }}>
+                    <div style={{ display:"flex", background: theme.fill, borderRadius:10, padding:3, gap:2 }}>
                     {["List","Map"].map(mode => {
                       const on = fieldMapView ? mode==="Map" : mode==="List";
                       return (
                       <button key={mode}
                         onClick={() => { setFieldMapView(mode === "Map"); setFieldReorderMode(false); }}
-                        style={isMobile ? {
+                        style={{
                           padding:"5px 13px", fontSize:12.5, fontWeight:700, cursor:"pointer", border:"none", borderRadius:8, fontFamily:"inherit",
                           background: on ? theme.card : "transparent", color: on ? theme.ink : theme.mut,
                           boxShadow: on ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
-                        } : {
-                          padding:"3px 10px", fontSize:12, fontWeight:700, cursor:"pointer",
-                          border:"1.5px solid #c8dbb0", borderRadius:4,
-                          background: on ? "#2a5c0f" : "#f9fdf5",
-                          color:      on ? "#fff"    : "#4a7a20",
                         }}
                       >{mode}</button>
                       );
@@ -3956,14 +3929,9 @@ export default function App() {
                       <button
                         onClick={() => setFieldReorderMode(m => !m)}
                         title="Reorder fields"
-                        style={isMobile ? {
+                        style={{
                           padding:"6px 10px", fontSize:13, fontWeight:700, cursor:"pointer", border:"none", borderRadius:9,
                           background: fieldReorderMode ? theme.tintGreen : theme.fill, color: fieldReorderMode ? theme.onGreen : theme.ink2,
-                        } : {
-                          padding:"3px 8px", fontSize:12, fontWeight:700, cursor:"pointer",
-                          border:"1.5px solid #c8dbb0", borderRadius:4,
-                          background: fieldReorderMode ? "#e6f5d0" : "#f9fdf5",
-                          color: "#4a7a20",
                         }}
                       >⇅</button>
                     )}
@@ -3978,6 +3946,7 @@ export default function App() {
                         key={f.id}
                         field={f}
                         isMobile={isMobile}
+                        theme={theme}
                         onRemove={() => removeField(f.id)}
                         onAcresChange={(newAcres) => {
                           set("selectedFields", form.selectedFields.map(sf =>
@@ -3993,19 +3962,19 @@ export default function App() {
 
                 {/* Field reorder panel */}
                 {!fieldMapView && fieldReorderMode && form.selectedFields.length > 0 && (
-                  <div style={{ border:"1.5px solid #c8dbb0", borderRadius:6, overflow:"hidden", marginBottom:6 }}>
-                    <div style={{ padding:"6px 10px", background:"#f0f7e8", fontSize:11, fontWeight:700, color:"#2a5c0f", display:"flex", justifyContent:"space-between" }}>
-                      <span>FIELD ORDER — drag or tap ↑↓ to reprioritize</span>
-                      <button onClick={() => setFieldReorderMode(false)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"#888" }}>Done</button>
+                  <div style={{ border:`1px solid ${theme.line}`, borderRadius:12, overflow:"hidden", marginBottom:8 }}>
+                    <div style={{ padding:"8px 12px", background: theme.fill, fontSize:10.5, fontWeight:800, letterSpacing:"0.05em", color: theme.mut, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span>FIELD ORDER — TAP ↑↓ TO REPRIORITIZE</span>
+                      <button onClick={() => setFieldReorderMode(false)} style={{ ...softBtnT, background: theme.card, padding:"4px 10px", fontSize:12 }}>Done</button>
                     </div>
                     {form.selectedFields.map((f, i) => (
-                      <div key={f.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderBottom:"1px solid #eef5e8", background:"#fff" }}>
-                        <span style={{ width:20, height:20, borderRadius:"50%", background:"#2a5c0f", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, flexShrink:0 }}>{i+1}</span>
-                        <span style={{ flex:1, fontSize:13, fontWeight:600, color:"#222" }}>{f.name}</span>
-                        <span style={{ fontSize:11, color:"#888" }}>{parseFloat(f.acres||0).toFixed(1)} ac</span>
-                        <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
-                          <button onClick={() => moveField(i, -1)} disabled={i===0} style={{ background:"none", border:"1px solid #c8dbb0", borderRadius:3, width:22, height:18, cursor:i===0?"default":"pointer", color:i===0?"#ccc":"#4a7a20", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>↑</button>
-                          <button onClick={() => moveField(i,  1)} disabled={i===form.selectedFields.length-1} style={{ background:"none", border:"1px solid #c8dbb0", borderRadius:3, width:22, height:18, cursor:i===form.selectedFields.length-1?"default":"pointer", color:i===form.selectedFields.length-1?"#ccc":"#4a7a20", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>↓</button>
+                      <div key={f.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 12px", borderBottom:`1px solid ${theme.divider}`, background: theme.card }}>
+                        <span style={{ width:22, height:22, borderRadius:7, background: theme.tintGreen, color: theme.onGreen, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, flexShrink:0, fontFamily:"'Space Grotesk',monospace" }}>{i+1}</span>
+                        <span style={{ flex:1, fontSize:13, fontWeight:600, color: theme.ink }}>{f.name}</span>
+                        <span style={{ fontSize:11.5, color: theme.mut, fontFamily:"'Space Grotesk',monospace" }}>{fmtAcresShort(f.acres, isMetric)}</span>
+                        <div style={{ display:"flex", gap:4 }}>
+                          <button onClick={() => moveField(i, -1)} disabled={i===0} aria-label="Move up" style={{ background: theme.fill, border:"none", borderRadius:7, width:28, height:28, cursor:i===0?"default":"pointer", color:i===0?theme.dash:theme.ink2, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>↑</button>
+                          <button onClick={() => moveField(i,  1)} disabled={i===form.selectedFields.length-1} aria-label="Move down" style={{ background: theme.fill, border:"none", borderRadius:7, width:28, height:28, cursor:i===form.selectedFields.length-1?"default":"pointer", color:i===form.selectedFields.length-1?theme.dash:theme.ink2, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>↓</button>
                         </div>
                       </div>
                     ))}
@@ -4028,6 +3997,7 @@ export default function App() {
                             key={f.id}
                             field={f}
                             isMobile={isMobile}
+                            theme={theme}
                             onRemove={() => removeField(f.id)}
                             onAcresChange={(newAcres) => {
                               set("selectedFields", form.selectedFields.map(sf =>
@@ -4044,7 +4014,7 @@ export default function App() {
                 ) : (
                   <div style={{ position:"relative" }}>
                     <div style={{
-                      border: `1.5px solid ${theme.inputLine}`, borderRadius: isMobile ? 10 : 5, padding:"5px 8px",
+                      border: `1.5px solid ${theme.inputLine}`, borderRadius:10, padding:"5px 8px",
                       background: theme.input, display:"flex", flexWrap:"wrap", alignItems:"center", gap:2, minHeight:40,
                       cursor:"text"
                     }} onClick={() => setShowDrop(true)}>
@@ -4053,7 +4023,7 @@ export default function App() {
                         onChange={e => { setFieldSearch(e.target.value); setShowDrop(true); }}
                         onFocus={() => setShowDrop(true)}
                         placeholder={form.selectedFields.length ? "Add more fields…" : "Search or select fields…"}
-                        style={{ border:"none", background:"transparent", outline:"none", fontSize:16, flex:1, minWidth:140, WebkitAppearance:"none", color: isMobile ? theme.ink : undefined }}
+                        style={{ border:"none", background:"transparent", outline:"none", fontSize: isMobile ? 16 : 14, flex:1, minWidth:140, WebkitAppearance:"none", color: theme.ink, fontFamily:"inherit" }}
                       />
                     </div>
                     {showDrop && (
@@ -4061,8 +4031,8 @@ export default function App() {
                       <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowDrop(false)} />
                       <div style={{
                         position:"absolute", top:"100%", left:0, right:0, zIndex:99,
-                        background: theme.card, border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
-                        boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight: isMobile ? 260 : 200, overflowY:"auto", marginTop: isMobile ? 4 : 0
+                        background: theme.card, border:`1px solid ${theme.line}`, borderRadius:12,
+                        boxShadow:"0 10px 28px -8px rgba(0,0,0,0.25)", maxHeight: isMobile ? 260 : 300, overflowY:"auto", marginTop:4
                       }}>
                         {filteredFields.length === 0 ? (
                           <div style={{ padding:"10px 12px", fontSize:13, color: theme.mut }}>
@@ -4070,12 +4040,12 @@ export default function App() {
                           </div>
                         ) : filteredFields.map(f => (
                           <div key={f.id} onClick={() => addField(f)}
-                            style={{ padding: isMobile ? "12px 13px" : "8px 12px", cursor:"pointer", fontSize: isMobile ? 14 : 13, color: isMobile ? theme.ink : undefined, borderBottom: `1px solid ${theme.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                            style={{ padding: isMobile ? "12px 13px" : "9px 13px", cursor:"pointer", fontSize: isMobile ? 14 : 13.5, color: theme.ink, borderBottom: `1px solid ${theme.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}
                             onMouseEnter={e => e.currentTarget.style.background = theme.fill}
                             onMouseLeave={e => e.currentTarget.style.background="transparent"}
                           >
                             <span>{f.name}</span>
-                            <span style={{ color: theme.onGreen, fontWeight:700, fontSize:12, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{fmtAcresShort(f.acres, isMetric)}</span>
+                            <span style={{ color: theme.onGreen, fontWeight:700, fontSize:12, fontFamily:"'Space Grotesk',monospace" }}>{fmtAcresShort(f.acres, isMetric)}</span>
                           </div>
                         ))}
                       </div>
@@ -4087,12 +4057,12 @@ export default function App() {
 
               {/* Live field schedule preview */}
               {form.selectedFields.length > 0 && form.timeStart && (
-                <div style={{ marginBottom:14, background:"#e6f5d0", borderRadius:6, padding:"8px 12px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <div style={{ fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.08em" }}>
-                    FIELD SCHEDULE <span style={{ fontWeight:400, color:"#6aaa40" }}>@ {isMetric ? `${(acresPerHour * 0.404686).toFixed(1)} ha/hr` : `${acresPerHour} ac/hr`}</span>
+                <div style={{ marginBottom: isMobile ? 14 : 0, background: theme.tintGreen, borderRadius:10, padding:"9px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                  <div style={{ fontSize:10.5, fontWeight:800, color: theme.onGreen, letterSpacing:"0.06em" }}>
+                    FIELD SCHEDULE <span style={{ fontWeight:600, color: theme.mut }}>@ {isMetric ? `${(acresPerHour * 0.404686).toFixed(1)} ha/hr` : `${acresPerHour} ac/hr`}</span>
                   </div>
-                  <div style={{ fontSize:11, color:"#6aaa40" }}>
-                    Est. finish: <strong style={{ color:"#2a5c0f" }}>
+                  <div style={{ fontSize:12, color: theme.ink2 }}>
+                    Est. finish: <strong style={{ color: theme.onGreen, fontFamily:"'Space Grotesk',monospace" }}>
                       {fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)}
                     </strong>
                   </div>
@@ -4101,36 +4071,35 @@ export default function App() {
             </div>
 
             {/* Notes — its own card */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={{ marginBottom: isMobile ? 0 : 12 }}>
-                <label style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, display:"block", marginBottom:11 } : labelT}>Notes</label>
-                {isMobile ? (
-                  <textarea value={form.notes} onChange={e => set("notes",e.target.value)} placeholder="Optional…"
-                    style={{ width:"100%", minHeight:74, boxSizing:"border-box", resize:"vertical", border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"11px 12px", fontSize:16, color:theme.ink, background:theme.input, fontFamily:"inherit", lineHeight:1.45 }}
-                  />
-                ) : (
-                  <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
-                )}
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
+              <div>
+                <label style={{ fontSize: isMobile ? 14 : 15, fontWeight:800, color:theme.ink, display:"block", marginBottom: isMobile ? 11 : 12 }}>Notes</label>
+                <textarea value={form.notes} onChange={e => set("notes",e.target.value)} placeholder="Optional…"
+                  style={{ width:"100%", minHeight: isMobile ? 74 : 64, boxSizing:"border-box", resize:"vertical", border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"11px 12px", fontSize: isMobile ? 16 : 14, color:theme.ink, background:theme.input, fontFamily:"inherit", lineHeight:1.45, outline:"none" }}
+                />
               </div>
             </div>
 
+            </div>
+            <div>
             {/* Tank Setup */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                <span style={sectionTitleT}>Tank Setup & Calculations</span>
+                <span style={{ ...sectionTitleT, marginBottom:0 }}>Tank Setup & Calculations</span>
                 <button onClick={() => setShowTankGear(g => !g)} title="Customize presets"
-                  style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color: showTankGear ? "#2a5c0f" : "#aaa", padding:"2px 4px" }}>⚙</button>
+                  aria-label="Customize presets"
+                  style={{ background: showTankGear ? theme.tintGreen : theme.fill, border:"none", borderRadius:9, cursor:"pointer", fontSize:15, color: showTankGear ? theme.onGreen : theme.mut, width:32, height:32, lineHeight:1 }}>⚙</button>
               </div>
               {showTankGear && (
-                <div style={{ background:"#f5fff0", border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", marginBottom:12 }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:"#2a5c0f", marginBottom:8 }}>Customize preset buttons</div>
+                <div style={{ background: theme.fill, borderRadius:12, padding:"10px 12px", marginBottom:12 }}>
+                  <div style={{ fontSize:11, fontWeight:800, color: theme.ink2, marginBottom:8 }}>Customize preset buttons</div>
                   {[
                     { label:`Tank Size (${tankLabel(isMetric)})`, presets: tankPresets, setPresets: setTankPresets, key:"bl_tankPresets" },
                     { label:"Pressure (PSI)",                    presets: psiPresets,  setPresets: setPsiPresets,  key:"bl_psiPresets"  },
                     { label:"Gal / Acre",      presets: gpaPresets,  setPresets: setGpaPresets,  key:"bl_gpaPresets"  },
                   ].map(({ label, presets, setPresets, key }) => (
                     <div key={key} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
-                      <span style={{ fontSize:11, color:"#555", minWidth:100 }}>{label}</span>
+                      <span style={{ fontSize:11, color: theme.ink2, minWidth:100 }}>{label}</span>
                       {presets.map((v, i) => (
                         <input key={i} type="number" defaultValue={v}
                           onBlur={e => {
@@ -4140,15 +4109,15 @@ export default function App() {
                             setPresets(updated);
                             localStorage.setItem(key, JSON.stringify(updated));
                           }}
-                          style={{ width:52, border:"1.5px solid #c8dbb0", borderRadius:4, padding:"3px 4px", fontSize:12, fontFamily:"inherit", textAlign:"center" }}
+                          style={{ width:52, border:`1.5px solid ${theme.inputLine}`, borderRadius:7, padding:"4px", fontSize: isMobile ? 16 : 12.5, fontFamily:"inherit", textAlign:"center", background: theme.input, color: theme.ink }}
                         />
                       ))}
                     </div>
                   ))}
-                  <button onClick={() => setShowTankGear(false)} style={{ marginTop:4, fontSize:11, background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 12px", cursor:"pointer", fontWeight:700 }}>Done</button>
+                  <button onClick={() => setShowTankGear(false)} style={{ marginTop:4, fontSize:12, background: theme.green, color:"#fff", border:"none", borderRadius:9, padding:"6px 14px", cursor:"pointer", fontWeight:700, fontFamily:"inherit" }}>Done</button>
                 </div>
               )}
-              <div style={{ display:"grid", gridTemplateColumns:rGrid(1, 4, isMobile), gap:10, marginBottom:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns: formTwoCol || isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 10 : 12, marginBottom:12 }}>
                 <div>
                   <label style={labelT}>Tank Size ({tankLabel(isMetric)})</label>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
@@ -4157,8 +4126,8 @@ export default function App() {
                         <button key={size}
                           onClick={() => { set("tankSize", String(size)); setManualTank(false); }}
                           style={{
-                            flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                            borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 12, fontWeight:700,
+                            flex:1, padding: isMobile ? "10px 4px" : "9px 4px", border:"1.5px solid",
+                            borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 13.5, fontWeight:700, fontFamily:"'Space Grotesk',monospace",
                             transition:"all 0.12s",
                             ...pillBtn(!manualTank && form.tankSize===String(size)),
                           }}
@@ -4167,8 +4136,8 @@ export default function App() {
                       <button
                         onClick={() => { setManualTank(true); set("tankSize",""); }}
                         style={{
-                          flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                          borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 11, fontWeight:700,
+                          flex:1, padding: isMobile ? "10px 4px" : "9px 4px", border:"1.5px solid",
+                          borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 12.5, fontWeight:700, fontFamily:"inherit",
                           transition:"all 0.12s",
                           ...pillBtn(manualTank),
                         }}
@@ -4189,8 +4158,8 @@ export default function App() {
                         <button key={psi} type="button"
                           onClick={() => { set("pressure", String(psi)); setManualPsi(false); }}
                           style={{
-                            flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                            borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 12, fontWeight:700,
+                            flex:1, padding: isMobile ? "10px 4px" : "9px 4px", border:"1.5px solid",
+                            borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 13.5, fontWeight:700, fontFamily:"'Space Grotesk',monospace",
                             transition:"all 0.12s",
                             ...pillBtn(!manualPsi && form.pressure===String(psi)),
                           }}
@@ -4199,8 +4168,8 @@ export default function App() {
                       <button type="button"
                         onClick={() => { setManualPsi(true); set("pressure",""); }}
                         style={{
-                          flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                          borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 11, fontWeight:700,
+                          flex:1, padding: isMobile ? "10px 4px" : "9px 4px", border:"1.5px solid",
+                          borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 12.5, fontWeight:700, fontFamily:"inherit",
                           transition:"all 0.12s",
                           ...pillBtn(manualPsi),
                         }}
@@ -4221,8 +4190,8 @@ export default function App() {
                         <button key={gpa} type="button"
                           onClick={() => { set("galPerAcre", String(gpa)); setManualGpa(false); }}
                           style={{
-                            flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                            borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 12, fontWeight:700,
+                            flex:1, padding: isMobile ? "10px 4px" : "9px 4px", border:"1.5px solid",
+                            borderRadius:6, cursor:"pointer", fontSize: isMobile ? 14 : 13.5, fontWeight:700, fontFamily:"'Space Grotesk',monospace",
                             transition:"all 0.12s",
                             ...pillBtn(!manualGpa && form.galPerAcre===String(gpa)),
                           }}
@@ -4231,8 +4200,8 @@ export default function App() {
                       <button type="button"
                         onClick={() => { setManualGpa(true); set("galPerAcre",""); }}
                         style={{
-                          flex:1, padding: isMobile ? "10px 4px" : "5px 4px", border:"1.5px solid",
-                          borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 11, fontWeight:700,
+                          flex:1, padding: isMobile ? "10px 4px" : "9px 4px", border:"1.5px solid",
+                          borderRadius:6, cursor:"pointer", fontSize: isMobile ? 13 : 12.5, fontWeight:700, fontFamily:"inherit",
                           transition:"all 0.12s",
                           ...pillBtn(manualGpa),
                         }}
@@ -4248,22 +4217,21 @@ export default function App() {
               </div>
 
               {/* Target zone (spot spray) — calc-only rate reduction */}
-              {(targetZoneEnabled || form.targetZone) && <div style={isMobile ? toggleCardT(form.targetZone, theme.purple, theme.tintPurple, { marginBottom:10, display:"block" }) : { marginBottom:10, background: form.targetZone ? "#f3eefc" : "#f4fbee",
-                border:`1.5px solid ${form.targetZone ? "#7a4ab0" : "#c8dbb0"}`, borderRadius:7, padding:"12px 14px" }}>
+              {(targetZoneEnabled || form.targetZone) && <div style={toggleCardT(form.targetZone, theme.purple, theme.tintPurple, { marginBottom:10, display:"block" })}>
                 <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
                   <input type="checkbox" checked={!!form.targetZone}
                     onChange={e => setForm(f => ({ ...f, targetZone: e.target.checked, targetZonePct: f.targetZonePct || "28" }))}
                     style={{ width:20, height:20, accentColor: theme.purple, flexShrink:0 }}/>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.targetZone ? theme.purple : theme.ink) : (form.targetZone ? "#4a2a7a" : "#2a5c0f") }}>Target Zone</div>
-                    <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
+                    <div style={{ fontWeight:700, fontSize:14, color: form.targetZone ? theme.purple : theme.ink }}>Target Zone</div>
+                    <div style={{ fontSize:11, color: theme.mut }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
                   </div>
                 </label>
                 {form.targetZone && (
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:10, flexWrap:"wrap" }}>
                     <input type="number" value={form.targetZonePct}
                       onChange={e => set("targetZonePct", e.target.value)}
-                      style={isMobile ? { ...inp, width:80, borderRadius:10, background: theme.input, color: theme.ink, borderColor: theme.inputLine } : { ...inp, width:80 }} min="1" max="99" step="0.1" placeholder="28"/>
+                      style={{ ...inp, width:80 }} min="1" max="99" step="0.1" placeholder="28"/>
                     <span style={{ fontSize:13, color: theme.purple, fontWeight:600 }}>% less than broadcast</span>
                     {parseFloat(form.galPerAcre) > 0 && parseFloat(form.targetZonePct) > 0 && parseFloat(form.targetZonePct) < 100 && (
                       <span style={{ fontSize:12, color: theme.ink2 }}>
@@ -4276,28 +4244,22 @@ export default function App() {
 
               {/* Prime boom + Flush checkboxes — compact side by side */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-                <label style={isMobile ? toggleCardT(form.primeBoom, theme.amber, theme.tintAmber) : { display:"flex", alignItems:"center", gap:10, cursor:"pointer",
-                  background: form.primeBoom ? "#fff8e0" : "#f4fbee",
-                  border:`1.5px solid ${form.primeBoom ? "#e0a020" : "#c8dbb0"}`,
-                  borderRadius:7, padding:"12px 14px" }}>
+                <label style={toggleCardT(form.primeBoom, theme.amber, theme.tintAmber)}>
                   <input type="checkbox" checked={form.primeBoom}
                     onChange={e => set("primeBoom", e.target.checked)}
                     style={{ width:20, height:20, accentColor: theme.amber, flexShrink:0 }}/>
                   <div>
-                    <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.primeBoom ? theme.amber : theme.ink) : (form.primeBoom ? "#7a5000" : "#2a5c0f") }}>Prime</div>
-                    <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut }}>20 gal before start</div>
+                    <div style={{ fontWeight:700, fontSize:14, color: form.primeBoom ? theme.amber : theme.ink }}>Prime</div>
+                    <div style={{ fontSize:11, color: theme.mut }}>20 gal before start</div>
                   </div>
                 </label>
-                <label style={isMobile ? toggleCardT(form.flushCleanout, theme.blue, theme.tintBlue) : { display:"flex", alignItems:"center", gap:10, cursor:"pointer",
-                  background: form.flushCleanout ? "#e8f4ff" : "#f4fbee",
-                  border:`1.5px solid ${form.flushCleanout ? "#1a6a8a" : "#c8dbb0"}`,
-                  borderRadius:7, padding:"12px 14px" }}>
+                <label style={toggleCardT(form.flushCleanout, theme.blue, theme.tintBlue)}>
                   <input type="checkbox" checked={form.flushCleanout}
                     onChange={e => set("flushCleanout", e.target.checked)}
                     style={{ width:20, height:20, accentColor: theme.blue, flexShrink:0 }}/>
                   <div>
-                    <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.flushCleanout ? theme.blue : theme.ink) : (form.flushCleanout ? "#0e3a5c" : "#2a5c0f") }}>Flush</div>
-                    <div style={{ fontSize: isMobile ? 11 : 10, color: theme.mut }}>Rinse when done</div>
+                    <div style={{ fontWeight:700, fontSize:14, color: form.flushCleanout ? theme.blue : theme.ink }}>Flush</div>
+                    <div style={{ fontSize:11, color: theme.mut }}>Rinse when done</div>
                   </div>
                 </label>
               </div>
@@ -4345,31 +4307,31 @@ export default function App() {
                   .filter(s => Math.abs(s.broadcastGpa - broadcastGpa) > 0.005 && s.broadcastGpa >= 5 && s.broadcastGpa <= 15)
                   .slice(0, 2);
                 if (!filtered.length) return (
-                  <div style={{ background:"#d4e8c2", borderRadius:6, padding:"5px 10px", fontSize:11, color:"#2a5c0f", fontWeight:600, marginBottom:8 }}>
+                  <div style={{ background: theme.tintGreen, borderRadius:9, padding:"6px 11px", fontSize:12, color: theme.onGreen, fontWeight:700, marginBottom:10 }}>
                     ✓ Exact full loads
                   </div>
                 );
 
                 return (
-                  <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"7px 10px", marginBottom:8 }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:"#7a5800", marginBottom:5 }}>Adjust for full loads:</div>
+                  <div style={{ background: theme.tintAmber, borderRadius:12, padding:"9px 11px", marginBottom:10 }}>
+                    <div style={{ fontSize:10, fontWeight:800, letterSpacing:"0.05em", color: theme.amber, marginBottom:6 }}>ADJUST FOR FULL LOADS</div>
                     <div style={{ display:"flex", gap:6 }}>
                       {filtered.map(s => {
                         const partAc = ta - s.n * (ts / s.idealGpa);
                         return (
                           <button key={s.n} onClick={() => set("galPerAcre", String(s.broadcastGpa))}
                             style={{
-                              flex:1, border:"1.5px solid #c0a020", borderRadius:6, padding:"5px 8px",
-                              background:"#fffbe6", cursor:"pointer", fontFamily:"inherit",
+                              flex:1, border:"none", borderRadius:9, padding:"7px 9px",
+                              background: theme.card, cursor:"pointer", fontFamily:"inherit",
                               display:"flex", flexDirection:"column", alignItems:"flex-start", gap:1
                             }}>
-                            <span style={{ fontSize:13, fontWeight:800, color:"#2a5c0f" }}>
+                            <span style={{ fontSize:13, fontWeight:800, color: theme.ink, fontFamily:"'Space Grotesk',monospace" }}>
                               {s.broadcastGpa % 1 === 0 ? s.broadcastGpa : s.broadcastGpa.toFixed(2)} gal/ac
                             </span>
-                            <span style={{ fontSize:10, color:"#7a5800" }}>
+                            <span style={{ fontSize:10.5, color: theme.ink2 }}>
                               {s.n} load{s.n!==1?"s":""} · {(ts/s.idealGpa).toFixed(1)} ac/tank
                             </span>
-                            <span style={{ fontSize:10, color: Math.abs(partAc) < 0.1 ? "#2a8a10" : "#c07000" }}>
+                            <span style={{ fontSize:10.5, fontWeight:600, color: Math.abs(partAc) < 0.1 ? theme.onGreen : theme.amber }}>
                               {Math.abs(partAc) < 0.1 ? "✓ no partial" : `~${partAc.toFixed(1)} ac partial`}
                             </span>
                           </button>
@@ -4383,61 +4345,27 @@ export default function App() {
               {(() => {
                 const mainCalcLive = calcTotals({ ...form, totalAcres });
                 const partAcLive   = mainCalcLive.partialAcres;
-                if (isMobile) {
-                  return (
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", background: theme.header, borderRadius:14, overflow:"hidden" }}>
-                      <div style={{ padding:"13px 10px" }}>
-                        <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>ACRES/LOAD</div>
-                        <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color:"#fff", lineHeight:1.15 }}>{acreLoads}</div>
-                      </div>
-                      <div style={{ padding:"13px 10px", background:"rgba(255,255,255,0.06)" }}>
-                        <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>FULL LOADS</div>
-                        <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color:"#fff", lineHeight:1.15 }}>{fullLoads}</div>
-                      </div>
-                      <div style={{ padding:"13px 10px" }}>
-                        <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>PARTIAL</div>
-                        {partAcLive > 0.01 ? (
-                          <>
-                            <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color: theme.amber, lineHeight:1.15 }}>{partAcLive.toFixed(1)}</div>
-                            <div style={{ fontSize:9.5, color: theme.headerSub }}>ac remaining</div>
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>✓ None</div>
-                            <div style={{ fontSize:9.5, color: theme.headerSub }}>all full loads</div>
-                          </>
-                        )}
-                      </div>
+              return (
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", background: theme.header, borderRadius:14, overflow:"hidden" }}>
+                    <div style={{ padding:"13px 10px" }}>
+                      <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>ACRES/LOAD</div>
+                      <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color:"#fff", lineHeight:1.15 }}>{acreLoads}</div>
                     </div>
-                  );
-                }
-                return (
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, background:"#e6f5d0", borderRadius:6, padding:"12px 14px" }}>
-                    <div>
-                      <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}>ACRES / LOAD</div>
-                      <div style={{ fontSize:28, fontWeight:700, color:"#2a5c0f" }}>{acreLoads}</div>
-                      <div style={{ fontSize:11, color:"#7aaa40" }}>
-                        Tank ÷ {form.galPerAcre
-                          ? <strong style={{ color:"#2a5c0f" }}>{form.targetZone && calcGpa(form) !== parseFloat(form.galPerAcre) ? `${calcGpa(form).toFixed(2)} gal/ac target zone` : `${form.galPerAcre} gal/ac`}</strong>
-                          : "Gal/Acre"}
-                      </div>
+                    <div style={{ padding:"13px 10px", background:"rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>FULL LOADS</div>
+                      <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color:"#fff", lineHeight:1.15 }}>{fullLoads}</div>
                     </div>
-                    <div>
-                      <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}># FULL LOADS</div>
-                      <div style={{ fontSize:28, fontWeight:700, color:"#2a5c0f" }}>{fullLoads}</div>
-                      <div style={{ fontSize:11, color:"#7aaa40" }}>Total Acres ÷ Acres/Load</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize:11, color: partAcLive > 0.01 ? "#c07000" : "#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}>PARTIAL LOAD</div>
+                    <div style={{ padding:"13px 10px" }}>
+                      <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", color: theme.headerSub }}>PARTIAL</div>
                       {partAcLive > 0.01 ? (
                         <>
-                          <div style={{ fontSize:28, fontWeight:700, color:"#c07000" }}>{partAcLive.toFixed(1)}</div>
-                          <div style={{ fontSize:11, color:"#c09030" }}>acres remaining</div>
+                          <div style={{ fontFamily:"'Space Grotesk',monospace", fontSize:24, fontWeight:700, color: theme.amber, lineHeight:1.15 }}>{partAcLive.toFixed(1)}</div>
+                          <div style={{ fontSize:9.5, color: theme.headerSub }}>ac remaining</div>
                         </>
                       ) : (
                         <>
-                          <div style={{ fontSize:20, fontWeight:700, color:"#2a8a10", marginTop:4 }}>✓ None</div>
-                          <div style={{ fontSize:11, color:"#7aaa40" }}>all full loads</div>
+                          <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>✓ None</div>
+                          <div style={{ fontSize:9.5, color: theme.headerSub }}>all full loads</div>
                         </>
                       )}
                     </div>
@@ -4446,8 +4374,11 @@ export default function App() {
               })()}
             </div>
 
+            </div>
+            </div>
+
             {/* Chemical Mix */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Chemical Mix</div>
 
               {/* ── Recently used chemicals — quick-pick chips ── */}
@@ -4471,18 +4402,13 @@ export default function App() {
                 if (!available.length) return null;
                 return (
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-                    <span style={isMobile ? { ...labelT, marginBottom:0, alignSelf:"center", whiteSpace:"nowrap" } : { fontSize:10, color:"#888", fontWeight:700, alignSelf:"center", whiteSpace:"nowrap" }}>Recent:</span>
+                    <span style={{ ...labelT, marginBottom:0, alignSelf:"center", whiteSpace:"nowrap" }}>Recent:</span>
                     {available.map(c => (
                       <button key={c.id} type="button"
                         onClick={() => { addChemRow(c.id); setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50); }}
-                        style={isMobile ? {
+                        style={{
                           padding:"7px 11px", border:"none", borderRadius:9, cursor:"pointer", fontSize:12.5, fontWeight:700,
                           fontFamily:"inherit", background: theme.tintBlue, color: theme.blue, whiteSpace:"nowrap",
-                        } : {
-                          padding:"4px 10px", border:"1.5px solid #b0c8e8",
-                          borderRadius:5, cursor:"pointer", fontSize:12, fontWeight:700,
-                          fontFamily:"inherit", background:"#f0f6ff", color:"#1a3a6a",
-                          whiteSpace:"nowrap"
                         }}
                         title={c.name}
                       >+ {c.name}</button>
@@ -4502,7 +4428,7 @@ export default function App() {
                   }}
                   onFocus={() => setShowChemDrop(s => ({...s, __main__: true}))}
                   placeholder="Search chemicals to add…"
-                  style={isMobile ? { ...inp, fontSize:16, borderRadius:12, background: theme.input, color: theme.ink, borderColor: theme.inputLine } : {...inp, fontSize:16}}
+                  style={{ ...inp, borderRadius:12, ...(isMobile ? { fontSize:16 } : null) }}
                 />
                 {showChemDrop.__main__ && (() => {
                   const q = (chemSearch.__main__ || "").toLowerCase();
@@ -4515,8 +4441,8 @@ export default function App() {
                     <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowChemDrop(s=>({...s,__main__:false}))} />
                     <div style={{
                       position:"absolute", bottom:"100%", left:0, right:0, zIndex:99,
-                      background: theme.card, border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
-                      boxShadow:"0 -4px 16px rgba(0,0,0,0.12)", maxHeight:220, overflowY:"auto",
+                      background: theme.card, border:`1px solid ${theme.line}`, borderRadius:12,
+                      boxShadow:"0 -8px 24px -8px rgba(0,0,0,0.25)", maxHeight: isMobile ? 220 : 300, overflowY:"auto",
                       marginBottom:4
                     }}>
                       {filtered.length === 0 ? (
@@ -4533,8 +4459,8 @@ export default function App() {
                           }}
                           style={{
                             padding: isMobile ? "12px 13px" : "10px 12px", cursor:"pointer", fontSize: isMobile ? 14 : 13,
-                            borderBottom: isMobile ? `1px solid ${theme.divider}` : "1px solid #eef5e8",
-                            color: isMobile ? theme.ink : undefined,
+                            borderBottom: `1px solid ${theme.divider}`,
+                            color: theme.ink,
                             display:"flex", justifyContent:"space-between", alignItems:"center"
                           }}
                           onMouseEnter={e => e.currentTarget.style.background = theme.fill}
@@ -4566,24 +4492,24 @@ export default function App() {
               )}
               {/* Compatibility warning */}
               {!aiCompatLoading && aiCompatWarning?.warnings?.length > 0 && (
-                <div style={{ background:"#fff8e0", border:"1.5px solid #e0a020", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
-                  <div style={{ fontWeight:700, color:"#7a5000", fontSize:12, marginBottom:4 }}>
+                <div style={{ background: theme.tintAmber, borderRadius:12, padding:"10px 13px", marginTop:10 }}>
+                  <div style={{ fontWeight:800, color: theme.amber, fontSize:12.5, marginBottom:4 }}>
                     Tank Mix Advisory
                     <span style={{ fontWeight:400, fontSize:10, marginLeft:6 }}>(AI-based — verify against product labels)</span>
                   </div>
                   {aiCompatWarning.warnings.map((w, i) => (
-                    <div key={i} style={{ fontSize:12, color:"#7a5000", marginTop:2 }}>⚠ {w}</div>
+                    <div key={i} style={{ fontSize:12.5, color: theme.ink2, marginTop:3 }}>⚠ {w}</div>
                   ))}
                 </div>
               )}
               {!aiCropSafetyLoading && aiCropSafety?.violations?.length > 0 && (
-                <div style={{ background:"#fff0f0", border:"1.5px solid #c0392b", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
-                  <div style={{ fontWeight:700, color:"#7a0000", fontSize:12, marginBottom:4 }}>
+                <div style={{ background: theme.tintRed, border:`1.5px solid ${theme.red}`, borderRadius:12, padding:"10px 13px", marginTop:10 }}>
+                  <div style={{ fontWeight:800, color: theme.red, fontSize:12.5, marginBottom:4 }}>
                     Crop Trait Warning
                     <span style={{ fontWeight:400, fontSize:10, marginLeft:6 }}>(AI-based — verify against product labels)</span>
                   </div>
                   {aiCropSafety.violations.map((v, i) => (
-                    <div key={i} style={{ fontSize:12, color:"#7a0000", marginTop:2 }}>
+                    <div key={i} style={{ fontSize:12.5, color: theme.ink, marginTop:3 }}>
                       🚫 <strong>{v.field}</strong>: {v.chemical} — {v.reason}
                     </div>
                   ))}
@@ -4591,8 +4517,8 @@ export default function App() {
               )}
               {/* Adjuvant recommendations */}
               {!aiAdjuvantsLoading && aiAdjuvants?.adjuvants?.length > 0 && (
-                <div style={{ background:"#f0f9f0", border:"1.5px solid #2a8a10", borderRadius:6, padding:"8px 12px", marginTop:8 }}>
-                  <div style={{ fontWeight:700, color:"#1a5c08", fontSize:12, marginBottom:8 }}>
+                <div style={{ background: theme.tintGreen, borderRadius:12, padding:"10px 13px", marginTop:10 }}>
+                  <div style={{ fontWeight:800, color: theme.onGreen, fontSize:12.5, marginBottom:8 }}>
                     Adjuvant / Surfactant Recommendations
                     <span style={{ fontWeight:400, fontSize:10, marginLeft:6 }}>(AI-based — verify against product labels)</span>
                   </div>
@@ -4642,12 +4568,12 @@ export default function App() {
                                 `Click to add ${libChem.name}${lastUsedRate ? ` @ ${lastUsedRate} ${libChem.unit}/ac` : ""}`
                               }
                               style={{
-                                padding:"4px 10px", borderRadius: lastUsedRate ? "5px 0 0 5px" : "5px",
+                                padding:"5px 11px", borderRadius: lastUsedRate ? "9px 0 0 9px" : 9,
                                 border:"1.5px solid", cursor: canAdd ? "pointer" : "default",
                                 fontSize:12, fontWeight:700, fontFamily:"inherit",
-                                borderColor: alreadyAdded ? "#c8dbb0" : (libChem ? "#2a8a10" : "#c8dbb0"),
-                                background: alreadyAdded ? "#e6f5d0" : (libChem ? "#2a8a10" : "#f0f0f0"),
-                                color: alreadyAdded ? "#888" : (libChem ? "#fff" : "#aaa"),
+                                borderColor: alreadyAdded ? theme.line : (libChem ? theme.green : theme.line),
+                                background: alreadyAdded ? theme.card : (libChem ? theme.green : theme.fill),
+                                color: alreadyAdded ? theme.mut : (libChem ? "#fff" : theme.mut),
                                 whiteSpace:"nowrap",
                               }}
                             >
@@ -4660,17 +4586,17 @@ export default function App() {
                                 disabled={!canAdd}
                                 title={canAdd ? `Last used rate: ${lastUsedRate} ${libChem.unit}/ac` : ""}
                                 style={{
-                                  padding:"4px 9px", borderRadius:"0 5px 5px 0",
-                                  border:"1.5px solid #c8dbb0", borderLeft:"none",
+                                  padding:"5px 9px", borderRadius:"0 9px 9px 0",
+                                  border:`1.5px solid ${theme.line}`, borderLeft:"none",
                                   cursor: canAdd ? "pointer" : "default",
-                                  fontSize:11, fontWeight:400, fontFamily:"inherit",
-                                  background:"#f5f5f5", color:"#999",
+                                  fontSize:11, fontWeight:600, fontFamily:"'Space Grotesk',monospace",
+                                  background: theme.card, color: theme.ink2,
                                   whiteSpace:"nowrap",
                                 }}
                               >{lastUsedRate} {libChem.unit}/ac</button>
                             )}
                           </div>
-                          <div style={{ fontSize:10, color:"#888", marginTop:2, marginLeft:2 }}>
+                          <div style={{ fontSize:11, color: theme.ink2, marginTop:3, marginLeft:2 }}>
                             {a.summary || a.reason}
                           </div>
                         </div>
@@ -4683,64 +4609,33 @@ export default function App() {
 
 
             <div style={{ display:"flex", gap:10, flexDirection:"column", marginTop:16 }}>
-              {!isMobile && editingId && (
-                <div style={{ background:"#fff8e0", border:"1.5px solid #e0c040", borderRadius:6, padding:"6px 12px", fontSize:12, color:"#7a5800", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:6 }}>
-                  <span>✏ Editing saved ticket — Save will update the existing record.</span>
-                  <div style={{ display:"flex", gap:8 }}>
-                    <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); }}
-                      style={{ background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:12 }}>Cancel Edit</button>
-                    <button onClick={async () => {
-                      if (!window.confirm("Delete this ticket? This cannot be undone.")) return;
-                      const { error } = await supabase.from("tickets").delete().eq("id", editingId);
-                      if (error) {
-                        showToast("Failed to delete ticket: " + error.message);
-                        return;
-                      }
-                      setTickets(t => t.filter(x => x.id !== editingId));
-                      setForm(blank()); setEditingId(null); setManualTank(false);
-                      setView("log");
-                    }} style={{
-                      background:"#c0392b", color:"#fff", border:"none", borderRadius:5,
-                      padding:"4px 12px", cursor:"pointer", fontWeight:700, fontSize:12
-                    }}>🗑 Delete Ticket</button>
-                  </div>
-                </div>
-              )}
-
-              <div style={isMobile ? { display:"flex", flexDirection:"column", gap:10, marginTop:16 } : { display:"flex", gap:12, marginTop:16 }}>
-                {isMobile ? (
-                  <button onClick={saveTicket} disabled={isSaving} style={{
-                    width:"100%", background: theme.header, color:"#fff", border:"none", borderRadius:15,
-                    padding:16, fontSize:16, fontWeight:800, cursor: isSaving ? "not-allowed" : "pointer",
-                    boxShadow:"0 8px 18px -6px rgba(14,92,50,0.5)",
-                  }}>{isSaving ? "Saving…" : (editingId ? "Save changes" : "Save ticket")}</button>
-                ) : (
-                  <>
-                    <button onClick={saveTicket} disabled={isSaving} style={{
-                      background: isSaving ? "#999" : (editingId ? "linear-gradient(135deg,#8a6010,#5c3c08)" : "linear-gradient(135deg,#2a8a10,#1e5c08)"),
-                      color:"#fff", border:"none", borderRadius:7, padding:"11px 0",
-                      cursor: isSaving ? "not-allowed" : "pointer", fontSize:15, fontWeight:700,
-                      boxShadow:"0 2px 8px rgba(30,90,8,0.2)", flex:1
-                    }}>{isSaving ? "Saving…" : (editingId ? "✏ Update Ticket" : "💾 Save Ticket")}</button>
-                    <button onClick={() => { setForm(blank()); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setEditingId(null); }} style={{
-                      background:"#f0f7e8", color:"#555", border:"1.5px solid #c8dbb0",
-                      borderRadius:7, padding:"11px 20px", cursor:"pointer", fontSize:14
-                    }}>Clear</button>
-                  </>
+              <div style={isMobile ? { display:"flex", flexDirection:"column", gap:10 } : { display:"flex", gap:10, alignItems:"center" }}>
+                {!isMobile && editingId && (
+                  <button onClick={deleteEditingTicket} style={{
+                    padding:"12px 18px", borderRadius:12, border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.red,
+                    fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:7,
+                  }}>🗑 Delete ticket</button>
                 )}
+                {!isMobile && <div style={{ flex:1 }} />}
+                {!isMobile && (
+                  <button onClick={() => { setForm(blank()); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setEditingId(null); }}
+                    title="Clear the form" style={{
+                    padding:"12px 20px", borderRadius:12, border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.ink2,
+                    fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
+                  }}>Clear</button>
+                )}
+                <button onClick={saveTicket} disabled={isSaving} style={{
+                  width: isMobile ? "100%" : "auto", minWidth: isMobile ? undefined : 200, background: isMobile ? theme.header : theme.green, color:"#fff", border:"none",
+                  borderRadius: isMobile ? 15 : 12, padding: isMobile ? 16 : "13px 28px", fontSize: isMobile ? 16 : 15, fontWeight:800,
+                  cursor: isSaving ? "not-allowed" : "pointer", opacity: isSaving ? 0.7 : 1, fontFamily:"inherit",
+                  boxShadow:"0 8px 18px -6px rgba(14,92,50,0.5)",
+                }}>{isSaving ? "Saving…" : (editingId ? "Save changes" : "Save ticket")}</button>
               </div>
 
               {isMobile && editingId && (
-                <button onClick={async () => {
-                  if (!window.confirm("Delete this ticket? This cannot be undone.")) return;
-                  const { error } = await supabase.from("tickets").delete().eq("id", editingId);
-                  if (error) { showToast("Failed to delete ticket: " + error.message); return; }
-                  setTickets(t => t.filter(x => x.id !== editingId));
-                  setForm(blank()); setEditingId(null); setManualTank(false);
-                  setView("log");
-                }} style={{
+                <button onClick={deleteEditingTicket} style={{
                   width:"100%", marginTop:10, padding:14, borderRadius:14, border:`1.5px solid ${theme.inputLine}`,
-                  background: theme.card, color:"#c0432f", fontSize:14, fontWeight:700, cursor:"pointer",
+                  background: theme.card, color: theme.red, fontSize:14, fontWeight:700, cursor:"pointer",
                   display:"flex", alignItems:"center", justifyContent:"center", gap:7,
                 }}>🗑 Delete ticket</button>
               )}
@@ -5520,7 +5415,7 @@ export default function App() {
               const unconfirmed   = Object.values(fmMatches).filter(m => m.status === "suggested" && !m.confirmed).length;
 
               return (
-                <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+                <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
                   <div style={sectionTitleT}>Import Field Boundaries</div>
 
                   {/* Stage 1: Upload */}
@@ -5973,7 +5868,7 @@ export default function App() {
             })()}
 
             {(!isMobile || csvStage !== "idle") && (
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Import Fields from CSV</div>
 
               {csvStage === "idle" && (
@@ -6221,7 +6116,7 @@ export default function App() {
             )}
 
             {!isMobile && (
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Add Field Manually</div>
               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr auto", gap:10, alignItems:"end" }}>
                 <div>
@@ -6282,7 +6177,7 @@ export default function App() {
                 { key: "post_harvest",label: "Post-Harvest" },
               ];
               return (
-                <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+                <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
                   <div style={sectionTitleT}>Crop Season Status</div>
                   <div style={isMobile ? { ...noteT, marginBottom:12 } : { fontSize:11, color:"#888", marginBottom:10 }}>
                     Set the current growing stage for each crop. Pre-Season and Post-Harvest suppress crop safety warnings for chemicals used to manage volunteer plants.
@@ -6340,7 +6235,7 @@ export default function App() {
               );
             })()}
 
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={{ ...sectionTitleT, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
                 {isMobile ? (
                   <div style={{ minWidth:0 }}>
@@ -6823,7 +6718,7 @@ export default function App() {
         {view === "equipMgr" && !(isMobile && libTab === "people") && (
           <div>
             {/* Equipment */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Equipment Library</div>
               {isOwner && <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
@@ -6919,7 +6814,7 @@ export default function App() {
                 Equip tab too was a duplicate. */}
             {!isMobile && <>
             {/* Licensed Applicators */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Licensed Applicators</div>
               {isOwner && <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
@@ -6971,7 +6866,7 @@ export default function App() {
             </div>
 
             {/* Non-Licensed Applicators */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Non-Licensed Applicators <span style={{ fontWeight:400, fontSize:10, color:"#888", textTransform:"none", letterSpacing:0 }}>working under license</span></div>
               {isOwner && <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
                 <div>
@@ -7233,7 +7128,7 @@ export default function App() {
               </div>
             )}
 
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Chemical Library ({chemicals.length})</div>
               {isMobile ? (
                 <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
@@ -7457,7 +7352,7 @@ export default function App() {
             </div>
 
             {/* Pest Library */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
+            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Pest / Weed / Disease Library ({pestLibrary.length})</div>
               {isOwner && (
                 <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
