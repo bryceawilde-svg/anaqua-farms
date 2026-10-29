@@ -3316,7 +3316,7 @@ export default function App() {
                     ? `Editing · No. ${String(tickets.find(t=>t.id===editingId)?.ticketNumber || "").padStart(3,"0")}`
                     : `Draft · No. ${String((Math.max(0, ...tickets.map(t=>t.ticketNumber||0)) + 1)).padStart(3,"0")}`)
                 : view === "log" ? `${currentOrg?.name || "Anaqua Farms"} · ${tickets.length} record${tickets.length!==1?"s":""}`
-                : view === "applicator" ? `${tickets.filter(t=>t.team_view).length} queued · tap a ticket to spray`
+                : view === "applicator" ? `${tickets.filter(t=>t.team_view && t.queue_status !== "completed").length} queued · tap a ticket to spray`
                 : null}
             </div>
           </div>

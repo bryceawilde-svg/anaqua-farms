@@ -103,19 +103,26 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       const done   = tickets.filter(t => t.queue_status === "completed");
       return (
         <div style={{ maxWidth: 640, margin: "0 auto", paddingBottom: 24 }}>
-          <div style={{ padding: "2px 4px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 12, color: t_.mut }}>{active.length} ticket{active.length !== 1 ? "s" : ""} queued · tap a ticket to spray</div>
+          {/* Count + hint live in the app header; this row is just the sync control */}
+          <div style={{ padding: "2px 4px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: t_.mut }}>Spray queue</div>
             <button
               onClick={async () => { setSyncing(true); await onRefresh?.(); setSyncing(false); }}
               disabled={syncing}
               title="Sync latest data"
-              style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color: t_.green }}
-            >⟳</button>
+              style={{ background: t_.card, border: `1px solid ${t_.line}`, borderRadius: 10, padding: "6px 12px", cursor: syncing ? "default" : "pointer",
+                fontSize: 12, fontWeight: 700, color: t_.onGreen, display: "flex", alignItems: "center", gap: 5, fontFamily: "inherit" }}
+            ><span style={{ fontSize: 14, lineHeight: 1 }}>⟳</span>{syncing ? "Syncing…" : "Sync"}</button>
           </div>
 
           {tickets.length === 0 && (
-            <div style={{ textAlign:"center", padding:"48px 24px", color: t_.mut }}>
-              <div style={{ fontSize:14, fontWeight:700, color: t_.ink2, marginBottom:4 }}>Queue is empty</div>
+            <div style={{ textAlign:"center", padding:"30px 24px 28px", color: t_.mut, border:`1.5px dashed ${t_.dash}`, borderRadius:16, margin:"6px 2px 0" }}>
+              <div style={{ width:48, height:48, borderRadius:14, background: t_.tintGreen, color: t_.onGreen, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 6h11v10H3zM14 9h4l3 3v4h-7" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" />
+                </svg>
+              </div>
+              <div style={{ fontSize:15, fontWeight:800, color: t_.ink, marginBottom:4 }}>Queue is empty</div>
               <div style={{ fontSize:12.5 }}>Open a ticket and tap <span style={{ fontWeight:700, color: t_.onGreen }}>Add to cab queue</span> to send it here.</div>
             </div>
           )}
