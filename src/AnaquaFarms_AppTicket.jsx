@@ -3114,7 +3114,36 @@ export default function App() {
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────────
-  if (authLoading) return (
+  // Entry screens (loading, sign in, create org). Mobile gets the redesign look —
+  // a green hero with the form card overlapping it; desktop keeps the original
+  // centered card until the office redesign.
+  const entryPage = isMobile
+    ? { minHeight:"100vh", background: theme.canvas, fontFamily:"'Hanken Grotesk',system-ui,sans-serif" }
+    : { minHeight:"100vh", background:"#f0f7e8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Georgia','Times New Roman',serif" };
+  const entryCard = (w) => isMobile
+    ? { position:"relative", background: theme.card, border:`1px solid ${theme.line}`, borderRadius:22, padding:"20px 18px 18px", margin:"-44px 16px 24px", boxShadow:"0 14px 34px -14px rgba(20,40,26,0.35)" }
+    : { background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:10, padding:"32px 32px 28px", width:w, boxShadow:"0 4px 24px rgba(42,92,15,0.13)" };
+  // 16px on mobile so iOS doesn't zoom the page when the field is focused.
+  const entryInput = isMobile
+    ? { border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"13px 14px", fontSize:16, fontFamily:"inherit", outline:"none", background: theme.input, color: theme.ink }
+    : { border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", fontSize:14, fontFamily:"inherit", outline:"none" };
+  const entryBtn = (off) => isMobile
+    ? { background: off ? theme.fill : theme.green, color: off ? theme.mut : "#fff", border:"none", borderRadius:14, padding:"14px 0", fontWeight:800, fontSize:16, cursor: off ? "default" : "pointer", fontFamily:"inherit" }
+    : { background: off ? "#aaa" : "#2a5c0f", color:"#fff", border:"none", borderRadius:6, padding:"11px 0", fontWeight:700, fontSize:14, cursor: off ? "default" : "pointer", fontFamily:"inherit" };
+  const entryHero = (title, sub) => (
+    <div style={{ background: theme.header, color:"#fff", padding:"52px 24px 66px", textAlign:"center" }}>
+      <div style={{ width:56, height:56, borderRadius:16, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:30, margin:"0 auto 12px" }}>🌾</div>
+      <div style={{ fontSize:26, fontWeight:800, letterSpacing:"-0.01em" }}>{title}</div>
+      {sub && <div style={{ fontSize:13, color: theme.headerSub, marginTop:5, lineHeight:1.5, maxWidth:300, marginInline:"auto" }}>{sub}</div>}
+    </div>
+  );
+  const splash = isMobile ? (
+    <div style={{ minHeight:"100vh", background: theme.header, color:"#fff", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'Hanken Grotesk',system-ui,sans-serif" }}>
+      <div style={{ width:72, height:72, borderRadius:20, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:40, marginBottom:14 }}>🌾</div>
+      <div style={{ fontSize:26, fontWeight:800 }}>BoomLog</div>
+      <div style={{ marginTop:6, color: theme.headerSub, fontSize:13 }}>Loading…</div>
+    </div>
+  ) : (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
       <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
       <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>BoomLog</div>
@@ -3122,44 +3151,53 @@ export default function App() {
     </div>
   );
 
+  if (authLoading) return splash;
+
   if (!session) return (
-    <div style={{ minHeight:"100vh", background:"#f0f7e8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Georgia','Times New Roman',serif" }}>
-      <div style={{ background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:10, padding:"32px 32px 28px", width:340, boxShadow:"0 4px 24px rgba(42,92,15,0.13)" }}>
-        <div style={{ textAlign:"center", marginBottom:20 }}>
-          <div style={{ fontSize:28 }}>🌱</div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>BoomLog</div>
-          <div style={{ fontSize:12, color:"#888", marginTop:3 }}>Application Management</div>
-        </div>
-        <div style={{ display:"flex", gap:0, marginBottom:18, borderRadius:6, overflow:"hidden", border:"1.5px solid #c8dbb0" }}>
+    <div style={entryPage}>
+      {isMobile && entryHero("BoomLog", "Application Management")}
+      <div style={entryCard(340)}>
+        {!isMobile && (
+          <div style={{ textAlign:"center", marginBottom:20 }}>
+            <div style={{ fontSize:28 }}>🌱</div>
+            <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>BoomLog</div>
+            <div style={{ fontSize:12, color:"#888", marginTop:3 }}>Application Management</div>
+          </div>
+        )}
+        <div style={isMobile
+          ? { display:"flex", background: theme.fill, borderRadius:12, padding:3, gap:2, marginBottom:16 }
+          : { display:"flex", gap:0, marginBottom:18, borderRadius:6, overflow:"hidden", border:"1.5px solid #c8dbb0" }}>
           {["login","signup"].map(v => (
             <button key={v} onClick={() => { setAuthView(v); setAuthError(""); }}
-              style={{ flex:1, padding:"8px 0", border:"none", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"inherit",
+              style={isMobile ? {
+                flex:1, padding:"10px 0", border:"none", borderRadius:9, cursor:"pointer", fontWeight:700, fontSize:14, fontFamily:"inherit",
+                background: authView===v ? theme.card : "transparent", color: authView===v ? theme.ink : theme.mut,
+                boxShadow: authView===v ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
+              } : { flex:1, padding:"8px 0", border:"none", cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"inherit",
                 background: authView===v ? "#2a5c0f" : "#f9fdf5",
                 color: authView===v ? "#fff" : "#2a5c0f" }}>
               {v === "login" ? "Sign In" : "Sign Up"}
             </button>
           ))}
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap: isMobile ? 12 : 10 }}>
           <input type="email" placeholder="Email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)}
-            style={{ border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", fontSize:14, fontFamily:"inherit", outline:"none" }} />
+            style={entryInput} />
           <input type="password" placeholder="Password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)}
             onKeyDown={e => e.key==="Enter" && (authView==="login" ? handleSignIn() : handleSignUp())}
-            style={{ border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", fontSize:14, fontFamily:"inherit", outline:"none" }} />
+            style={entryInput} />
           {authError && (
-            <div style={{ fontSize:12, color: authError.includes("Check your email") ? "#2a5c0f" : "#c0392b", lineHeight:1.5 }}>
+            <div style={{ fontSize: isMobile ? 13 : 12, color: authError.includes("Check your email") ? (isMobile ? theme.onGreen : "#2a5c0f") : "#c0392b", lineHeight:1.5 }}>
               {authError}
             </div>
           )}
           <button onClick={authView==="login" ? handleSignIn : handleSignUp}
             disabled={authWorking || !authEmail || !authPassword}
-            style={{ background: authWorking || !authEmail || !authPassword ? "#aaa" : "#2a5c0f",
-              color:"#fff", border:"none", borderRadius:6, padding:"11px 0", fontWeight:700, fontSize:14,
-              cursor: authWorking || !authEmail || !authPassword ? "default" : "pointer", fontFamily:"inherit" }}>
+            style={entryBtn(authWorking || !authEmail || !authPassword)}>
             {authWorking ? "…" : authView==="login" ? "Sign In" : "Create Account"}
           </button>
         </div>
-        <div style={{ fontSize:10, color:"#aaa", textAlign:"center", marginTop:14, lineHeight:1.6 }}>
+        <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#aaa", textAlign:"center", marginTop:14, lineHeight:1.6 }}>
           Your records are isolated from other users.
         </div>
       </div>
@@ -3167,16 +3205,19 @@ export default function App() {
   );
 
   if (showOrgCreate && !currentOrg) return (
-    <div style={{ minHeight:"100vh", background:"#f0f7e8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Georgia','Times New Roman',serif" }}>
-      <div style={{ background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:10, padding:"32px 32px 28px", width:360, boxShadow:"0 4px 24px rgba(42,92,15,0.13)" }}>
-        <div style={{ textAlign:"center", marginBottom:20 }}>
-          <div style={{ fontSize:28 }}>🌾</div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>Create Your Organization</div>
-          <div style={{ fontSize:12, color:"#888", marginTop:4, lineHeight:1.5 }}>
-            Name your farm or business. Team members you invite will share the same data.
+    <div style={entryPage}>
+      {isMobile && entryHero("Create your organization", "Name your farm or business. Team members you invite will share the same data.")}
+      <div style={entryCard(360)}>
+        {!isMobile && (
+          <div style={{ textAlign:"center", marginBottom:20 }}>
+            <div style={{ fontSize:28 }}>🌾</div>
+            <div style={{ fontWeight:800, fontSize:18, color:"#2a5c0f" }}>Create Your Organization</div>
+            <div style={{ fontSize:12, color:"#888", marginTop:4, lineHeight:1.5 }}>
+              Name your farm or business. Team members you invite will share the same data.
+            </div>
           </div>
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        )}
+        <div style={{ display:"flex", flexDirection:"column", gap: isMobile ? 12 : 10 }}>
           <input
             type="text"
             placeholder="e.g. Anaqua Farms"
@@ -3191,7 +3232,7 @@ export default function App() {
               setShowOrgCreate(false);
               setOrgWorking(false);
             })()}
-            style={{ border:"1.5px solid #c8dbb0", borderRadius:6, padding:"10px 12px", fontSize:14, fontFamily:"inherit", outline:"none" }}
+            style={entryInput}
           />
           <button
             onClick={async () => {
@@ -3205,14 +3246,10 @@ export default function App() {
               setOrgWorking(false);
             }}
             disabled={orgWorking || !newOrgName.trim()}
-            style={{
-              background: orgWorking || !newOrgName.trim() ? "#aaa" : "#2a5c0f",
-              color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
-              fontWeight:700, fontSize:14, cursor: orgWorking || !newOrgName.trim() ? "default" : "pointer", fontFamily:"inherit"
-            }}>
+            style={entryBtn(orgWorking || !newOrgName.trim())}>
             {orgWorking ? "Creating…" : "Create Organization"}
           </button>
-          <button onClick={() => supabase.auth.signOut()} style={{ background:"none", border:"none", color:"#999", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+          <button onClick={() => supabase.auth.signOut()} style={{ background:"none", border:"none", color: isMobile ? theme.mut : "#999", fontSize: isMobile ? 13 : 12, padding: isMobile ? "6px 0" : 0, cursor:"pointer", fontFamily:"inherit" }}>
             Sign out
           </button>
         </div>
@@ -3220,13 +3257,7 @@ export default function App() {
     </div>
   );
 
-  if (dbLoading) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f0f7e8", fontFamily:"Georgia,serif" }}>
-      <div style={{ fontSize:52, marginBottom:16 }}>🌾</div>
-      <div style={{ fontSize:22, color:"#2a5c0f", fontWeight:700 }}>BoomLog</div>
-      <div style={{ marginTop:12, color:"#666", fontSize:14 }}>Loading…</div>
-    </div>
-  );
+  if (dbLoading) return splash;
   const navTabs = isViewer
     ? [["applicator","📋 Applications"]]
     : [["applicator","📱 Applicator"],["log","📋 Saved"],["chemMgr","🧪 Chems"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]];
