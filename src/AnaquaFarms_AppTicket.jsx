@@ -1043,6 +1043,8 @@ const inp = {
   boxSizing:"border-box", WebkitAppearance:"none"
 };
 const sel  = { ...inp };
+// App shadows inp/sel with themed mobile versions; these keep the originals reachable.
+const inpBase = inp, selBase = sel;
 const td   = { padding:"8px 8px", borderBottom:"1px solid #eef5e8", verticalAlign:"middle" };
 const th   = { padding:"8px", background:"#2a5c0f", color:"#fff", fontSize:12, fontWeight:700, textAlign:"left", letterSpacing:"0.04em" };
 const labelStyle  = { fontSize:14, fontWeight:700, color:"#3a6b1a", display:"block", marginBottom:4, letterSpacing:"0.03em" };
@@ -1807,7 +1809,11 @@ export default function App() {
   useEffect(() => { localStorage.setItem("boomlog_dark", darkMode ? "1" : "0"); }, [darkMode]);
   useEffect(() => { localStorage.setItem("boomlog_accent", accent); }, [accent]);
   const theme = buildTheme(darkMode, accent);
-  useEffect(() => { document.body.style.background = theme.canvas; }, [darkMode, accent]);
+  useEffect(() => {
+    document.body.style.background = theme.canvas;
+    // Browser chrome / Android status bar color follows the header it sits above.
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isMobile ? theme.header : "#2a5c0f");
+  }, [darkMode, accent, isMobile]);
   // Mobile Library sub-nav: "equip" and "people" both live under view==="equipMgr",
   // this just tracks which half of that view to show on mobile.
   const [libTab,        setLibTab]        = useState("chems");
@@ -1825,9 +1831,10 @@ export default function App() {
   const sectionTitleT = isMobile ? {
     fontSize:14, fontWeight:800, color: theme.ink, marginBottom:12,
   } : sectionTitle;
+  // Mobile sets the whole `border` shorthand (overriding the call site's
+  // border:"1.5px solid") — mixing it with borderWidth trips React's style warning.
   const pillBtn = (active) => isMobile ? {
-    borderWidth: active ? 2 : 1.5,
-    borderColor: active ? theme.green     : "transparent",
+    border:      `${active ? 2 : 1.5}px solid ${active ? theme.green : "transparent"}`,
     background:  active ? theme.tintGreen : theme.fill,
     color:       active ? theme.green     : theme.ink2,
     borderRadius: 10,
@@ -1840,6 +1847,23 @@ export default function App() {
     fontSize:9.5, fontWeight:700, letterSpacing:"0.06em", color: theme.mut,
     display:"block", marginBottom:4, textTransform:"uppercase",
   } : labelStyle;
+  // Mobile inputs take the theme's fill/border (legible in dark mode); desktop
+  // gets the module-level originals. Declared before any JSX in App uses them.
+  const inp = isMobile ? { ...inpBase, background: theme.input, color: theme.ink, borderColor: theme.inputLine, borderRadius:10 } : inpBase;
+  const sel = isMobile ? { ...inp } : selBase;
+  // Mobile primary "+ Add" button beside an input.
+  const addBtnT = (enabled = true) => ({
+    background: enabled ? theme.green : theme.fill, color: enabled ? "#fff" : theme.mut, border:"none", borderRadius:10,
+    padding:"0 14px", minHeight:42, cursor: enabled ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap", fontFamily:"inherit",
+  });
+  // Mobile checkbox card (Target Zone / Prime / Flush): neutral fill when off,
+  // tinted with its own color when on.
+  const toggleCardT = (on, color, tint, extra) => ({
+    display:"flex", alignItems:"center", gap:10, cursor:"pointer",
+    background: on ? tint : theme.fill,
+    border:`1.5px solid ${on ? color : "transparent"}`,
+    borderRadius:12, padding:"12px 13px", ...extra,
+  });
 
   // ── Form state
   const blank = () => ({
@@ -3134,7 +3158,7 @@ export default function App() {
     ? { background: off ? theme.fill : theme.green, color: off ? theme.mut : "#fff", border:"none", borderRadius:14, padding:"14px 0", fontWeight:800, fontSize:16, cursor: off ? "default" : "pointer", fontFamily:"inherit" }
     : { background: off ? "#aaa" : "#2a5c0f", color:"#fff", border:"none", borderRadius:6, padding:"11px 0", fontWeight:700, fontSize:14, cursor: off ? "default" : "pointer", fontFamily:"inherit" };
   const entryHero = (title, sub) => (
-    <div style={{ background: theme.header, color:"#fff", padding:"52px 24px 66px", textAlign:"center" }}>
+    <div style={{ background: theme.header, color:"#fff", padding:"calc(52px + env(safe-area-inset-top)) 24px 66px", textAlign:"center" }}>
       <div style={{ width:56, height:56, borderRadius:16, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:30, margin:"0 auto 12px" }}>🌾</div>
       <div style={{ fontSize:26, fontWeight:800, letterSpacing:"-0.01em" }}>{title}</div>
       {sub && <div style={{ fontSize:13, color: theme.headerSub, marginTop:5, lineHeight:1.5, maxWidth:300, marginInline:"auto" }}>{sub}</div>}
@@ -3300,7 +3324,9 @@ export default function App() {
 
       {/* Header */}
       {isMobile ? (
-        <div ref={headerRef} style={{ position:"fixed", top:0, left:0, right:0, zIndex:100, background: theme.header, padding:"14px 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap" }}>
+        // Safe-area inset: installed to the home screen, iOS draws under a
+        // black-translucent status bar (index.html), so the title would sit under the clock.
+        <div ref={headerRef} style={{ position:"fixed", top:0, left:0, right:0, zIndex:100, background: theme.header, padding:"calc(14px + env(safe-area-inset-top)) 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap" }}>
           <div>
             <div style={{ fontSize:23, fontWeight:800, letterSpacing:"-0.01em" }}>
               {view === "form" ? (editingId ? "Edit Ticket" : "New Ticket")
@@ -3425,7 +3451,11 @@ export default function App() {
               <div style={sectionTitleT}>Application Info</div>
               {/* Weather fetch button */}
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: isMobile ? 8 : 12, flexWrap:"wrap" }}>
-                <button onClick={fetchWeather} disabled={wxLoading} style={{
+                <button onClick={fetchWeather} disabled={wxLoading} style={isMobile ? {
+                  background: theme.tintBlue, color: theme.blue, border:"none", borderRadius:10,
+                  padding:"8px 12px", cursor: wxLoading ? "default" : "pointer", opacity: wxLoading ? 0.7 : 1,
+                  fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6, fontFamily:"inherit",
+                } : {
                   background: wxLoading ? "#aaa" : "linear-gradient(135deg,#1a6a8a,#0e3a5c)",
                   color:"#fff", border:"none", borderRadius:7,
                   padding: isMobile ? "7px 12px" : "10px 18px",
@@ -3443,7 +3473,7 @@ export default function App() {
                   <span style={{ fontSize:11, color:"#c03020", fontWeight:600 }}>⚠ {wxError}</span>
                 )}
                 {!wxLoading && !wxError && form.windSpeed && (
-                  <span style={{ fontSize:11, color:"#2a8a10", fontWeight:600 }}>
+                  <span style={{ fontSize:11, color: isMobile ? theme.onGreen : "#2a8a10", fontWeight:600 }}>
                     ✓ {fmtWindSpeed(form.windSpeed, isMetric)} {form.windDir}, {fmtTemp(form.airTemp, isMetric)}
                   </span>
                 )}
@@ -3467,12 +3497,15 @@ export default function App() {
                 </div>
                 <div>
                   <label style={cl}>Est. End</label>
-                  <div style={{
+                  <div style={isMobile ? {
+                    border:"1.5px solid transparent", borderRadius:6, padding:"5px 7px",
+                    background: theme.tintGreen, display:"flex", alignItems:"center", minHeight:28,
+                  } : {
                     border:"1.5px solid #a8d870", borderRadius:5,
                     padding: isMobile ? "5px 7px" : "6px 10px",
                     background:"#e6f5d0", display:"flex", alignItems:"center", minHeight: isMobile ? 28 : 32
                   }}>
-                    <span style={{ fontSize: isMobile ? 12 : 14, fontWeight:700, color:"#2a5c0f" }}>{endTime}</span>
+                    <span style={{ fontSize: isMobile ? 12 : 14, fontWeight:700, color: isMobile ? theme.onGreen : "#2a5c0f", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{endTime}</span>
                   </div>
                 </div>
                 <div>
@@ -3529,7 +3562,10 @@ export default function App() {
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, marginBottom:10 } : sectionTitleT}>Crop / Site</div>
               <div style={{ marginBottom:0 }}>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                {/* Mobile: equal-width grid, so a crop that wraps onto its own row doesn't stretch across the card */}
+                <div style={isMobile
+                  ? { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(96px, 1fr))", gap:6 }
+                  : { display:"flex", gap:6, flexWrap:"wrap" }}>
                   {[...new Set([...orgCrops, ...fieldLibrary.map(f=>f.crop).filter(Boolean)])].filter(Boolean).sort().map(crop => (
                     <button key={crop} type="button"
                       onClick={() => set("crop", crop)}
@@ -3617,7 +3653,7 @@ export default function App() {
                       addPest(name);
                       setPestInput("");
                     }}
-                    style={{ padding:"6px 14px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}
+                    style={isMobile ? addBtnT() : { padding:"6px 14px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}
                   >+ Add</button>
                 </div>
                 {!isMobile && (form.targetPest||[]).length > 0 && (
@@ -3716,23 +3752,35 @@ export default function App() {
                       </span>
                     )}
                   </label>
-                  <div style={{ display:"flex", gap:2 }}>
-                    {["List","Map"].map(mode => (
+                  <div style={{ display:"flex", gap: isMobile ? 6 : 2, alignItems:"center" }}>
+                    <div style={isMobile ? { display:"flex", background: theme.fill, borderRadius:10, padding:3, gap:2 } : { display:"contents" }}>
+                    {["List","Map"].map(mode => {
+                      const on = fieldMapView ? mode==="Map" : mode==="List";
+                      return (
                       <button key={mode}
                         onClick={() => { setFieldMapView(mode === "Map"); setFieldReorderMode(false); }}
-                        style={{
+                        style={isMobile ? {
+                          padding:"5px 13px", fontSize:12.5, fontWeight:700, cursor:"pointer", border:"none", borderRadius:8, fontFamily:"inherit",
+                          background: on ? theme.card : "transparent", color: on ? theme.ink : theme.mut,
+                          boxShadow: on ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
+                        } : {
                           padding:"3px 10px", fontSize:12, fontWeight:700, cursor:"pointer",
                           border:"1.5px solid #c8dbb0", borderRadius:4,
-                          background: (fieldMapView ? mode==="Map" : mode==="List") ? "#2a5c0f" : "#f9fdf5",
-                          color:      (fieldMapView ? mode==="Map" : mode==="List") ? "#fff"    : "#4a7a20",
+                          background: on ? "#2a5c0f" : "#f9fdf5",
+                          color:      on ? "#fff"    : "#4a7a20",
                         }}
                       >{mode}</button>
-                    ))}
+                      );
+                    })}
+                    </div>
                     {!fieldMapView && form.selectedFields.length > 1 && (
                       <button
                         onClick={() => setFieldReorderMode(m => !m)}
                         title="Reorder fields"
-                        style={{
+                        style={isMobile ? {
+                          padding:"6px 10px", fontSize:13, fontWeight:700, cursor:"pointer", border:"none", borderRadius:9,
+                          background: fieldReorderMode ? theme.tintGreen : theme.fill, color: fieldReorderMode ? theme.onGreen : theme.ink2,
+                        } : {
                           padding:"3px 8px", fontSize:12, fontWeight:700, cursor:"pointer",
                           border:"1.5px solid #c8dbb0", borderRadius:4,
                           background: fieldReorderMode ? "#e6f5d0" : "#f9fdf5",
@@ -3815,8 +3863,8 @@ export default function App() {
                 ) : (
                   <div style={{ position:"relative" }}>
                     <div style={{
-                      border:"1.5px solid #c8dbb0", borderRadius:5, padding:"5px 8px",
-                      background:"#f9fdf5", display:"flex", flexWrap:"wrap", alignItems:"center", gap:2, minHeight:40,
+                      border: `1.5px solid ${isMobile ? theme.inputLine : "#c8dbb0"}`, borderRadius: isMobile ? 10 : 5, padding:"5px 8px",
+                      background: isMobile ? theme.input : "#f9fdf5", display:"flex", flexWrap:"wrap", alignItems:"center", gap:2, minHeight:40,
                       cursor:"text"
                     }} onClick={() => setShowDrop(true)}>
                       <input
@@ -3824,7 +3872,7 @@ export default function App() {
                         onChange={e => { setFieldSearch(e.target.value); setShowDrop(true); }}
                         onFocus={() => setShowDrop(true)}
                         placeholder={form.selectedFields.length ? "Add more fields…" : "Search or select fields…"}
-                        style={{ border:"none", background:"transparent", outline:"none", fontSize:16, flex:1, minWidth:140, WebkitAppearance:"none" }}
+                        style={{ border:"none", background:"transparent", outline:"none", fontSize:16, flex:1, minWidth:140, WebkitAppearance:"none", color: isMobile ? theme.ink : undefined }}
                       />
                     </div>
                     {showDrop && (
@@ -3832,21 +3880,21 @@ export default function App() {
                       <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowDrop(false)} />
                       <div style={{
                         position:"absolute", top:"100%", left:0, right:0, zIndex:99,
-                        background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
-                        boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight:200, overflowY:"auto"
+                        background: isMobile ? theme.card : "#fff", border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
+                        boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight: isMobile ? 260 : 200, overflowY:"auto", marginTop: isMobile ? 4 : 0
                       }}>
                         {filteredFields.length === 0 ? (
-                          <div style={{ padding:"10px 12px", fontSize:13, color:"#999" }}>
+                          <div style={{ padding:"10px 12px", fontSize:13, color: isMobile ? theme.mut : "#999" }}>
                             {fieldSearch ? "No matching fields" : "All fields selected or library empty"}
                           </div>
                         ) : filteredFields.map(f => (
                           <div key={f.id} onClick={() => addField(f)}
-                            style={{ padding:"8px 12px", cursor:"pointer", fontSize:13, borderBottom:"1px solid #eef5e8", display:"flex", justifyContent:"space-between", alignItems:"center" }}
-                            onMouseEnter={e => e.currentTarget.style.background="#f0f7e8"}
+                            style={{ padding: isMobile ? "12px 13px" : "8px 12px", cursor:"pointer", fontSize: isMobile ? 14 : 13, color: isMobile ? theme.ink : undefined, borderBottom: `1px solid ${isMobile ? theme.divider : "#eef5e8"}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                            onMouseEnter={e => e.currentTarget.style.background = isMobile ? theme.fill : "#f0f7e8"}
                             onMouseLeave={e => e.currentTarget.style.background="transparent"}
                           >
                             <span>{f.name}</span>
-                            <span style={{ color:"#4aaa1a", fontWeight:700, fontSize:12 }}>{fmtAcresShort(f.acres, isMetric)}</span>
+                            <span style={{ color: isMobile ? theme.onGreen : "#4aaa1a", fontWeight:700, fontSize:12, fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{fmtAcresShort(f.acres, isMetric)}</span>
                           </div>
                         ))}
                       </div>
@@ -4019,26 +4067,26 @@ export default function App() {
               </div>
 
               {/* Target zone (spot spray) — calc-only rate reduction */}
-              {(targetZoneEnabled || form.targetZone) && <div style={{ marginBottom:10, background: form.targetZone ? "#f3eefc" : "#f4fbee",
+              {(targetZoneEnabled || form.targetZone) && <div style={isMobile ? toggleCardT(form.targetZone, theme.purple, theme.tintPurple, { marginBottom:10, display:"block" }) : { marginBottom:10, background: form.targetZone ? "#f3eefc" : "#f4fbee",
                 border:`1.5px solid ${form.targetZone ? "#7a4ab0" : "#c8dbb0"}`, borderRadius:7, padding:"12px 14px" }}>
                 <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
                   <input type="checkbox" checked={!!form.targetZone}
                     onChange={e => setForm(f => ({ ...f, targetZone: e.target.checked, targetZonePct: f.targetZonePct || "28" }))}
-                    style={{ width:20, height:20, accentColor:"#7a4ab0", flexShrink:0 }}/>
+                    style={{ width:20, height:20, accentColor: isMobile ? theme.purple : "#7a4ab0", flexShrink:0 }}/>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:700, fontSize:14, color: form.targetZone ? "#4a2a7a" : "#2a5c0f" }}>Target Zone</div>
-                    <div style={{ fontSize:10, color:"#888" }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
+                    <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.targetZone ? theme.purple : theme.ink) : (form.targetZone ? "#4a2a7a" : "#2a5c0f") }}>Target Zone</div>
+                    <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888" }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
                   </div>
                 </label>
                 {form.targetZone && (
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:10, flexWrap:"wrap" }}>
                     <input type="number" value={form.targetZonePct}
                       onChange={e => set("targetZonePct", e.target.value)}
-                      style={{ ...inp, width:80 }} min="1" max="99" step="0.1" placeholder="28"/>
-                    <span style={{ fontSize:13, color:"#4a2a7a", fontWeight:600 }}>% less than broadcast</span>
+                      style={isMobile ? { ...inp, width:80, borderRadius:10, background: theme.input, color: theme.ink, borderColor: theme.inputLine } : { ...inp, width:80 }} min="1" max="99" step="0.1" placeholder="28"/>
+                    <span style={{ fontSize:13, color: isMobile ? theme.purple : "#4a2a7a", fontWeight:600 }}>% less than broadcast</span>
                     {parseFloat(form.galPerAcre) > 0 && parseFloat(form.targetZonePct) > 0 && parseFloat(form.targetZonePct) < 100 && (
-                      <span style={{ fontSize:12, color:"#666" }}>
-                        {form.galPerAcre} gal/ac → <strong style={{ color:"#4a2a7a" }}>{calcGpa(form).toFixed(2)} gal/ac</strong> effective
+                      <span style={{ fontSize:12, color: isMobile ? theme.ink2 : "#666" }}>
+                        {form.galPerAcre} gal/ac → <strong style={{ color: isMobile ? theme.purple : "#4a2a7a" }}>{calcGpa(form).toFixed(2)} gal/ac</strong> effective
                       </span>
                     )}
                   </div>
@@ -4047,28 +4095,28 @@ export default function App() {
 
               {/* Prime boom + Flush checkboxes — compact side by side */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer",
+                <label style={isMobile ? toggleCardT(form.primeBoom, theme.amber, theme.tintAmber) : { display:"flex", alignItems:"center", gap:10, cursor:"pointer",
                   background: form.primeBoom ? "#fff8e0" : "#f4fbee",
                   border:`1.5px solid ${form.primeBoom ? "#e0a020" : "#c8dbb0"}`,
                   borderRadius:7, padding:"12px 14px" }}>
                   <input type="checkbox" checked={form.primeBoom}
                     onChange={e => set("primeBoom", e.target.checked)}
-                    style={{ width:20, height:20, accentColor:"#c08000", flexShrink:0 }}/>
+                    style={{ width:20, height:20, accentColor: isMobile ? theme.amber : "#c08000", flexShrink:0 }}/>
                   <div>
-                    <div style={{ fontWeight:700, fontSize:14, color: form.primeBoom ? "#7a5000" : "#2a5c0f" }}>Prime</div>
-                    <div style={{ fontSize:10, color:"#888" }}>20 gal before start</div>
+                    <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.primeBoom ? theme.amber : theme.ink) : (form.primeBoom ? "#7a5000" : "#2a5c0f") }}>Prime</div>
+                    <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888" }}>20 gal before start</div>
                   </div>
                 </label>
-                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer",
+                <label style={isMobile ? toggleCardT(form.flushCleanout, theme.blue, theme.tintBlue) : { display:"flex", alignItems:"center", gap:10, cursor:"pointer",
                   background: form.flushCleanout ? "#e8f4ff" : "#f4fbee",
                   border:`1.5px solid ${form.flushCleanout ? "#1a6a8a" : "#c8dbb0"}`,
                   borderRadius:7, padding:"12px 14px" }}>
                   <input type="checkbox" checked={form.flushCleanout}
                     onChange={e => set("flushCleanout", e.target.checked)}
-                    style={{ width:20, height:20, accentColor:"#1a6a8a", flexShrink:0 }}/>
+                    style={{ width:20, height:20, accentColor: isMobile ? theme.blue : "#1a6a8a", flexShrink:0 }}/>
                   <div>
-                    <div style={{ fontWeight:700, fontSize:14, color: form.flushCleanout ? "#0e3a5c" : "#2a5c0f" }}>Flush</div>
-                    <div style={{ fontSize:10, color:"#888" }}>Rinse when done</div>
+                    <div style={{ fontWeight:700, fontSize:14, color: isMobile ? (form.flushCleanout ? theme.blue : theme.ink) : (form.flushCleanout ? "#0e3a5c" : "#2a5c0f") }}>Flush</div>
+                    <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#888" }}>Rinse when done</div>
                   </div>
                 </label>
               </div>
@@ -4242,11 +4290,14 @@ export default function App() {
                 if (!available.length) return null;
                 return (
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-                    <span style={{ fontSize:10, color:"#888", fontWeight:700, alignSelf:"center", whiteSpace:"nowrap" }}>Recent:</span>
+                    <span style={isMobile ? { ...labelT, marginBottom:0, alignSelf:"center", whiteSpace:"nowrap" } : { fontSize:10, color:"#888", fontWeight:700, alignSelf:"center", whiteSpace:"nowrap" }}>Recent:</span>
                     {available.map(c => (
                       <button key={c.id} type="button"
                         onClick={() => { addChemRow(c.id); setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50); }}
-                        style={{
+                        style={isMobile ? {
+                          padding:"7px 11px", border:"none", borderRadius:9, cursor:"pointer", fontSize:12.5, fontWeight:700,
+                          fontFamily:"inherit", background: theme.tintBlue, color: theme.blue, whiteSpace:"nowrap",
+                        } : {
                           padding:"4px 10px", border:"1.5px solid #b0c8e8",
                           borderRadius:5, cursor:"pointer", fontSize:12, fontWeight:700,
                           fontFamily:"inherit", background:"#f0f6ff", color:"#1a3a6a",
@@ -4270,7 +4321,7 @@ export default function App() {
                   }}
                   onFocus={() => setShowChemDrop(s => ({...s, __main__: true}))}
                   placeholder="Search chemicals to add…"
-                  style={{...inp, fontSize:16}}
+                  style={isMobile ? { ...inp, fontSize:16, borderRadius:12, background: theme.input, color: theme.ink, borderColor: theme.inputLine } : {...inp, fontSize:16}}
                 />
                 {showChemDrop.__main__ && (() => {
                   const q = (chemSearch.__main__ || "").toLowerCase();
@@ -4283,12 +4334,12 @@ export default function App() {
                     <div style={{ position:"fixed", inset:0, zIndex:98 }} onClick={() => setShowChemDrop(s=>({...s,__main__:false}))} />
                     <div style={{
                       position:"absolute", bottom:"100%", left:0, right:0, zIndex:99,
-                      background:"#fff", border:"1.5px solid #c8dbb0", borderRadius:5,
+                      background: isMobile ? theme.card : "#fff", border: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0", borderRadius: isMobile ? 12 : 5,
                       boxShadow:"0 -4px 16px rgba(0,0,0,0.12)", maxHeight:220, overflowY:"auto",
                       marginBottom:4
                     }}>
                       {filtered.length === 0 ? (
-                        <div style={{ padding:"10px 12px", fontSize:13, color:"#999" }}>
+                        <div style={{ padding:"10px 12px", fontSize:13, color: isMobile ? theme.mut : "#999" }}>
                           {q ? "No matching chemicals" : "All chemicals already added or library empty"}
                         </div>
                       ) : filtered.map(c => (
@@ -4300,15 +4351,16 @@ export default function App() {
                             setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50);
                           }}
                           style={{
-                            padding:"10px 12px", cursor:"pointer", fontSize:13,
-                            borderBottom:"1px solid #eef5e8",
+                            padding: isMobile ? "12px 13px" : "10px 12px", cursor:"pointer", fontSize: isMobile ? 14 : 13,
+                            borderBottom: isMobile ? `1px solid ${theme.divider}` : "1px solid #eef5e8",
+                            color: isMobile ? theme.ink : undefined,
                             display:"flex", justifyContent:"space-between", alignItems:"center"
                           }}
-                          onMouseEnter={e => e.currentTarget.style.background="#f0f7e8"}
+                          onMouseEnter={e => e.currentTarget.style.background = isMobile ? theme.fill : "#f0f7e8"}
                           onMouseLeave={e => e.currentTarget.style.background="transparent"}
                         >
                           <span style={{ fontWeight:600 }}>{c.name}</span>
-                          <span style={{ fontSize:11, color:"#888" }}>{c.formType}</span>
+                          <span style={{ fontSize:11, color: isMobile ? theme.mut : "#888" }}>{c.formType}</span>
                         </div>
                       ))}
                     </div>
@@ -7042,7 +7094,7 @@ export default function App() {
                     style={{ ...inp, flex:1 }}
                   />
                   <button onClick={() => { addPest(newPestName); setNewPestName(""); }}
-                    style={{ padding:"7px 16px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
+                    style={isMobile ? addBtnT() : { padding:"7px 16px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
                     + Add
                   </button>
                 </div>
@@ -7185,7 +7237,7 @@ export default function App() {
                     placeholder="Add a crop not in the list above…"
                     style={{ ...inp, flex:1, fontSize:13 }} />
                   <button onClick={addOrgCrop} disabled={!cropInput.trim()}
-                    style={{ background: cropInput.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: cropInput.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
+                    style={isMobile ? addBtnT(!!cropInput.trim()) : { background: cropInput.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: cropInput.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
                     + Add
                   </button>
                 </div>
@@ -7721,7 +7773,7 @@ export default function App() {
         <div style={{
           position:"fixed", left:0, right:0, bottom:0, zIndex:900,
           background: theme.card, borderTop:`1px solid ${theme.inputLine}`,
-          padding:"8px 10px 22px", display:"flex", alignItems:"flex-start",
+          padding:"8px 10px max(22px, env(safe-area-inset-bottom))", display:"flex", alignItems:"flex-start",
           boxShadow:"0 -2px 14px rgba(20,40,26,0.12)",
         }}>
           {[
