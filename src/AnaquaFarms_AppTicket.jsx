@@ -6452,7 +6452,7 @@ export default function App() {
                               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"4px 0" }}>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Field Name</label>
-                                  <input value={editFieldDraft.name||""} onChange={e=>setEditFieldDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                  <input value={editFieldDraft.name||""} onChange={e=>setEditFieldDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:13, padding:"6px 8px" }} />
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Crop</label>
@@ -6594,8 +6594,8 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ PEOPLE (mobile-only unified applicators view) ═══════════════════ */}
-        {view === "equipMgr" && isMobile && libTab === "people" && (() => {
+        {/* ══ PEOPLE (unified applicators view: Library › People / sidebar › People) ══ */}
+        {view === "equipMgr" && libTab === "people" && (() => {
           const people = [
             ...licensed.map(p => ({ ...p, _kind:"lic" })),
             ...nonLicensed.map(p => ({ ...p, _kind:"nonlic" })),
@@ -6639,11 +6639,11 @@ export default function App() {
             <div>
               {isOwner && (
                 <button onClick={() => setAddPersonOpen(true)} style={{
-                  width:"100%", border:`1.5px dashed ${theme.dash}`, borderRadius:13, padding:13,
-                  background: theme.card, color: theme.onGreen, fontSize:14, fontWeight:800, cursor:"pointer", marginBottom:13,
+                  width: isMobile ? "100%" : "auto", border:`1.5px dashed ${theme.dash}`, borderRadius:13, padding: isMobile ? 13 : "12px 22px",
+                  background: theme.card, color: theme.onGreen, fontSize:14, fontWeight:800, cursor:"pointer", marginBottom: isMobile ? 13 : 16, fontFamily:"inherit",
                 }}>+ Add applicator</button>
               )}
-              <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+              <div style={isMobile ? { display:"flex", flexDirection:"column", gap:9 } : { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:12 }}>
                 {people.map(p => (
                   <div key={`${p._kind}-${p.id}`} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
                     <span style={{ width:38, height:38, borderRadius:11, background: p._kind==="lic" ? theme.header : theme.fill, color: p._kind==="lic" ? "#fff" : theme.ink2, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13, fontWeight:800 }}>
@@ -6660,15 +6660,17 @@ export default function App() {
                   </div>
                 ))}
                 {people.length === 0 && (
-                  <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No applicators added yet.</div>
+                  <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13, gridColumn:"1 / -1" }}>No applicators added yet.</div>
                 )}
               </div>
 
               {addPersonOpen && (
-                <div style={{ position:"fixed", inset:0, zIndex:200, display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+                // Phones: a bottom sheet. Desktop: a centered dialog.
+                <div style={{ position:"fixed", inset:0, zIndex:200, display:"flex", flexDirection:"column", justifyContent: isMobile ? "flex-end" : "center", alignItems: isMobile ? "stretch" : "center" }}>
                   <div onClick={() => setAddPersonOpen(false)} style={{ position:"absolute", inset:0, background:"rgba(10,20,14,0.45)" }} />
-                  <div style={{ position:"relative", background: theme.canvas, borderRadius:"26px 26px 0 0", padding:"16px 16px 26px", boxShadow:"0 -12px 40px rgba(0,0,0,0.28)", maxHeight:"85vh", overflowY:"auto" }}>
-                    <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 14px" }} />
+                  <div role="dialog" aria-label="New applicator" style={{ position:"relative", background: theme.canvas, borderRadius: isMobile ? "26px 26px 0 0" : 20, padding: isMobile ? "16px 16px 26px" : "22px 22px 22px",
+                    width: isMobile ? "auto" : 440, boxSizing:"border-box", boxShadow:"0 -12px 40px rgba(0,0,0,0.28)", maxHeight:"85vh", overflowY:"auto" }}>
+                    {isMobile && <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 14px" }} />}
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
                       <div style={{ fontSize:19, fontWeight:800, color: theme.ink }}>New applicator</div>
                       <button onClick={() => setAddPersonOpen(false)} style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:19, lineHeight:1, cursor:"pointer" }}>×</button>
@@ -6715,7 +6717,7 @@ export default function App() {
         })()}
 
         {/* ══ EQUIPMENT & OPERATORS MANAGER ════════════════════════════════════ */}
-        {view === "equipMgr" && !(isMobile && libTab === "people") && (
+        {view === "equipMgr" && libTab !== "people" && (
           <div>
             {/* Equipment */}
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
@@ -6743,13 +6745,10 @@ export default function App() {
                   });
                   nameEl.value = "";
                   aphEl.value  = "75";
-                }} style={isMobile ? addBtnT() : {
-                  background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
-                  padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                }}>+ Add</button>
+                }} style={isMobile ? addBtnT() : { ...addBtnT(), minHeight:40 }}>+ Add</button>
               </div>}
-              {isMobile ? (
-                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+              {(
+                <div style={isMobile ? { display:"flex", flexDirection:"column", gap:9 } : { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:12 }}>
                   {equipment.map(eq => (
                     <div key={eq.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
                       <span style={{ width:34, height:34, borderRadius:10, background: theme.fill, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -6773,150 +6772,12 @@ export default function App() {
                     </div>
                   ))}
                   {equipment.length === 0 && (
-                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No equipment added yet.</div>
+                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13, gridColumn:"1 / -1" }}>No equipment added yet.</div>
                   )}
                 </div>
-              ) : (
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                <thead><tr>
-                  <th style={th}>Equipment Name</th>
-                  <th style={th}>Ac/Hr</th>
-                  <th style={th}></th>
-                </tr></thead>
-                <tbody>
-                  {equipment.map(eq => (
-                    <tr key={eq.id}>
-                      <td style={{ ...td, fontWeight:600 }}>{eq.name}</td>
-                      <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{eq.acresPerHour || 75}</td>
-                      <td style={td}>
-                        {isOwner && <button onClick={() => {
-                          if (!confirmDelete(eq.name, "equipment")) return;
-                          setEquipment(e=>e.filter(x=>x.id!==eq.id));
-                          supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => {
-                            if (error) showToast("Failed to delete equipment: " + error.message);
-                          });
-                        }} style={{
-                          background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}>×</button>}
-                      </td>
-                    </tr>
-                  ))}
-                  {equipment.length === 0 && (
-                    <tr><td colSpan={2} style={{ ...td, color:"#aaa", fontStyle:"italic" }}>No equipment added yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
               )}
-            </div>
 
-            {/* Licensed / Non-Licensed Applicators — desktop only; on mobile they live
-                under Library › People (with its own add sheet), so showing them on the
-                Equip tab too was a duplicate. */}
-            {!isMobile && <>
-            {/* Licensed Applicators */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
-              <div style={sectionTitleT}>Licensed Applicators</div>
-              {isOwner && <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
-                <div>
-                  <label style={labelT}>Name</label>
-                  <input id="newLicName" style={inp} placeholder="Full name"/>
-                </div>
-                <button onClick={() => {
-                  const name = document.getElementById("newLicName").value.trim();
-                  if (!name) return alert("Name is required.");
-                  const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
-                  const newLicRec = { id: nextId, name, license: "" };
-                  setLicensed(ops => [...ops, newLicRec]);
-                  supabase.from("licensed_applicators").upsert({ ...newLicRec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
-                    if (error) showToast("Failed to save applicator: " + error.message);
-                  });
-                  document.getElementById("newLicName").value = "";
-                }} style={{
-                  background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
-                  padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                }}>+ Add</button>
-              </div>}
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                <thead><tr>
-                  <th style={th}>Name</th>
-                  <th style={th}></th>
-                </tr></thead>
-                <tbody>
-                  {licensed.map(op => (
-                    <tr key={op.id}>
-                      <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
-                      <td style={td}>
-                        {isOwner && <button onClick={() => {
-                          if (!confirmDelete(op.name, "applicator")) return;
-                          setLicensed(ops=>ops.filter(x=>x.id!==op.id));
-                          supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => {
-                            if (error) showToast("Failed to delete applicator: " + error.message);
-                          });
-                        }} style={{
-                          background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}>×</button>}
-                      </td>
-                    </tr>
-                  ))}
-                  {licensed.length === 0 && (
-                    <tr><td colSpan={2} style={{ ...td, color:"#aaa", fontStyle:"italic" }}>No licensed applicators added yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
             </div>
-
-            {/* Non-Licensed Applicators */}
-            <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
-              <div style={sectionTitleT}>Non-Licensed Applicators <span style={{ fontWeight:400, fontSize:10, color:"#888", textTransform:"none", letterSpacing:0 }}>working under license</span></div>
-              {isOwner && <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"end", marginBottom:12 }}>
-                <div>
-                  <label style={labelT}>Name</label>
-                  <input id="newNonLicName" style={inp} placeholder="Full name"/>
-                </div>
-                <button onClick={() => {
-                  const name = document.getElementById("newNonLicName").value.trim();
-                  if (!name) return alert("Name is required.");
-                  const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
-                  const newNonLicRec = { id: nextId, name };
-                  setNonLicensed(ops => [...ops, newNonLicRec]);
-                  supabase.from("non_licensed_applicators").upsert({ ...newNonLicRec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
-                    if (error) showToast("Failed to save applicator: " + error.message);
-                  });
-                  document.getElementById("newNonLicName").value = "";
-                }} style={{
-                  background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
-                  padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
-                }}>+ Add</button>
-              </div>}
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                <thead><tr>
-                  <th style={th}>Name</th>
-                  <th style={th}></th>
-                </tr></thead>
-                <tbody>
-                  {nonLicensed.map(p => (
-                    <tr key={p.id}>
-                      <td style={{ ...td, fontWeight:600 }}>{p.name}</td>
-                      <td style={td}>
-                        {isOwner && <button onClick={() => {
-                          if (!confirmDelete(p.name, "applicator")) return;
-                          setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
-                          supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
-                            if (error) showToast("Failed to delete applicator: " + error.message);
-                          });
-                        }} style={{
-                          background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16
-                        }}>×</button>}
-                      </td>
-                    </tr>
-                  ))}
-                  {nonLicensed.length === 0 && (
-                    <tr><td colSpan={2} style={{ ...td, color:"#aaa", fontStyle:"italic" }}>No non-licensed applicators added yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            </>}
           </div>
         )}
 
@@ -6928,24 +6789,20 @@ export default function App() {
             <input ref={chemFileRef} type="file" accept=".csv" onChange={handleChemCSV} style={{ display:"none" }}/>
 
             {!isMobile && (
-            <div style={{...cardT, padding:"14px 16px"}}>
+            <div style={{...cardT, padding:"18px 20px"}}>
               <div style={sectionTitleT}>Upload Chemical List (CSV)</div>
-              <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>ID, Name, EPA #, REI, Unit, Formulation Type, Container Size, Active Ingredient</code> — first row is header.<br/>
-                <span style={{ fontSize:11, color:"#888" }}>Download the library below, fill in <strong>Active Ingredient</strong> from the product labels, then re-upload — rows with a matching ID or name are <strong>updated in place</strong>, not duplicated. Values containing commas are fine.</span><br/>
-                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, SC, CS, E, EC, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
+              <div style={{ fontSize:12.5, color: theme.ink2, marginBottom:12, lineHeight:1.55 }}>
+                CSV format: <code style={{ background: theme.tintGreen, color: theme.onGreen, padding:"1px 6px", borderRadius:5 }}>ID, Name, EPA #, REI, Unit, Formulation Type, Container Size, Active Ingredient</code> — first row is header.<br/>
+                <span style={{ fontSize:11.5, color: theme.mut }}>Download the library below, fill in <strong>Active Ingredient</strong> from the product labels, then re-upload — rows with a matching ID or name are <strong>updated in place</strong>, not duplicated. Values containing commas are fine.</span><br/>
+                <span style={{ fontSize:11.5, color: theme.mut }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, SC, CS, E, EC, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                <button onClick={() => chemFileRef.current.click()} style={{
-                  background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
-                  padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
-                }}>📂 Upload CSV</button>
+                <button onClick={() => chemFileRef.current.click()} style={{ ...addBtnT(), minHeight:40, padding:"0 18px" }}>📂 Upload CSV</button>
                 <button onClick={() => downloadChemLibraryCSV(chemicals, currentOrg?.name)} disabled={!chemicals.length} style={{
-                  background:"#fff", color:"#2a5c0f", border:"1.5px solid #2a5c0f", borderRadius:6,
-                  padding:"8px 18px", cursor: chemicals.length ? "pointer" : "not-allowed",
-                  fontSize:13, fontWeight:700, opacity: chemicals.length ? 1 : 0.5
+                  ...softBtnT, minHeight:40, padding:"0 18px", border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.onGreen,
+                  cursor: chemicals.length ? "pointer" : "not-allowed", opacity: chemicals.length ? 1 : 0.5
                 }}>⬇ Download Library CSV</button>
-                {chemUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{chemUpMsg}</span>}
+                {chemUpMsg && <span style={{ color: theme.onGreen, fontSize:13, fontWeight:600 }}>{chemUpMsg}</span>}
               </div>
             </div>
             )}
@@ -6958,28 +6815,28 @@ export default function App() {
                 }}>+ Add chemical</button>
               )
             ) : (
-            <div style={{...cardT, padding:"14px 16px"}}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                <div style={sectionTitleT}>Add Chemical Manually</div>
+            <div style={{...cardT, padding:"18px 20px"}}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                <div style={{ ...sectionTitleT, marginBottom:0 }}>Add Chemical Manually</div>
                 {isPro ? (
                   <button
                     onClick={() => scanLabelRef.current.click()}
                     disabled={scanLabelLoading}
-                    style={{ background:"#1a6fa8", color:"#fff", border:"none", borderRadius:6,
-                      padding:"7px 14px", cursor: scanLabelLoading ? "default" : "pointer",
+                    style={{ background: theme.tintBlue, color: theme.blue, border:"none", borderRadius:10,
+                      padding:"8px 14px", cursor: scanLabelLoading ? "default" : "pointer", fontFamily:"inherit",
                       fontSize:13, fontWeight:700, opacity: scanLabelLoading ? 0.7 : 1 }}
                   >
                     {scanLabelLoading ? "⏳ Scanning…" : "📷 Scan Label"}
                   </button>
                 ) : (
                   <button disabled title="Pro feature"
-                    style={{ background:"#aaa", color:"#fff", border:"none", borderRadius:6,
-                      padding:"7px 14px", cursor:"not-allowed", fontSize:13, fontWeight:700, opacity:0.5 }}>
+                    style={{ background: theme.fill, color: theme.mut, border:"none", borderRadius:10,
+                      padding:"8px 14px", cursor:"not-allowed", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>
                     📷 Scan Label 🔒
                   </button>
                 )}
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"2fr 1.6fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
+              <div style={{ display:"grid", gridTemplateColumns: isNarrowDesk ? "repeat(4, minmax(0,1fr))" : "2fr 1.6fr 1fr 1fr 1fr 1.3fr 1fr", gap:12, alignItems:"end" }}>
                 {[["name","Chemical Name","text"],["activeIngredient","Active Ingredient","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelT}>{lbl}</label>
@@ -7023,7 +6880,7 @@ export default function App() {
                 <div>
                   <label style={labelT}>
                     Container Size
-                    <span style={{ fontSize:10, fontWeight:400, color:"#888", marginLeft:4 }}>
+                    <span style={{ fontWeight:600, color: theme.mut, marginLeft:4, textTransform:"none" }}>
                       {chemContainerIsLb(newChem) ? "(lb)" : "(gal)"}
                     </span>
                   </label>
@@ -7036,15 +6893,12 @@ export default function App() {
                 </div>
               </div>
               {chemDupWarning && (
-                <div style={{ marginTop:10, padding:"7px 12px", background:"#fff3cd", border:"1px solid #e0a800",
-                  borderRadius:6, color:"#856404", fontSize:13, fontWeight:600 }}>
+                <div style={{ marginTop:12, padding:"9px 12px", background: theme.tintAmber, border:`1px solid ${theme.amber}`,
+                  borderRadius:10, color: theme.amber, fontSize:13, fontWeight:600 }}>
                   ⚠️ Duplicate — {chemDupWarning}
                 </div>
               )}
-              <button onClick={addManualChem} disabled={!!chemDupWarning} style={{
-                marginTop:12, background: chemDupWarning ? "#999" : "#2a5c0f", color:"#fff", border:"none",
-                borderRadius:6, padding:"8px 20px", cursor: chemDupWarning ? "default" : "pointer", fontSize:13, fontWeight:700
-              }}>+ Add Chemical</button>
+              <button onClick={addManualChem} disabled={!!chemDupWarning} style={{ ...addBtnT(!chemDupWarning), marginTop:14, minHeight:40, padding:"0 20px" }}>+ Add Chemical</button>
             </div>
             )}
 
@@ -7249,28 +7103,28 @@ export default function App() {
                       if (isEditing) {
                         const draftIsDryOrLb = chemContainerIsLb(editChemDraft);
                         return (
-                          <tr key={c.id} style={{ background:"#f5fff0" }}>
-                            <td style={td} colSpan={8}>
-                              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1.6fr 1fr 1fr 1fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"6px 0" }}>
+                          <tr key={c.id} style={{ background: theme.fieldTint }}>
+                            <td style={{ ...td, boxShadow:`inset 3px 0 0 ${theme.green}` }} colSpan={8}>
+                              <div style={{ display:"grid", gridTemplateColumns: isNarrowDesk ? "repeat(4, minmax(0,1fr))" : "2fr 1.6fr 1fr 1fr 1fr 1fr 1fr auto", gap:8, alignItems:"end", padding:"6px 0" }}>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Chemical Name</label>
-                                  <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                  <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:13, padding:"6px 8px" }} />
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Active Ingredient</label>
-                                  <input value={editChemDraft.activeIngredient||""} onChange={e=>setEditChemDraft(d=>({...d,activeIngredient:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="from label" />
+                                  <input value={editChemDraft.activeIngredient||""} onChange={e=>setEditChemDraft(d=>({...d,activeIngredient:e.target.value}))} style={{ ...inp, fontSize:13, padding:"6px 8px" }} placeholder="from label" />
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>EPA #</label>
-                                  <input value={editChemDraft.epa||""} onChange={e=>setEditChemDraft(d=>({...d,epa:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                  <input value={editChemDraft.epa||""} onChange={e=>setEditChemDraft(d=>({...d,epa:e.target.value}))} style={{ ...inp, fontSize:13, padding:"6px 8px" }} />
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>REI</label>
-                                  <input value={editChemDraft.rei||""} onChange={e=>setEditChemDraft(d=>({...d,rei:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                  <input value={editChemDraft.rei||""} onChange={e=>setEditChemDraft(d=>({...d,rei:e.target.value}))} style={{ ...inp, fontSize:13, padding:"6px 8px" }} />
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Unit</label>
-                                  <select value={editChemDraft.unit||"oz"} onChange={e=>setEditChemDraft(d=>({...d,unit:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
+                                  <select value={editChemDraft.unit||"oz"} onChange={e=>setEditChemDraft(d=>({...d,unit:e.target.value}))} style={{ ...sel, fontSize:13, padding:"6px 8px" }}>
                                     <optgroup label="Imperial">
                                       <option value="oz">oz (liquid)</option>
                                       <option value="dry oz">dry oz</option>
@@ -7289,7 +7143,7 @@ export default function App() {
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Form. Type</label>
-                                  <select value={editChemDraft.formType||"L"} onChange={e=>setEditChemDraft(d=>({...d,formType:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
+                                  <select value={editChemDraft.formType||"L"} onChange={e=>setEditChemDraft(d=>({...d,formType:e.target.value}))} style={{ ...sel, fontSize:13, padding:"6px 8px" }}>
                                     <option value="L">L</option>
                                     <option value="SC">SC</option>
                                     <option value="CS">CS</option>
@@ -7304,11 +7158,11 @@ export default function App() {
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Container ({draftIsDryOrLb ? "lb" : "gal"})</label>
-                                  <input type="number" min="0" step="0.01" value={editChemDraft.containerSize||""} onChange={e=>setEditChemDraft(d=>({...d,containerSize:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="blank=tote" />
+                                  <input type="number" min="0" step="0.01" value={editChemDraft.containerSize||""} onChange={e=>setEditChemDraft(d=>({...d,containerSize:e.target.value}))} style={{ ...inp, fontSize:13, padding:"6px 8px" }} placeholder="blank=tote" />
                                 </div>
                                 <div style={{ display:"flex", gap:4, alignItems:"flex-end", paddingBottom:1 }}>
-                                  <button onClick={saveChemEdit} style={{ background:"#2a5c0f", color:"#fff", border:"none", borderRadius:4, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Save</button>
-                                  <button onClick={() => setEditingChemId(null)} style={{ background:"none", border:"1px solid #ccc", borderRadius:4, padding:"4px 8px", cursor:"pointer", fontSize:12 }}>Cancel</button>
+                                  <button onClick={saveChemEdit} style={{ ...addBtnT(), minHeight:34, padding:"0 12px", fontSize:12.5 }}>Save</button>
+                                  <button onClick={() => setEditingChemId(null)} style={{ ...softBtnT, minHeight:34, padding:"0 10px", fontSize:12.5 }}>Cancel</button>
                                 </div>
                               </div>
                             </td>
@@ -7319,28 +7173,33 @@ export default function App() {
                       const isDryOz  = unitNorm === "dryoz";
                       const isLb     = unitNorm === "lb" || unitNorm === "lbs";
                       const unitBadge = isDryOz
-                        ? <span style={{ background:"#fff3cc", color:"#7a5000", borderRadius:3, padding:"1px 4px", fontSize:10, fontWeight:700, marginLeft:3 }}>→ lb+oz</span>
+                        ? <span style={{ background: theme.tintAmber, color: theme.amber, borderRadius:5, padding:"1px 5px", fontSize:10, fontWeight:700, marginLeft:4 }}>→ lb+oz</span>
                         : null;
                       const csVal = parseFloat(c.containerSize);
                       const containerCell = csVal > 0
-                        ? <span style={{ background:"#f5eeff", color:"#5a1a7a", borderRadius:3, padding:"1px 5px", fontSize:11, fontWeight:700 }}>
+                        ? <span style={{ background: theme.tintPurple, color: theme.purple, borderRadius:6, padding:"2px 7px", fontSize:11, fontWeight:700, fontFamily:"'Space Grotesk',monospace" }}>
                             {csVal} {chemContainerIsLb(c) ? "lb" : "gal"}
                           </span>
-                        : <span style={{ color:"#aaa", fontSize:11 }}>tote/bulk</span>;
+                        : <span style={{ color: theme.mut, fontSize:11.5 }}>tote/bulk</span>;
                       return (
                         <tr key={c.id}>
-                          <td style={{ ...td, fontWeight:600 }}>{c.name}</td>
-                          <td style={{ ...td, fontSize:12 }}>
-                            {c.activeIngredient || <span style={{ color:"#c9a227" }} title="Required on TDA records">— missing</span>}
+                          <td style={{ ...td, fontWeight:700, fontSize:13.5 }}>{c.name}</td>
+                          <td style={{ ...td, fontSize:12.5, color: theme.ink2 }}>
+                            {c.activeIngredient || <span style={{ color: theme.amber, fontWeight:600 }} title="Required on TDA records">— missing</span>}
                           </td>
-                          <td style={td}>{c.formType||"—"}</td>
-                          <td style={td}>{c.epa}</td>
-                          <td style={td}>{c.rei}</td>
-                          <td style={td}>{c.unit}{unitBadge}</td>
+                          <td style={td}><span style={{ display:"inline-block", minWidth:22, textAlign:"center", background: theme.tintBlue, color: theme.blue, borderRadius:6, padding:"2px 6px", fontSize:10.5, fontWeight:800 }}>{c.formType||"—"}</span></td>
+                          <td style={{ ...td, fontFamily:"'Space Grotesk',monospace", fontSize:12.5, color: theme.ink2, whiteSpace:"nowrap" }}>{c.epa}</td>
+                          <td style={{ ...td, color: theme.ink2, whiteSpace:"nowrap" }}>{c.rei}</td>
+                          <td style={{ ...td, color: theme.ink2, whiteSpace:"nowrap" }}>{c.unit}{unitBadge}</td>
                           <td style={td}>{containerCell}</td>
-                          <td style={{ ...td, whiteSpace:"nowrap" }}>
-                            {isOwner && <><button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#2a5c0f", fontSize:13, marginRight:6 }} title="Edit">✏</button>
-                            <button onClick={() => deleteChem(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button></>}
+                          <td style={{ ...td, whiteSpace:"nowrap", textAlign:"right" }}>
+                            {isOwner && <div style={{ display:"inline-flex", gap:6 }}>
+                              <button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} aria-label={`Edit ${c.name}`} title="Edit"
+                                style={{ width:30, height:30, borderRadius:8, background: theme.fill, border:"none", cursor:"pointer", color: theme.ink2, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M14 6l4 4" /></svg>
+                              </button>
+                              <button onClick={() => deleteChem(c.id)} aria-label={`Delete ${c.name}`} title="Delete" style={{ ...delBtnT, width:30, height:30, borderRadius:8 }}>×</button>
+                            </div>}
                           </td>
                         </tr>
                       );
@@ -7364,7 +7223,7 @@ export default function App() {
                     style={{ ...inp, flex:1 }}
                   />
                   <button onClick={() => { addPest(newPestName); setNewPestName(""); }}
-                    style={isMobile ? addBtnT() : { padding:"7px 16px", background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
+                    style={isMobile ? addBtnT() : { ...addBtnT(), minHeight:40 }}>
                     + Add
                   </button>
                 </div>
@@ -7374,15 +7233,11 @@ export default function App() {
                 : (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                     {pestLibrary.map(p => (
-                      <span key={p.id} style={isMobile
-                        ? { display:"inline-flex", alignItems:"center", gap:2, background: theme.fill, borderRadius:9, padding: isOwner ? "2px 2px 2px 11px" : "7px 11px", fontSize:13, fontWeight:700, color: theme.ink2 }
-                        : { display:"inline-flex", alignItems:"center", gap:5, background:"#f9fdf5", border:"1.5px solid #c8dbb0", borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#2a5c0f" }}>
+                      <span key={p.id} style={{ display:"inline-flex", alignItems:"center", gap:2, background: theme.fill, borderRadius:9, padding: isOwner ? "2px 2px 2px 11px" : "7px 11px", fontSize:13, fontWeight:700, color: theme.ink2 }}>
                         {p.name}
                         {isOwner && (
                           <button onClick={() => deletePest(p.id)} aria-label={`Delete ${p.name}`}
-                            style={isMobile
-                              ? { background:"none", border:"none", cursor:"pointer", color: theme.red, fontSize:17, width:28, height:28, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }
-                              : { background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:14, lineHeight:1, padding:0 }}>×</button>
+                            style={{ background:"none", border:"none", cursor:"pointer", color: theme.red, fontSize:17, width:28, height:28, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                         )}
                       </span>
                     ))}
