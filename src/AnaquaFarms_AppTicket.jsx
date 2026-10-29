@@ -2075,20 +2075,23 @@ export default function App() {
     const inlineBold = (str, keyPrefix) => str.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
       p.startsWith("**") && p.endsWith("**") ? <strong key={`${keyPrefix}-${j}`}>{p.slice(2,-2)}</strong> : p
     );
+    // Mobile reads from the theme so replies stay legible in dark mode.
+    const body = isMobile ? theme.ink : "#333";
+    const fs   = isMobile ? 13.5 : 12;
     return text.split("\n").map((line, i) => {
       if (line.startsWith("## "))
-        return <div key={i} style={{ fontSize:13, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:"1.5px solid #c8dbb0", paddingBottom:3, marginTop:12, marginBottom:4 }}>{line.slice(3)}</div>;
+        return <div key={i} style={{ fontSize:13, fontWeight:800, color: isMobile ? theme.onGreen : "#2a5c0f", letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:`1.5px solid ${isMobile ? theme.line : "#c8dbb0"}`, paddingBottom:3, marginTop:12, marginBottom:4 }}>{line.slice(3)}</div>;
       if (line.startsWith("### "))
-        return <div key={i} style={{ fontSize:12, fontWeight:700, color:"#3a6b1a", marginTop:8, marginBottom:2 }}>{line.slice(4)}</div>;
+        return <div key={i} style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: isMobile ? theme.ink : "#3a6b1a", marginTop:8, marginBottom:2 }}>{line.slice(4)}</div>;
       if (line.startsWith("---"))
-        return <hr key={i} style={{ border:"none", borderTop:"1px solid #c8dbb0", margin:"8px 0" }} />;
+        return <hr key={i} style={{ border:"none", borderTop:`1px solid ${isMobile ? theme.line : "#c8dbb0"}`, margin:"8px 0" }} />;
       if (line.startsWith("* ") || line.startsWith("- "))
-        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, position:"relative", marginBottom:2 }}><span style={{ position:"absolute", left:2 }}>•</span>{inlineBold(line.slice(2), i)}</div>;
+        return <div key={i} style={{ fontSize: fs, color: body, paddingLeft:14, position:"relative", marginBottom:2, lineHeight: isMobile ? 1.5 : undefined }}><span style={{ position:"absolute", left:2 }}>•</span>{inlineBold(line.slice(2), i)}</div>;
       if (/^\d+\.\s/.test(line))
-        return <div key={i} style={{ fontSize:12, color:"#333", paddingLeft:14, marginBottom:2 }}>{inlineBold(line, i)}</div>;
+        return <div key={i} style={{ fontSize: fs, color: body, paddingLeft:14, marginBottom:2, lineHeight: isMobile ? 1.5 : undefined }}>{inlineBold(line, i)}</div>;
       if (line.trim() === "")
         return <div key={i} style={{ height:4 }} />;
-      return <div key={i} style={{ fontSize:12, color:"#333", lineHeight:1.6, marginBottom:1 }}>{inlineBold(line, i)}</div>;
+      return <div key={i} style={{ fontSize: fs, color: body, lineHeight:1.6, marginBottom:1 }}>{inlineBold(line, i)}</div>;
     });
   }
 
@@ -3321,6 +3324,16 @@ export default function App() {
             <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); }}
               style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", borderRadius:11, cursor:"pointer" }}>
               Cancel
+            </button>
+          ) : (isPro && !isViewer) ? (
+            // Advisor entry on mobile — the desktop floating bubble would sit on the bottom nav.
+            <button onClick={() => setChatOpen(true)} aria-label="Open advisor chat" title="Application Sector Advisor"
+              style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", width:40, height:40, borderRadius:12,
+                cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z" />
+                <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" strokeWidth="2.6" />
+              </svg>
             </button>
           ) : null}
           {/* Library sub-nav — lives in the header, right under the "Library" title */}
@@ -7538,8 +7551,17 @@ export default function App() {
         >💬</button>
       )}
 
+      {isPro && !isViewer && chatOpen && isMobile && (
+        <div onClick={() => setChatOpen(false)} style={{ position:"fixed", inset:0, zIndex:999, background:"rgba(10,20,14,0.45)" }} />
+      )}
       {isPro && !isViewer && chatOpen && (
-        <div style={{
+        <div style={isMobile ? {
+          // Pinned edges, not 100vw — see the partial-load sheet for why.
+          position: "fixed", bottom: 0, left: 0, right: 0, height: "90vh", zIndex: 1000,
+          background: theme.canvas, borderRadius: "26px 26px 0 0", boxShadow: "0 -12px 40px rgba(0,0,0,0.28)",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+          fontFamily: "'Hanken Grotesk',system-ui,sans-serif",
+        } : {
           position: "fixed",
           bottom: isMobile ? 0 : 96,
           right: isMobile ? 0 : 28,
@@ -7556,6 +7578,19 @@ export default function App() {
           fontFamily: "'Georgia','Times New Roman',serif",
         }}>
           {/* Header */}
+          {isMobile ? (
+            <div style={{ padding:"10px 16px 12px", flexShrink:0, borderBottom:`1px solid ${theme.line}` }}>
+              <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 12px" }} />
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.06em", color: theme.mut, textTransform:"uppercase" }}>AI advisor</div>
+                  <div style={{ fontSize:18, fontWeight:800, color: theme.ink }}>Application Sector Advisor</div>
+                </div>
+                <button onClick={() => setChatOpen(false)} aria-label="Close"
+                  style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2, fontSize:19, lineHeight:1, cursor:"pointer", flexShrink:0 }}>×</button>
+              </div>
+            </div>
+          ) : (
           <div style={{
             background: "linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)",
             padding: "12px 14px",
@@ -7575,6 +7610,7 @@ export default function App() {
               aria-label="Close"
             >✕</button>
           </div>
+          )}
 
           {/* Messages */}
           <div style={{
@@ -7582,7 +7618,7 @@ export default function App() {
             display: "flex", flexDirection: "column", gap: 10,
           }}>
             {chatMessages.length === 0 && (
-              <div style={{ color: "#888", fontSize: 13, textAlign: "center", marginTop: 32, lineHeight: 1.8, padding: "0 16px" }}>
+              <div style={{ color: isMobile ? theme.mut : "#888", fontSize: 13, textAlign: "center", marginTop: 32, lineHeight: 1.8, padding: "0 16px" }}>
                 Ask about your records — fields sprayed, chemicals used, dates, rates, and more.
               </div>
             )}
@@ -7590,12 +7626,15 @@ export default function App() {
               <div key={i} style={{ alignSelf: msg.role === "user" ? "flex-end" : "flex-start", maxWidth: "90%" }}>
                 {msg.role === "user" ? (
                   <div style={{
-                    background: "#2a5c0f", color: "#fff",
-                    borderRadius: "16px 16px 2px 16px",
-                    padding: "9px 14px", fontSize: 14, lineHeight: 1.5,
+                    background: isMobile ? theme.green : "#2a5c0f", color: "#fff",
+                    borderRadius: isMobile ? "18px 18px 4px 18px" : "16px 16px 2px 16px",
+                    padding: "9px 14px", fontSize: isMobile ? 15 : 14, lineHeight: 1.5,
                   }}>{msg.content}</div>
                 ) : (
-                  <div style={{
+                  <div style={isMobile ? {
+                    background: theme.card, border: `1px solid ${theme.line}`,
+                    borderRadius: "4px 18px 18px 18px", padding: "11px 13px",
+                  } : {
                     background: "#f4fbee", border: "1.5px solid #c8dbb0",
                     borderRadius: "2px 16px 16px 16px", padding: "10px 12px",
                   }}>{renderReportMarkdown(msg.content)}</div>
@@ -7603,7 +7642,7 @@ export default function App() {
               </div>
             ))}
             {chatLoading && (
-              <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 13, fontStyle: "italic", padding: "4px 8px" }}>
+              <div style={{ alignSelf: "flex-start", color: isMobile ? theme.mut : "#888", fontSize: 13, fontStyle: "italic", padding: "4px 8px" }}>
                 Thinking…
               </div>
             )}
@@ -7612,16 +7651,16 @@ export default function App() {
 
           {/* Input row — send button inside the pill */}
           <div style={{
-            borderTop: "1.5px solid #c8dbb0",
-            padding: isMobile ? "10px 12px 18px" : "10px 12px",
+            borderTop: isMobile ? `1px solid ${theme.line}` : "1.5px solid #c8dbb0",
+            padding: isMobile ? "10px 12px calc(14px + env(safe-area-inset-bottom))" : "10px 12px",
             flexShrink: 0,
-            background: "#f9fdf5",
+            background: isMobile ? theme.card : "#f9fdf5",
           }}>
             <div style={{
               display: "flex", alignItems: "center",
-              background: "#fff", border: "2px solid #2a5c0f",
+              background: isMobile ? theme.input : "#fff", border: isMobile ? `1.5px solid ${theme.inputLine}` : "2px solid #2a5c0f",
               borderRadius: 14, overflow: "hidden",
-              boxShadow: "0 1px 6px rgba(42,92,15,0.10)",
+              boxShadow: isMobile ? "none" : "0 1px 6px rgba(42,92,15,0.10)",
             }}>
               <input
                 value={chatInput}
@@ -7633,14 +7672,15 @@ export default function App() {
                   flex: 1, border: "none", outline: "none",
                   fontSize: 16, padding: "12px 14px",
                   background: "transparent", fontFamily: "inherit",
+                  color: isMobile ? theme.ink : undefined,
                 }}
               />
               <button
                 onClick={submitSectorChat}
                 disabled={!chatInput.trim() || chatLoading}
                 style={{
-                  background: !chatInput.trim() || chatLoading ? "#aaa" : "#2a5c0f",
-                  color: "#fff", border: "none",
+                  background: !chatInput.trim() || chatLoading ? (isMobile ? theme.fill : "#aaa") : (isMobile ? theme.green : "#2a5c0f"),
+                  color: isMobile && (!chatInput.trim() || chatLoading) ? theme.mut : "#fff", border: "none",
                   borderRadius: 10, margin: 5,
                   width: 44, height: 44, flexShrink: 0,
                   cursor: !chatInput.trim() || chatLoading ? "default" : "pointer",
@@ -7649,7 +7689,7 @@ export default function App() {
                 }}
               >➤</button>
             </div>
-            <div style={{ fontSize: 10, color: "#aaa", textAlign: "center", marginTop: 5 }}>
+            <div style={{ fontSize: 10, color: isMobile ? theme.mut : "#aaa", textAlign: "center", marginTop: 5 }}>
               AI can make mistakes. Verify important information.
             </div>
           </div>
