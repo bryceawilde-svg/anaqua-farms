@@ -1052,7 +1052,7 @@ const card = { border:"1.5px solid #c8dbb0", borderRadius:8, padding:"14px 16px"
 const sectionTitle = { fontSize:11, fontWeight:800, color:"#2a5c0f", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10, borderBottom:"2px solid #c8dbb0", paddingBottom:4 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function FieldTag({ field, onRemove, onAcresChange }) {
+function FieldTag({ field, onRemove, onAcresChange, isMobile = false }) {
   const [editing, setEditing] = React.useState(false);
   const [val, setVal]         = React.useState("");
   const origAcres = field._origAcres ?? field.acres;
@@ -1092,7 +1092,7 @@ function FieldTag({ field, onRemove, onAcresChange }) {
           onClick={e => e.stopPropagation()}
           type="number" min="0.1" step="0.1"
           style={{
-            width:54, fontSize:12, fontWeight:700,
+            width: isMobile ? 64 : 54, fontSize: isMobile ? 16 : 12, fontWeight:700,
             border:"1.5px solid #2a5c0f", borderRadius:3,
             padding:"1px 4px", background:"#fff", color:"#2a5c0f",
             outline:"none"
@@ -1241,14 +1241,14 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
           {inputMode === "rate" ? (
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <input value={chem.ratePerAcre} onChange={e => onChange("ratePerAcre", e.target.value)}
-                style={{ width:62, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:8, fontSize:14, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace" }}
+                style={{ width:70, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:8, fontSize:16, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace" }}
                 placeholder="0" type="number" min="0" step="0.1"/>
               <span style={{ fontSize:12, color: t_.mut, fontWeight:600 }}>{baseUnit}/ac</span>
             </div>
           ) : (
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <input value={chem.galPerTank||""} onChange={e => onChange("galPerTank", e.target.value)}
-                style={{ width:62, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:8, fontSize:14, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace" }}
+                style={{ width:70, border:`1.5px solid ${t_.inputLine}`, borderRadius:9, padding:8, fontSize:16, fontWeight:700, color: t_.ink, background: t_.input, textAlign:"center", fontFamily:"'Space Grotesk',monospace" }}
                 placeholder="0" type="number" min="0" step="0.01"/>
               <span style={{ fontSize:12, color: t_.mut, fontWeight:600 }}>{galtankLabel}</span>
             </div>
@@ -2914,7 +2914,11 @@ export default function App() {
     setFieldLibrary(fl => [...fl, { ...rec, id: data.id }]);
     setNewField({ name:"", acres:"", crop:"", traits:[] });
   };
+  // Library deletes are immediate and permanent, so ask first (tickets and members already do).
+  const confirmDelete = (name, what) =>
+    window.confirm(`Delete ${name ? `"${name}"` : `this ${what}`}? This cannot be undone.`);
   const deleteField = (id) => {
+    if (!confirmDelete(fieldLibrary.find(f => f.id === id)?.name, "field")) return;
     setFieldLibrary(fl => fl.filter(f => f.id !== id));
     supabase.from("fields").delete().eq("id", id).then(({ error }) => {
       if (error) showToast("Failed to delete field: " + error.message);
@@ -3096,6 +3100,7 @@ export default function App() {
     setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"" });
   };
   const deleteChem = (id) => {
+    if (!confirmDelete(chemicals.find(x => x.id === id)?.name, "chemical")) return;
     setChemicals(c => c.filter(x => x.id !== id));
     supabase.from("chemicals").delete().eq("id", id).then(({ error }) => {
       if (error) showToast("Failed to delete chemical: " + error.message);
@@ -3112,6 +3117,7 @@ export default function App() {
       .then(({ error }) => { if (error) showToast("Failed to save pest: " + error.message); });
   };
   const deletePest = (id) => {
+    if (!confirmDelete(pestLibrary.find(p => p.id === id)?.name, "pest")) return;
     setPestLibrary(prev => prev.filter(p => p.id !== id));
     supabase.from("pests").delete().eq("id", id).then(({ error }) => {
       if (error) showToast("Failed to delete pest: " + error.message);
@@ -3285,6 +3291,19 @@ export default function App() {
   );
 
   if (dbLoading) return splash;
+
+  // Members (Account): shared by the desktop table and the mobile list.
+  const changeMemberRole = async (m, newRole) => {
+    const { error } = await supabase.from("org_memberships").update({ role: newRole }).eq("id", m.id);
+    if (error) showToast(error.message);
+    else setOrgMembers(prev => prev.map(x => x.id === m.id ? { ...x, role: newRole } : x));
+  };
+  const removeMember = async (m) => {
+    if (!confirm(`Remove ${m.invited_email || "this member"}?`)) return;
+    const { error } = await supabase.from("org_memberships").delete().eq("id", m.id);
+    if (error) showToast(error.message);
+    else setOrgMembers(prev => prev.filter(x => x.id !== m.id));
+  };
   const navTabs = isViewer
     ? [["applicator","📋 Applications"]]
     : [["applicator","📱 Applicator"],["log","📋 Saved"],["chemMgr","🧪 Chems"],["fieldMgr","🌾 Fields"],["equipMgr","🔧 Equip"],["team","👥 Team"]];
@@ -3479,54 +3498,56 @@ export default function App() {
                 )}
               </div>
               {(() => {
-                const ci = isMobile ? { ...inp, fontSize:12, padding:"5px 7px", background: theme.input, color: theme.ink, borderColor: theme.inputLine } : inp;
-                const cs = isMobile ? { ...sel, fontSize:12, padding:"5px 7px", background: theme.input, color: theme.ink, borderColor: theme.inputLine } : sel;
+                const ci = isMobile ? { ...inp, fontSize:16, padding:"8px 10px", minHeight:42 } : inp;
+                const cs = isMobile ? { ...sel, fontSize:16, padding:"8px 10px", minHeight:42 } : sel;
                 const cl = isMobile ? { ...labelT, fontSize:9 } : labelStyle;
                 const endTime = form.timeStart && form.selectedFields.length
                   ? fmtTime(buildFieldSchedule(form.selectedFields, form.timeStart, acresPerHour).slice(-1)[0]?.timeEnd)
                   : "—";
                 return (<>
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : rGrid(2,6,false), gap: isMobile ? 6 : 10, marginBottom: isMobile ? 6 : 12 }}>
-                <div>
+              {/* Mobile: two columns at 16px (iOS zooms the page on inputs under 16px).
+                  `order` pairs Wind with Wind Dir and moves the read-only Est. End last. */}
+              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : rGrid(2,6,false), gap: isMobile ? 8 : 10, marginBottom: isMobile ? 8 : 12 }}>
+                <div style={isMobile ? { order:1, minWidth:0 } : undefined}>
                   <label style={cl}>Date</label>
                   <input type="date" value={form.date} onChange={e => set("date",e.target.value)} style={ci}/>
                 </div>
-                <div>
+                <div style={isMobile ? { order:2, minWidth:0 } : undefined}>
                   <label style={cl}>Start</label>
                   <input type="time" value={form.timeStart} onChange={e => set("timeStart",e.target.value)} style={ci}/>
                 </div>
-                <div>
+                <div style={isMobile ? { order:6, minWidth:0 } : undefined}>
                   <label style={cl}>Est. End</label>
                   <div style={isMobile ? {
-                    border:"1.5px solid transparent", borderRadius:6, padding:"5px 7px",
-                    background: theme.tintGreen, display:"flex", alignItems:"center", minHeight:28,
+                    border:"1.5px solid transparent", borderRadius:10, padding:"8px 10px", boxSizing:"border-box",
+                    background: theme.tintGreen, display:"flex", alignItems:"center", minHeight:42,
                   } : {
                     border:"1.5px solid #a8d870", borderRadius:5,
                     padding: isMobile ? "5px 7px" : "6px 10px",
                     background:"#e6f5d0", display:"flex", alignItems:"center", minHeight: isMobile ? 28 : 32
                   }}>
-                    <span style={{ fontSize: isMobile ? 12 : 14, fontWeight:700, color: isMobile ? theme.onGreen : "#2a5c0f", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{endTime}</span>
+                    <span style={{ fontSize: isMobile ? 16 : 14, fontWeight:700, color: isMobile ? theme.onGreen : "#2a5c0f", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{endTime}</span>
                   </div>
                 </div>
-                <div>
+                <div style={isMobile ? { order:3, minWidth:0 } : undefined}>
                   <label style={cl}>Wind ({windSpeedLabel(isMetric)})</label>
                   <input type="number" value={form.windSpeed} onChange={e => set("windSpeed",e.target.value)} style={ci} placeholder="8" min="0"/>
                 </div>
-                <div>
+                <div style={isMobile ? { order:4, minWidth:0 } : undefined}>
                   <label style={cl}>Wind Dir</label>
                   <select value={form.windDir} onChange={e => set("windDir",e.target.value)} style={cs}>
                     <option value="">—</option>
                     {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
-                <div>
+                <div style={isMobile ? { order:5, minWidth:0 } : undefined}>
                   <label style={cl}>Air Temp ({tempLabel(isMetric)})</label>
                   <input type="number" value={form.airTemp} onChange={e => set("airTemp",e.target.value)} style={ci} placeholder="85" min="0"/>
                 </div>
               </div>
-              {/* Equipment / Applicator */}
-              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "1fr 1fr", gap: isMobile ? 6 : 10, marginBottom:14 }}>
-                <div>
+              {/* Equipment / Applicator — mobile: equipment full width, the two applicators below */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: isMobile ? 8 : 10, marginBottom:14 }}>
+                <div style={isMobile ? { gridColumn:"1 / -1" } : undefined}>
                   <label style={cl}>Equipment</label>
                   <select value={form.equipmentType} onChange={e => set("equipmentType",e.target.value)} style={cs}>
                     <option value="">— select —</option>
@@ -3538,7 +3559,7 @@ export default function App() {
                       style={{...ci, marginTop:5}} placeholder="Enter name"/>
                   )}
                 </div>
-                <div>
+                <div style={isMobile ? { minWidth:0 } : undefined}>
                   <label style={cl}>Licensed Applicator</label>
                   <select value={form.licensedApplicant} onChange={e => {
                     set("licensedApplicant", e.target.value);
@@ -3547,7 +3568,7 @@ export default function App() {
                     {licensed.map(op => <option key={op.id} value={op.name}>{op.name}</option>)}
                   </select>
                 </div>
-                <div>
+                <div style={isMobile ? { minWidth:0 } : undefined}>
                   <label style={cl}>Non-Licensed</label>
                   <select value={form.nonLicensedApplicant} onChange={e => set("nonLicensedApplicant", e.target.value)} style={cs}>
                     <option value="">— optional —</option>
@@ -3798,6 +3819,7 @@ export default function App() {
                       <FieldTag
                         key={f.id}
                         field={f}
+                        isMobile={isMobile}
                         onRemove={() => removeField(f.id)}
                         onAcresChange={(newAcres) => {
                           set("selectedFields", form.selectedFields.map(sf =>
@@ -3847,6 +3869,7 @@ export default function App() {
                           <FieldTag
                             key={f.id}
                             field={f}
+                            isMobile={isMobile}
                             onRemove={() => removeField(f.id)}
                             onAcresChange={(newAcres) => {
                               set("selectedFields", form.selectedFields.map(sf =>
@@ -3925,7 +3948,7 @@ export default function App() {
                 <label style={isMobile ? { fontSize:14, fontWeight:800, color:theme.ink, display:"block", marginBottom:11 } : labelT}>Notes</label>
                 {isMobile ? (
                   <textarea value={form.notes} onChange={e => set("notes",e.target.value)} placeholder="Optional…"
-                    style={{ width:"100%", minHeight:74, boxSizing:"border-box", resize:"vertical", border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"11px 12px", fontSize:14, color:theme.ink, background:theme.input, fontFamily:"inherit", lineHeight:1.45 }}
+                    style={{ width:"100%", minHeight:74, boxSizing:"border-box", resize:"vertical", border:`1.5px solid ${theme.inputLine}`, borderRadius:12, padding:"11px 12px", fontSize:16, color:theme.ink, background:theme.input, fontFamily:"inherit", lineHeight:1.45 }}
                   />
                 ) : (
                   <input value={form.notes} onChange={e => set("notes",e.target.value)} style={inp} placeholder="Optional…"/>
@@ -4597,7 +4620,7 @@ export default function App() {
                         value={logFieldSearch}
                         onChange={e => setLogFieldSearch(e.target.value)}
                         placeholder="Search by field…"
-                        style={{ ...inp, paddingLeft:28, fontSize:13 }}
+                        style={{ ...inp, paddingLeft:28, fontSize: isMobile ? 16 : 13 }}
                       />
                     </div>
                     <div style={{ position:"relative" }}>
@@ -4609,7 +4632,7 @@ export default function App() {
                         value={logChemSearch}
                         onChange={e => setLogChemSearch(e.target.value)}
                         placeholder="Search by chemical…"
-                        style={{ ...inp, paddingLeft:28, fontSize:13 }}
+                        style={{ ...inp, paddingLeft:28, fontSize: isMobile ? 16 : 13 }}
                       />
                     </div>
                   </div>
@@ -4793,7 +4816,7 @@ export default function App() {
                                   onClick={() => !editingDate && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualDateEnd" })}>
                                   {editingDate ? (
                                     <input type="date" autoFocus defaultValue={fs.actualDateEnd||""}
-                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:110 }}
+                                      style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:136 } : { ...inp, padding:"1px 4px", fontSize:11, width:110 }}
                                       onBlur={e => { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); }}
                                       onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                                     />
@@ -4810,12 +4833,12 @@ export default function App() {
                                   {editingWind ? (
                                     <div style={{ display:"flex", gap:3, justifyContent:"flex-end" }}>
                                       <input type="number" autoFocus defaultValue={w.windSpeed??""} min="0"
-                                        style={{ ...inp, padding:"1px 4px", fontSize:11, width:46 }}
+                                        style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:54 } : { ...inp, padding:"1px 4px", fontSize:11, width:46 }}
                                         onBlur={e => { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
                                         onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                                       />
                                       <select defaultValue={w.windDir||""}
-                                        style={{ ...inp, padding:"1px 2px", fontSize:11, width:46 }}
+                                        style={isMobile ? { ...inp, padding:"4px 4px", fontSize:16, width:66 } : { ...inp, padding:"1px 2px", fontSize:11, width:46 }}
                                         onChange={e => saveActualTime(t, i, "fieldWeather.windDir", e.target.value || null)}>
                                         <option value="">—</option>
                                         {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
@@ -4829,7 +4852,7 @@ export default function App() {
                                   onClick={() => !editingTemp && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.airTemp" })}>
                                   {editingTemp ? (
                                     <input type="number" autoFocus defaultValue={w.airTemp??""} min="0"
-                                      style={{ ...inp, padding:"1px 4px", fontSize:11, width:50 }}
+                                      style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:56 } : { ...inp, padding:"1px 4px", fontSize:11, width:50 }}
                                       onBlur={e => { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
                                       onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
                                     />
@@ -6290,6 +6313,7 @@ export default function App() {
             ...nonLicensed.map(p => ({ ...p, _kind:"nonlic" })),
           ].sort((a,b) => a.name.localeCompare(b.name));
           const deletePerson = (p) => {
+            if (!confirmDelete(p.name, "applicator")) return;
             if (p._kind === "lic") {
               setLicensed(ops=>ops.filter(x=>x.id!==p.id));
               supabase.from("licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
@@ -6452,6 +6476,7 @@ export default function App() {
                         <div style={{ fontSize:10.5, color: theme.mut }}>ac/hr</div>
                       </div>
                       {isOwner && <button onClick={() => {
+                        if (!confirmDelete(eq.name, "equipment")) return;
                         setEquipment(e=>e.filter(x=>x.id!==eq.id));
                         supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => {
                           if (error) showToast("Failed to delete equipment: " + error.message);
@@ -6477,6 +6502,7 @@ export default function App() {
                       <td style={{ ...td, color:"#2a5c0f", fontWeight:700 }}>{eq.acresPerHour || 75}</td>
                       <td style={td}>
                         {isOwner && <button onClick={() => {
+                          if (!confirmDelete(eq.name, "equipment")) return;
                           setEquipment(e=>e.filter(x=>x.id!==eq.id));
                           supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => {
                             if (error) showToast("Failed to delete equipment: " + error.message);
@@ -6530,6 +6556,7 @@ export default function App() {
                         <div style={{ fontSize:11.5, color: theme.mut }}>Licensed applicator</div>
                       </div>
                       {isOwner && <button onClick={() => {
+                        if (!confirmDelete(op.name, "applicator")) return;
                         setLicensed(ops=>ops.filter(x=>x.id!==op.id));
                         supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => {
                           if (error) showToast("Failed to delete applicator: " + error.message);
@@ -6553,6 +6580,7 @@ export default function App() {
                       <td style={{ ...td, fontWeight:600 }}>{op.name}</td>
                       <td style={td}>
                         {isOwner && <button onClick={() => {
+                          if (!confirmDelete(op.name, "applicator")) return;
                           setLicensed(ops=>ops.filter(x=>x.id!==op.id));
                           supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => {
                             if (error) showToast("Failed to delete applicator: " + error.message);
@@ -6606,6 +6634,7 @@ export default function App() {
                         <div style={{ fontSize:11.5, color: theme.mut }}>Non-licensed</div>
                       </div>
                       {isOwner && <button onClick={() => {
+                        if (!confirmDelete(p.name, "applicator")) return;
                         setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
                         supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
                           if (error) showToast("Failed to delete applicator: " + error.message);
@@ -6629,6 +6658,7 @@ export default function App() {
                       <td style={{ ...td, fontWeight:600 }}>{p.name}</td>
                       <td style={td}>
                         {isOwner && <button onClick={() => {
+                          if (!confirmDelete(p.name, "applicator")) return;
                           setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
                           supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
                             if (error) showToast("Failed to delete applicator: " + error.message);
@@ -7161,7 +7191,7 @@ export default function App() {
             <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
               <div style={{ ...sectionTitleT, marginBottom:10 }}>Appearance</div>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:600, color:"#333" }}>Dark mode</span>
+                <span style={{ fontSize:13, fontWeight:600, color: isMobile ? theme.ink : "#333" }}>Dark mode</span>
                 <button onClick={() => setDarkMode(d => !d)} style={{
                   width:46, height:26, borderRadius:13, border:"none", cursor:"pointer", position:"relative",
                   background: darkMode ? theme.green : "#ccc", transition:"background 0.15s",
@@ -7172,7 +7202,7 @@ export default function App() {
                   }} />
                 </button>
               </div>
-              <div style={{ fontSize:13, fontWeight:600, color:"#333", marginBottom:8 }}>Accent color</div>
+              <div style={{ fontSize:13, fontWeight:600, color: isMobile ? theme.ink : "#333", marginBottom:8 }}>Accent color</div>
               <div style={{ display:"flex", gap:8 }}>
                 {ACCENTS.map(c => (
                   <button key={c} onClick={() => setAccent(c)} title={c} style={{
@@ -7235,7 +7265,7 @@ export default function App() {
                   <input value={cropInput} onChange={e => setCropInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && addOrgCrop()}
                     placeholder="Add a crop not in the list above…"
-                    style={{ ...inp, flex:1, fontSize:13 }} />
+                    style={{ ...inp, flex:1, fontSize: isMobile ? 16 : 13 }} />
                   <button onClick={addOrgCrop} disabled={!cropInput.trim()}
                     style={isMobile ? addBtnT(!!cropInput.trim()) : { background: cropInput.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: cropInput.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
                     + Add
@@ -7325,10 +7355,10 @@ export default function App() {
                     onChange={e => setFarmZipDraft(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && saveFarmZip()}
                     placeholder="e.g. Lyford, TX or 78560"
-                    style={{ ...inp, flex:1, fontSize:13 }}
+                    style={{ ...inp, flex:1, fontSize: isMobile ? 16 : 13 }}
                   />
                   <button onClick={saveFarmZip} disabled={farmZipSaving || !farmZipDraft.trim()}
-                    style={{ background: farmZipDraft.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: farmZipDraft.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
+                    style={isMobile ? addBtnT(!!farmZipDraft.trim()) : { background: farmZipDraft.trim() ? "#2a5c0f" : "#ccc", color:"#fff", border:"none", borderRadius:5, padding:"8px 14px", cursor: farmZipDraft.trim() ? "pointer" : "default", fontSize:13, fontWeight:700, whiteSpace:"nowrap" }}>
                     {farmZipSaving ? "Looking up…" : "Find Location"}
                   </button>
                 </div>
@@ -7363,28 +7393,58 @@ export default function App() {
             {/* Members list */}
             <div style={{ ...cardT, padding: isMobile ? "10px 10px" : "14px 16px", marginBottom:10 }}>
               <div style={sectionTitleT}>Members</div>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, ...(isMobile ? { tableLayout:"fixed" } : {}) }}>
+              {/* Mobile: one row per member instead of a table, so the role picker
+                  can be full size (16px — iOS zooms on smaller inputs). */}
+              {isMobile ? (
+                <div style={{ display:"flex", flexDirection:"column" }}>
+                  {orgMembers.map((m, i) => {
+                    const isMe = m.user_id === session.user.id;
+                    return (
+                      <div key={m.id} style={{ padding:"11px 2px", borderTop: i ? `1px solid ${theme.divider}` : "none" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: isOwner && !isMe ? 8 : 2 }}>
+                          <div style={{ flex:1, minWidth:0, fontSize:14, fontWeight:600, color: m.status === "pending" ? theme.mut : theme.ink, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {m.invited_email || "—"}
+                          </div>
+                          <span style={{ flexShrink:0, borderRadius:6, padding:"2px 7px", fontSize:10.5, fontWeight:700,
+                            background: m.status === "active" ? theme.tintGreen : theme.tintAmber,
+                            color: m.status === "active" ? theme.onGreen : theme.amber }}>{m.status}</span>
+                        </div>
+                        {isOwner && !isMe ? (
+                          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                            <select value={m.role} onChange={e => changeMemberRole(m, e.target.value)} aria-label="Role" style={{ ...sel, flex:1, padding:"8px 10px" }}>
+                              <option value="owner">Owner</option>
+                              <option value="member">Member</option>
+                              <option value="applicator">Applicator</option>
+                              <option value="viewer">Viewer</option>
+                            </select>
+                            <button onClick={() => removeMember(m)} aria-label={`Remove ${m.invited_email || "member"}`}
+                              style={{ flexShrink:0, background: theme.fill, border:"none", borderRadius:10, padding:"0 13px", minHeight:42, cursor:"pointer", color:"#c0392b", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Remove</button>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize:12, color: theme.mut, textTransform:"capitalize" }}>{m.role}{isMe ? " · you" : ""}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
                   <tr style={{ background:"#f0f7e8" }}>
                     {["Email","Role","Status", isOwner ? "Remove" : ""].filter(Boolean).map(h => (
-                      <th key={h} style={{ padding:"6px 8px", textAlign:"left", fontWeight:700, color:"#2a5c0f", borderBottom:"1.5px solid #c8dbb0", ...(isMobile && h === "Email" ? { width:"48%" } : {}) }}>{h}</th>
+                      <th key={h} style={{ padding:"6px 8px", textAlign:"left", fontWeight:700, color:"#2a5c0f", borderBottom:"1.5px solid #c8dbb0" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {orgMembers.map(m => (
                     <tr key={m.id} style={{ borderBottom:"1px solid #e8f0dc" }}>
-                      <td style={{ padding:"6px 8px", color: m.status === "pending" ? "#aaa" : "#333", ...(isMobile ? { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" } : {}) }}>
+                      <td style={{ padding:"6px 8px", color: m.status === "pending" ? "#aaa" : "#333" }}>
                         {m.invited_email || "—"}
                       </td>
                       <td style={{ padding:"6px 8px" }}>
                         {isOwner && m.user_id !== session.user.id ? (
-                          <select value={m.role} onChange={async e => {
-                            const newRole = e.target.value;
-                            const { error } = await supabase.from("org_memberships").update({ role: newRole }).eq("id", m.id);
-                            if (error) showToast(error.message);
-                            else setOrgMembers(prev => prev.map(x => x.id === m.id ? { ...x, role: newRole } : x));
-                          }} style={{ border:"1px solid #c8dbb0", borderRadius:4, fontSize:11, padding:"2px 4px", fontFamily:"inherit" }}>
+                          <select value={m.role} onChange={e => changeMemberRole(m, e.target.value)} style={{ border:"1px solid #c8dbb0", borderRadius:4, fontSize:11, padding:"2px 4px", fontFamily:"inherit" }}>
                             <option value="owner">Owner</option>
                             <option value="member">Member</option>
                             <option value="applicator">Applicator</option>
@@ -7404,12 +7464,7 @@ export default function App() {
                       {isOwner && (
                         <td style={{ padding:"6px 8px" }}>
                           {m.user_id !== session.user.id ? (
-                            <button onClick={async () => {
-                              if (!confirm(`Remove ${m.invited_email || "this member"}?`)) return;
-                              const { error } = await supabase.from("org_memberships").delete().eq("id", m.id);
-                              if (error) showToast(error.message);
-                              else setOrgMembers(prev => prev.filter(x => x.id !== m.id));
-                            }} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                            <button onClick={() => removeMember(m)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
                           ) : <span style={{ color:"#ccc", fontSize:12 }}>you</span>}
                         </td>
                       )}
@@ -7417,6 +7472,7 @@ export default function App() {
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
 
             {/* Invite form — owner only */}
@@ -7426,9 +7482,11 @@ export default function App() {
                 <div style={{ fontSize:11, color:"#666", marginBottom:10, lineHeight:1.5 }}>
                   Enter their email below, then send them the app link. When they sign up, they will automatically join <strong>{currentOrg?.name}</strong> and see all shared data.
                 </div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
+                <div style={isMobile
+                  ? { display:"flex", flexDirection:"column", gap:10, alignItems:"stretch" }
+                  : { display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
                   <div>
-                    <div style={{ fontSize:11, color:"#666", marginBottom:3 }}>Email</div>
+                    <div style={isMobile ? labelT : { fontSize:11, color:"#666", marginBottom:3 }}>Email</div>
                     <input
                       type="email"
                       placeholder="coworker@email.com"
@@ -7438,9 +7496,9 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <div style={{ fontSize:11, color:"#666", marginBottom:3 }}>Role</div>
+                    <div style={isMobile ? labelT : { fontSize:11, color:"#666", marginBottom:3 }}>Role</div>
                     <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
-                      style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"7px 8px", fontSize:13, fontFamily:"inherit", background:"#fff" }}>
+                      style={isMobile ? sel : { border:"1.5px solid #c8dbb0", borderRadius:5, padding:"7px 8px", fontSize:13, fontFamily:"inherit", background:"#fff" }}>
                       <option value="member">Member — can create tickets, read settings</option>
                       <option value="applicator">Applicator — applicator view only</option>
                       <option value="viewer">Viewer — read-only</option>
@@ -7466,13 +7524,13 @@ export default function App() {
                       }
                     }}
                     disabled={!inviteEmail.trim()}
-                    style={{ background: inviteEmail.trim() ? "#2a5c0f" : "#aaa", color:"#fff", border:"none", borderRadius:5, padding:"8px 16px", cursor: inviteEmail.trim() ? "pointer" : "default", fontWeight:700, fontSize:13, fontFamily:"inherit" }}>
+                    style={isMobile ? addBtnT(!!inviteEmail.trim()) : { background: inviteEmail.trim() ? "#2a5c0f" : "#aaa", color:"#fff", border:"none", borderRadius:5, padding:"8px 16px", cursor: inviteEmail.trim() ? "pointer" : "default", fontWeight:700, fontSize:13, fontFamily:"inherit" }}>
                     Send Invite
                   </button>
                 </div>
-                <div style={{ marginTop:12, background:"#f0f7e8", borderRadius:6, padding:"10px 12px", fontSize:11, color:"#444" }}>
+                <div style={{ marginTop:12, background: isMobile ? theme.fill : "#f0f7e8", borderRadius: isMobile ? 10 : 6, padding:"10px 12px", fontSize: isMobile ? 12 : 11, color: isMobile ? theme.ink2 : "#444" }}>
                   <strong>App link to share:</strong>{" "}
-                  <a href="https://boomlog.app" target="_blank" rel="noopener noreferrer" style={{ color:"#2a5c0f" }}>
+                  <a href="https://boomlog.app" target="_blank" rel="noopener noreferrer" style={{ color: isMobile ? theme.onGreen : "#2a5c0f" }}>
                     boomlog.app
                   </a>
                 </div>
@@ -7484,11 +7542,11 @@ export default function App() {
               <div style={sectionTitleT}>Reports</div>
               <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:8 }}>
                 <input type="date" value={tdaFrom} onChange={e=>setTdaFrom(e.target.value)}
-                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
+                  style={isMobile ? { ...inp, padding:"8px 8px", flex:1, minWidth:0 } : { border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
                   title="Report from date"/>
-                <span style={{ fontSize:12, color:"#888", flexShrink:0 }}>–</span>
+                <span style={{ fontSize:12, color: isMobile ? theme.mut : "#888", flexShrink:0 }}>–</span>
                 <input type="date" value={tdaTo} onChange={e=>setTdaTo(e.target.value)}
-                  style={{ border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
+                  style={isMobile ? { ...inp, padding:"8px 8px", flex:1, minWidth:0 } : { border:"1.5px solid #c8dbb0", borderRadius:5, padding:"6px 6px", fontSize:13, fontFamily:"inherit", flex:1, minWidth:0 }}
                   title="Report to date"/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
