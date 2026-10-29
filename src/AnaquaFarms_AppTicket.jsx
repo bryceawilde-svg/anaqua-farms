@@ -6055,9 +6055,13 @@ export default function App() {
                           <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.onGreen }}>
                             {isMetric ? (parseFloat(f.acres||0)*0.404686).toFixed(1) : parseFloat(f.acres||0).toFixed(1)}
                           </span>
-                          <div style={{ display:"flex", gap:8 }}>
-                            <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:14 }}>✏</button>
-                            <button onClick={() => deleteField(f.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                          <div style={{ display:"flex", gap:6 }}>
+                            <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); }} aria-label={`Edit ${f.name}`}
+                              style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color: theme.ink2, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M14 6l4 4" /></svg>
+                            </button>
+                            <button onClick={() => deleteField(f.id)} aria-label={`Delete ${f.name}`}
+                              style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color:"#c0392b", fontSize:18, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                           </div>
                         </div>
                       </div>
@@ -6754,6 +6758,10 @@ export default function App() {
                       <input value={newChem.name} onChange={e => { setNewChem(c=>({...c,name:e.target.value})); setChemDupWarning(""); }} placeholder="Required" style={inp} />
                     </div>
                     <div>
+                      <label style={{ ...labelT, marginBottom:5 }}>Active Ingredient</label>
+                      <input value={newChem.activeIngredient||""} onChange={e => setNewChem(c=>({...c,activeIngredient:e.target.value}))} placeholder="From the label, e.g. Atrazine 42.2%" style={inp} />
+                    </div>
+                    <div>
                       <label style={{ ...labelT, marginBottom:5 }}>EPA Reg. No.</label>
                       <input value={newChem.epa} onChange={e => { setNewChem(c=>({...c,epa:e.target.value})); setChemDupWarning(""); }} placeholder="e.g. 524-537" style={inp} />
                     </div>
@@ -6811,6 +6819,10 @@ export default function App() {
                             <div>
                               <label style={{ ...labelT, fontSize:10 }}>Chemical Name</label>
                               <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={inp} />
+                            </div>
+                            <div>
+                              <label style={{ ...labelT, fontSize:10 }}>Active Ingredient</label>
+                              <input value={editChemDraft.activeIngredient||""} onChange={e=>setEditChemDraft(d=>({...d,activeIngredient:e.target.value}))} style={inp} placeholder="from label" />
                             </div>
                             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
                               <div>
@@ -6874,16 +6886,24 @@ export default function App() {
                         <span style={{ width:34, height:34, borderRadius:10, background: theme.tintBlue, color: theme.blue, fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{c.formType||"—"}</span>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{c.name}</div>
-                          <div style={{ fontSize:11.5, color: theme.mut, fontFamily:"'Space Grotesk',monospace" }}>EPA {c.epa}</div>
+                          <div style={{ fontSize:11.5, color: c.activeIngredient ? theme.ink2 : theme.amber, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}
+                            title={c.activeIngredient ? undefined : "Required on TDA records"}>
+                            {c.activeIngredient || "Active ingredient missing"}
+                          </div>
+                          <div style={{ fontSize:11.5, color: theme.mut, fontFamily:"'Space Grotesk',monospace" }}>EPA {c.epa || "—"}</div>
                         </div>
-                        <div style={{ textAlign:"right" }}>
+                        <div style={{ textAlign:"right", flexShrink:0 }}>
                           <div style={{ fontSize:11, color: theme.mut }}>REI</div>
-                          <div style={{ fontSize:13, fontWeight:700, color: theme.ink2 }}>{c.rei}</div>
+                          <div style={{ fontSize:13, fontWeight:700, color: theme.ink2 }}>{c.rei || "—"}</div>
                         </div>
                         {isOwner && (
-                          <div style={{ display:"flex", gap:8, marginLeft:4 }}>
-                            <button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:14 }}>✏</button>
-                            <button onClick={() => deleteChem(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:16 }}>×</button>
+                          <div style={{ display:"flex", flexDirection:"column", gap:6, marginLeft:2, flexShrink:0 }}>
+                            <button onClick={() => { setEditingChemId(c.id); setEditChemDraft({...c, containerSize: c.containerSize ?? ""}); }} aria-label={`Edit ${c.name}`}
+                              style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color: theme.ink2, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M14 6l4 4" /></svg>
+                            </button>
+                            <button onClick={() => deleteChem(c.id)} aria-label={`Delete ${c.name}`}
+                              style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color:"#c0392b", fontSize:18, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
                           </div>
                         )}
                       </div>
