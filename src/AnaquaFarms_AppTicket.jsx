@@ -4681,8 +4681,12 @@ export default function App() {
           <div>
 
             {tickets.length === 0 ? (
-              <div style={{ textAlign:"center", padding:60, color:"#999", fontSize:14 }}>
-                No tickets yet. Create one using the New Ticket tab.
+              <div style={isMobile
+                ? { textAlign:"center", padding:"36px 24px", color: theme.mut, fontSize:13.5, lineHeight:1.5, border:`1.5px dashed ${theme.dash}`, borderRadius:16, margin:"4px 2px" }
+                : { textAlign:"center", padding:60, color:"#999", fontSize:14 }}>
+                {isMobile
+                  ? <><div style={{ fontSize:15, fontWeight:800, color: theme.ink, marginBottom:4 }}>No tickets yet</div>Tap <span style={{ fontWeight:700, color: theme.onGreen }}>+</span> below to create your first one.</>
+                  : "No tickets yet. Create one using the New Ticket tab."}
               </div>
             ) : (() => {
               // Filter tickets by field name and/or chemical name
@@ -4705,7 +4709,7 @@ export default function App() {
                       <input
                         value={logFieldSearch}
                         onChange={e => setLogFieldSearch(e.target.value)}
-                        placeholder="Search by field…"
+                        placeholder={isMobile ? "Field…" : "Search by field…"}
                         style={{ ...inp, paddingLeft:28, fontSize: isMobile ? 16 : 13 }}
                       />
                     </div>
@@ -4717,22 +4721,22 @@ export default function App() {
                       <input
                         value={logChemSearch}
                         onChange={e => setLogChemSearch(e.target.value)}
-                        placeholder="Search by chemical…"
+                        placeholder={isMobile ? "Chemical…" : "Search by chemical…"}
                         style={{ ...inp, paddingLeft:28, fontSize: isMobile ? 16 : 13 }}
                       />
                     </div>
                   </div>
                   {(fq || cq) && (
-                    <div style={{ fontSize:12, color:"#888", marginBottom:8, display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ fontSize: isMobile ? 12.5 : 12, color: isMobile ? theme.ink2 : "#888", marginBottom: isMobile ? 10 : 8, display:"flex", alignItems:"center", gap:8, justifyContent: isMobile ? "space-between" : "flex-start" }}>
                       {filtered.length} of {tickets.length} ticket{tickets.length!==1?"s":""} match
                       <button onClick={() => { setLogFieldSearch(""); setLogChemSearch(""); }}
-                        style={{ background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:11 }}>
+                        style={isMobile ? { ...softBtnT, padding:"5px 11px", fontSize:12 } : { background:"none", border:"none", cursor:"pointer", color:"#c05000", fontWeight:700, fontSize:11 }}>
                         ✕ clear
                       </button>
                     </div>
                   )}
                   {filtered.length === 0 ? (
-                    <div style={{ textAlign:"center", padding:40, color:"#999", fontSize:13 }}>
+                    <div style={{ textAlign:"center", padding:40, color: isMobile ? theme.mut : "#999", fontSize:13 }}>
                       No tickets match your search.
                     </div>
                   ) : filtered.map(t => {
@@ -4879,83 +4883,130 @@ export default function App() {
                         })()}
                       </div>
 
-                      {/* Field schedule */}
-                      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:5, display: isMobile ? "block" : "none" }}>FIELD SCHEDULE</div>
-                      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
-                        <thead>
-                          <tr>{["Field","Acres","App. Date","Wind","Temp"].map(h => (
-                            <th key={h} style={{ textAlign: h==="Field"?"left":"right", color: isMobile ? theme.mut : "#4a7a20", fontSize: isMobile?8.5:10, fontWeight:700, paddingBottom:3, borderBottom: isMobile ? "none" : "1px solid #c8dbb0" }}>{h}</th>
-                          ))}</tr>
-                        </thead>
-                        <tbody>
-                          {(t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
-                            const editingDate = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualDateEnd";
-                            const editingWind = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.windSpeed";
-                            const editingTemp = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.airTemp";
-                            const w = fs.fieldWeather || {};
-                            const rowDim = isMobile && !fs.actualDateEnd ? 0.5 : 1;
-                            return (
-                              <tr key={fs.id || i} style={{ borderBottom: isMobile ? `1px solid ${theme.divider}` : "1px solid #eef5e8", opacity: rowDim }}>
-                                <td style={{ padding:"3px 0", fontWeight:600, color: isMobile ? theme.ink : "#2a5c0f" }}>{i+1}. {fs.name}</td>
-                                <td style={{ padding:"3px 0", textAlign:"right", color: isMobile ? theme.ink2 : "#555", fontFamily: isMobile ? "'Space Grotesk',monospace" : "inherit" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
-                                <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }}
-                                  onClick={() => !editingDate && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualDateEnd" })}>
-                                  {editingDate ? (
-                                    <input type="date" autoFocus defaultValue={fs.actualDateEnd||""}
-                                      style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:136 } : { ...inp, padding:"1px 4px", fontSize:11, width:110 }}
-                                      onBlur={e => { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); }}
-                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
-                                    />
-                                  ) : fs.actualDateEnd ? (
-                                    <span style={{ color:"#555" }}>
-                                      {new Date(fs.actualDateEnd + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" })}
-                                    </span>
-                                  ) : (
-                                    <span style={{ color:"#bbb", fontSize:11 }}>—</span>
-                                  )}
-                                </td>
-                                <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap", cursor:"pointer" }}
-                                  onClick={() => !editingWind && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.windSpeed" })}>
-                                  {editingWind ? (
-                                    <div style={{ display:"flex", gap:3, justifyContent:"flex-end" }}>
-                                      <input type="number" autoFocus defaultValue={w.windSpeed??""} min="0"
-                                        style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:54 } : { ...inp, padding:"1px 4px", fontSize:11, width:46 }}
-                                        onBlur={e => { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
-                                        onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
-                                      />
-                                      <select defaultValue={w.windDir||""}
-                                        style={isMobile ? { ...inp, padding:"4px 4px", fontSize:16, width:66 } : { ...inp, padding:"1px 2px", fontSize:11, width:46 }}
-                                        onChange={e => saveActualTime(t, i, "fieldWeather.windDir", e.target.value || null)}>
-                                        <option value="">—</option>
-                                        {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
-                                      </select>
-                                    </div>
-                                  ) : w.windSpeed != null ? (
-                                    `${isMetric ? (w.windSpeed * 1.60934).toFixed(1) : w.windSpeed}${w.windDir ? ` ${w.windDir}` : ""}`
-                                  ) : "—"}
-                                </td>
-                                <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", cursor:"pointer" }}
-                                  onClick={() => !editingTemp && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.airTemp" })}>
-                                  {editingTemp ? (
-                                    <input type="number" autoFocus defaultValue={w.airTemp??""} min="0"
-                                      style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:56 } : { ...inp, padding:"1px 4px", fontSize:11, width:50 }}
-                                      onBlur={e => { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
-                                      onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
-                                    />
-                                  ) : w.airTemp != null ? (
-                                    isMetric ? ((w.airTemp - 32) * 5/9).toFixed(1) : w.airTemp
-                                  ) : "—"}
-                                </td>
-                              </tr>
+                      {/* Field schedule — desktop: table; mobile: one row per field with
+                          tappable Date / Wind / Temp chips (same inline editors, built once). */}
+                      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom: isMobile ? 7 : 5, display: isMobile ? "block" : "none" }}>FIELD SCHEDULE</div>
+                      {(() => {
+                        const rows = (t.fieldSchedule || buildFieldSchedule(t.selectedFields||[], t.timeStart, t.acresPerHour || 75)).map((fs,i) => {
+                          const editingDate = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "actualDateEnd";
+                          const editingWind = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.windSpeed";
+                          const editingTemp = editingActualTime?.ticketId === t.id && editingActualTime?.fieldIdx === i && editingActualTime?.key === "fieldWeather.airTemp";
+                          const w = fs.fieldWeather || {};
+                          const editDate = () => !editingDate && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "actualDateEnd" });
+                          const editWind = () => !editingWind && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.windSpeed" });
+                          const editTemp = () => !editingTemp && setEditingActualTime({ ticketId: t.id, fieldIdx: i, key: "fieldWeather.airTemp" });
+                          const empty = <span style={{ color: isMobile ? theme.mut : "#bbb", fontSize:11 }}>—</span>;
+
+                          const dateCell = editingDate ? (
+                            <input type="date" autoFocus defaultValue={fs.actualDateEnd||""}
+                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:136 } : { ...inp, padding:"1px 4px", fontSize:11, width:110 }}
+                              onBlur={e => { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); }}
+                              onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "actualDateEnd", e.target.value); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                            />
+                          ) : fs.actualDateEnd ? (
+                            <span style={{ color: isMobile ? theme.ink : "#555" }}>
+                              {new Date(fs.actualDateEnd + "T12:00:00").toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit" })}
+                            </span>
+                          ) : empty;
+
+                          const windCell = editingWind ? (
+                            <div style={{ display:"flex", gap:3, justifyContent:"flex-end" }}>
+                              <input type="number" autoFocus defaultValue={w.windSpeed??""} min="0"
+                                style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:54 } : { ...inp, padding:"1px 4px", fontSize:11, width:46 }}
+                                onBlur={e => { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
+                                onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.windSpeed", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                              />
+                              <select defaultValue={w.windDir||""}
+                                style={isMobile ? { ...inp, padding:"4px 4px", fontSize:16, width:66 } : { ...inp, padding:"1px 2px", fontSize:11, width:46 }}
+                                onChange={e => saveActualTime(t, i, "fieldWeather.windDir", e.target.value || null)}>
+                                <option value="">—</option>
+                                {WIND_DIRS.map(d => <option key={d}>{d}</option>)}
+                              </select>
+                            </div>
+                          ) : w.windSpeed != null ? (
+                            `${isMetric ? (w.windSpeed * 1.60934).toFixed(1) : w.windSpeed}${w.windDir ? ` ${w.windDir}` : ""}`
+                          ) : (isMobile ? empty : "—");
+
+                          const tempCell = editingTemp ? (
+                            <input type="number" autoFocus defaultValue={w.airTemp??""} min="0"
+                              style={isMobile ? { ...inp, padding:"4px 6px", fontSize:16, width:56 } : { ...inp, padding:"1px 4px", fontSize:11, width:50 }}
+                              onBlur={e => { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); }}
+                              onKeyDown={e => { if (e.key==="Enter") { saveActualTime(t, i, "fieldWeather.airTemp", e.target.value !== "" ? parseFloat(e.target.value) : null); setEditingActualTime(null); } else if (e.key==="Escape") setEditingActualTime(null); }}
+                            />
+                          ) : w.airTemp != null ? (
+                            isMetric ? ((w.airTemp - 32) * 5/9).toFixed(1) : w.airTemp
+                          ) : (isMobile ? empty : "—");
+
+                          if (isMobile) {
+                            const done = !!fs.actualDateEnd;
+                            // Tap target: small label + value; becomes the inline editor while editing.
+                            const chip = (label, content, onTap, editing, unit) => (
+                              <div onClick={onTap} style={{ flex: editing ? "0 0 auto" : 1, minWidth:0, minHeight:34, display:"flex", alignItems:"center", gap:5,
+                                background: editing ? "transparent" : theme.fill, borderRadius:9, padding: editing ? 0 : "0 9px", cursor:"pointer", fontSize:12.5, fontWeight:600, color: theme.ink }}>
+                                {!editing && <span style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", color: theme.mut }}>{label}</span>}
+                                <span style={{ fontFamily:"'Space Grotesk',monospace", whiteSpace:"nowrap", overflow: editing ? "visible" : "hidden", textOverflow:"ellipsis" }}>{content}</span>
+                                {!editing && unit && <span style={{ fontSize:10, color: theme.mut }}>{unit}</span>}
+                              </div>
                             );
-                          })}
-                        </tbody>
-                      </table>
+                            return (
+                              <div key={fs.id || i} style={{ padding:"9px 0", borderBottom:`1px solid ${theme.divider}` }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:7 }}>
+                                  <span title={done ? "Sprayed" : "Not yet sprayed"} style={{ width:18, height:18, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+                                    background: done ? theme.green : "transparent", border: done ? "none" : `1.5px solid ${theme.dash}`, boxSizing:"border-box", color:"#fff" }}>
+                                    {done && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
+                                  </span>
+                                  <span style={{ flex:1, minWidth:0, fontSize:14, fontWeight:700, color: done ? theme.ink : theme.ink2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{i+1}. {fs.name}</span>
+                                  <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:13, fontWeight:700, color: theme.ink2, flexShrink:0 }}>{fmtAcresShort(fs.acres, isMetric)}</span>
+                                </div>
+                                <div style={{ display:"flex", gap:6, flexWrap: (editingDate || editingWind || editingTemp) ? "wrap" : "nowrap" }}>
+                                  {chip("Date", dateCell, editDate, editingDate)}
+                                  {chip("Wind", windCell, editWind, editingWind)}
+                                  {chip("Temp", tempCell, editTemp, editingTemp, w.airTemp != null && !editingTemp ? tempLabel(isMetric) : null)}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <tr key={fs.id || i} style={{ borderBottom:"1px solid #eef5e8" }}>
+                              <td style={{ padding:"3px 0", fontWeight:600, color:"#2a5c0f" }}>{i+1}. {fs.name}</td>
+                              <td style={{ padding:"3px 0", textAlign:"right", color:"#555" }}>{parseFloat(fs.acres||0).toFixed(1)}</td>
+                              <td style={{ padding:"3px 4px", textAlign:"right", cursor:"pointer" }} onClick={editDate}>{dateCell}</td>
+                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", whiteSpace:"nowrap", cursor:"pointer" }} onClick={editWind}>{windCell}</td>
+                              <td style={{ padding:"3px 4px", textAlign:"right", fontSize:11, color:"#555", cursor:"pointer" }} onClick={editTemp}>{tempCell}</td>
+                            </tr>
+                          );
+                        });
+                        return isMobile ? (
+                          <div style={{ marginBottom:14, marginTop:-4 }}>{rows}</div>
+                        ) : (
+                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
+                            <thead>
+                              <tr>{["Field","Acres","App. Date","Wind","Temp"].map(h => (
+                                <th key={h} style={{ textAlign: h==="Field"?"left":"right", color:"#4a7a20", fontSize:10, fontWeight:700, paddingBottom:3, borderBottom:"1px solid #c8dbb0" }}>{h}</th>
+                              ))}</tr>
+                            </thead>
+                            <tbody>{rows}</tbody>
+                          </table>
+                        );
+                      })()}
 
                       {/* Chemicals */}
                       {t.chemicals.length > 0 && (
                         <>
-                          {isMobile && <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:5 }}>TANK MIX</div>}
+                          {isMobile && <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color: theme.mut, marginBottom:3 }}>TANK MIX</div>}
+                          {isMobile ? (
+                            <div style={{ marginBottom:14 }}>
+                              {t.chemicals.map((c,i) => (
+                                <div key={i} style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:10, padding:"8px 0", borderBottom:`1px solid ${theme.divider}` }}>
+                                  <span style={{ fontSize:14, fontWeight:600, color: theme.ink, minWidth:0 }}>{c.name}</span>
+                                  <span style={{ flexShrink:0, whiteSpace:"nowrap" }}>
+                                    <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.ink }}>{c.ratePerAcre ? parseFloat(c.ratePerAcre).toFixed(2) : "—"}</span>
+                                    <span style={{ fontSize:11.5, color: theme.mut, marginLeft:4 }}>{c.unit}/ac</span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
                           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, marginBottom:10 }}>
                             <thead>
                               <tr>{["Chemical","Rate/Acre","Unit"].map(h => (
@@ -4974,6 +5025,7 @@ export default function App() {
                               ))}
                             </tbody>
                           </table>
+                          )}
                         </>
                       )}
 
@@ -5073,7 +5125,11 @@ export default function App() {
                           onClick={() => setCalcTicketId(t.id)}
                           title="Partial load calculator"
                           aria-label="Partial load calculator"
-                          style={{
+                          style={isMobile ? {
+                            background: theme.tintGreen, color: theme.onGreen, border:"none", borderRadius:11,
+                            cursor:"pointer", width:44, minHeight:44, alignSelf:"stretch",
+                            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, padding:0
+                          } : {
                             background:"#f0f7e8", color:"#2a5c0f", border:"1.5px solid #c8dbb0", borderRadius:5,
                             cursor:"pointer", width: isMobile ? 44 : 36, height: isMobile ? 44 : 36,
                             display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, padding:0
