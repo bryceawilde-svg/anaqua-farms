@@ -4681,7 +4681,9 @@ export default function App() {
 
         {/* ══ SAVED TICKETS ══════════════════════════════════════════════════════ */}
                 {view === "log" && (
-          <div>
+          // Mobile: the whole list (search + every ticket, open or collapsed) reaches 4px from
+          // the screen edges, so a ticket doesn't change width when it's opened.
+          <div style={isMobile ? { margin:"0 -6px" } : undefined}>
 
             {tickets.length === 0 ? (
               <div style={isMobile
@@ -4760,8 +4762,6 @@ export default function App() {
                   border: `1px solid ${isOpen ? theme.green : theme.line}`,
                   outline: t.team_view ? `2px solid ${theme.blue}` : "none",
                   borderRadius:14, marginBottom:8,
-                  // An open ticket reaches toward the screen edges for a wider field schedule.
-                  marginLeft: isOpen ? -6 : 0, marginRight: isOpen ? -6 : 0,
                   boxShadow: isOpen ? "0 6px 18px -9px rgba(20,40,26,0.22)" : "0 6px 18px -9px rgba(20,40,26,0.16)",
                   overflow:"hidden", transition:"box-shadow 0.15s"
                 } : {
