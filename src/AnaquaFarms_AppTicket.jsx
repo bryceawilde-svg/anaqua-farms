@@ -8,7 +8,7 @@ import ApplicatorView from "./ApplicatorView";
 import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
-import { buildTheme, ACCENTS } from "./utils/theme";
+import { buildTheme, ACCENTS, DEFAULT_THEME } from "./utils/theme";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 // Full reference crop list — used as the org crop library default.
@@ -1401,7 +1401,7 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
 // READ-ONLY scratch pad. Tickets are state regulatory records: this panel must
 // never write to the ticket, the tickets table, or field_schedule. It takes no
 // setTickets and never touches supabase.
-function PartialLoadCalc({ ticket, isMetric, isMobile, onClose }) {
+function PartialLoadCalc({ ticket, isMetric, isMobile, theme = DEFAULT_THEME, onClose }) {
   // Freeze the field list at open time. refreshTeamTickets polls every 15s and
   // rewrites fieldSchedule, which would move acres under the operator's finger
   // mid-calculation. Length check, not ||: normalizeTicket defaults it to [].
@@ -1487,11 +1487,19 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, onClose }) {
     });
   };
 
-  const statLabel = { fontSize:9, color:"#888", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" };
+  // Mobile follows the redesign bottom-sheet look; desktop keeps the original panel.
+  const statLabel = isMobile
+    ? { fontSize:9.5, color: theme.mut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }
+    : { fontSize:9, color:"#888", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" };
+  const headT  = isMobile ? { fontSize:14, fontWeight:800, color: theme.ink, marginBottom:10 } : sectionTitle;
+  const cardC  = isMobile ? { background: theme.card, border:`1px solid ${theme.line}`, borderRadius:14 } : card;
+  const numF   = isMobile ? "'Space Grotesk',monospace" : "inherit";
+  const ink    = isMobile ? theme.onGreen : "#2a5c0f";
+  const warn   = isMobile ? theme.amber : "#c07000";
 
   return (
     <>
-      <div style={{ position:"fixed", inset:0, zIndex:1000 }} onClick={onClose} />
+      <div style={{ position:"fixed", inset:0, zIndex:1000, background: isMobile ? "rgba(10,20,14,0.45)" : "transparent" }} onClick={onClose} />
       <div style={{
         position:"fixed",
         bottom: isMobile ? 0 : 96,
@@ -1503,14 +1511,31 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, onClose }) {
         width:  isMobile ? "auto" : 420,
         maxHeight: isMobile ? "88vh" : 620,
         zIndex: 1001,
-        background:"#fff",
-        borderRadius: isMobile ? "16px 16px 0 0" : 10,
-        boxShadow:"0 8px 40px rgba(0,0,0,0.22)",
-        border:"1.5px solid #c8dbb0",
+        background: isMobile ? theme.canvas : "#fff",
+        borderRadius: isMobile ? "26px 26px 0 0" : 10,
+        boxShadow: isMobile ? "0 -12px 40px rgba(0,0,0,0.28)" : "0 8px 40px rgba(0,0,0,0.22)",
+        border: isMobile ? "none" : "1.5px solid #c8dbb0",
         display:"flex", flexDirection:"column", overflow:"hidden",
-        fontFamily:"'Georgia','Times New Roman',serif",
+        fontFamily: isMobile ? "'Hanken Grotesk',system-ui,sans-serif" : "'Georgia','Times New Roman',serif",
       }}>
         {/* Header */}
+        {isMobile ? (
+          <div style={{ padding:"10px 16px 12px", flexShrink:0 }}>
+            <div style={{ width:40, height:4, borderRadius:999, background: theme.dash, margin:"0 auto 12px" }} />
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+              <div style={{ minWidth:0 }}>
+                <div style={statLabel}>Partial load</div>
+                <div style={{ fontSize:19, fontWeight:800, color: theme.ink, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  Ticket No. {String(ticket.ticketNumber || "?").padStart(3,"0")}
+                  <TargetZoneBadge ticket={ticket} size={10} />
+                </div>
+              </div>
+              <button onClick={onClose} aria-label="Close"
+                style={{ background: theme.fill, border:"none", width:32, height:32, borderRadius:10, color: theme.ink2,
+                  fontSize:19, lineHeight:1, cursor:"pointer", flexShrink:0 }}>×</button>
+            </div>
+          </div>
+        ) : (
         <div style={{
           background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)",
           padding:"12px 14px", display:"flex", alignItems:"center",
@@ -1527,31 +1552,34 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, onClose }) {
             style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", fontSize:18,
               cursor:"pointer", lineHeight:1, padding:"4px 9px", borderRadius:6, fontWeight:700 }}>✕</button>
         </div>
+        )}
 
         {/* Body */}
-        <div style={{ flex:1, overflowY:"auto", padding:"12px 14px" }}>
-          <div style={sectionTitle}>Fields left to spray</div>
+        <div style={{ flex:1, overflowY:"auto", padding: isMobile ? "2px 16px calc(22px + env(safe-area-inset-bottom))" : "12px 14px" }}>
+          <div style={headT}>Fields left to spray</div>
           {rows.length === 0 ? (
-            <div style={{ fontSize:12, color:"#888", marginBottom:12 }}>No fields on this ticket.</div>
+            <div style={{ fontSize:12, color: isMobile ? theme.mut : "#888", marginBottom:12 }}>No fields on this ticket.</div>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:12 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap: isMobile ? 7 : 6, marginBottom: isMobile ? 16 : 12 }}>
               {rows.map((fs, i) => {
                 const on = checkedIdx.has(i);
                 return (
                   <label key={i} style={{
                     display:"flex", alignItems:"center", gap:10, cursor:"pointer",
-                    background: on ? "#f0f7e8" : "#fafafa",
-                    border:`1.5px solid ${on ? "#2a5c0f" : "#e4e4e4"}`,
-                    borderRadius:7, padding:"10px 12px",
+                    background: isMobile ? (on ? theme.tintGreen : theme.card) : (on ? "#f0f7e8" : "#fafafa"),
+                    border: isMobile ? `1.5px solid ${on ? theme.green : theme.line}` : `1.5px solid ${on ? "#2a5c0f" : "#e4e4e4"}`,
+                    borderRadius: isMobile ? 12 : 7, padding: isMobile ? "11px 12px" : "10px 12px",
                   }}>
                     <input type="checkbox" checked={on} onChange={() => toggle(i)}
-                      style={{ width:20, height:20, accentColor:"#2a5c0f", flexShrink:0, margin:0 }} />
+                      style={{ width:20, height:20, accentColor: isMobile ? theme.green : "#2a5c0f", flexShrink:0, margin:0 }} />
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:700, color: on ? "#2a5c0f" : "#999",
+                      <div style={{ fontSize: isMobile ? 14 : 13, fontWeight:700, color: isMobile ? (on ? theme.ink : theme.ink2) : (on ? "#2a5c0f" : "#999"),
                         overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{fs.name}</div>
-                      <div style={{ fontSize:11, color:"#888" }}>
+                      <div style={{ fontSize:11, color: isMobile ? theme.mut : "#888" }}>
                         {fmtAcresShort(fs.acres, isMetric)}
-                        {isSprayed(fs) && <span style={{ marginLeft:6, color:"#1a6b2f", fontWeight:700 }}>sprayed</span>}
+                        {isSprayed(fs) && (isMobile
+                          ? <span style={{ marginLeft:6, background: theme.tintGreen, color: theme.onGreen, borderRadius:5, padding:"1px 6px", fontSize:10, fontWeight:700 }}>Sprayed</span>
+                          : <span style={{ marginLeft:6, color:"#1a6b2f", fontWeight:700 }}>sprayed</span>)}
                       </div>
                     </div>
                   </label>
@@ -1560,95 +1588,103 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, onClose }) {
             </div>
           )}
 
-          <label style={labelStyle}>Already sprayed on current field ({areaUnit})</label>
+          <label style={isMobile ? { ...statLabel, display:"block", marginBottom:5 } : labelStyle}>Already sprayed on current field ({areaUnit})</label>
           <input type="number" inputMode="decimal" step="any" min="0" value={doneAcres} placeholder="0"
             onChange={e => { setResult(null); setDoneAcres(e.target.value); }}
-            style={{ ...inp, marginBottom:12 }} />
+            style={isMobile
+              ? { ...inp, marginBottom:12, borderRadius:12, background: theme.input, color: theme.ink, borderColor: theme.inputLine }
+              : { ...inp, marginBottom:12 }} />
 
           {/* Remaining — live, independent of the Calculate button */}
-          <div style={{ ...card, marginBottom:12, padding:"11px 14px", textAlign:"center" }}>
+          <div style={{ ...cardC, marginBottom:12, padding:"11px 14px", textAlign:"center" }}>
             <div style={statLabel}>Remaining</div>
-            <div style={{ fontSize:26, fontWeight:700, lineHeight:1.15, color: remRaw < 0 ? "#c07000" : "#2a5c0f" }}>
+            <div style={{ fontSize: isMobile ? 30 : 26, fontWeight:700, lineHeight:1.15, fontFamily: numF, color: remRaw < 0 ? warn : (isMobile ? theme.ink : "#2a5c0f") }}>
               {toDisp(remRaw).toFixed(1)} {areaUnit}
             </div>
             {overEntered && (
-              <div style={{ fontSize:11, color:"#c07000", fontWeight:700, marginTop:3 }}>
+              <div style={{ fontSize:11, color: warn, fontWeight:700, marginTop:3 }}>
                 More than selected ({fmtAcresShort(selectedAcres, isMetric)})
               </div>
             )}
           </div>
 
           <button onClick={calculate} disabled={remAc <= 0}
-            style={{
+            style={isMobile ? {
+              width:"100%", background: remAc > 0 ? theme.green : theme.fill, color: remAc > 0 ? "#fff" : theme.mut, border:"none",
+              borderRadius:14, padding:"14px 16px", fontSize:16, fontWeight:800, fontFamily:"inherit",
+              cursor: remAc > 0 ? "pointer" : "default", marginBottom:12,
+            } : {
               width:"100%", background: remAc > 0 ? "#2a5c0f" : "#bbb", color:"#fff", border:"none",
               borderRadius:6, padding:"12px 16px", fontSize:15, fontWeight:700, fontFamily:"inherit",
               cursor: remAc > 0 ? "pointer" : "default", marginBottom:12,
             }}>Calculate</button>
 
           {!result ? (
-            <div style={{ fontSize:12, color:"#aaa", textAlign:"center", padding:"8px 0 4px" }}>
+            <div style={{ fontSize:12, color: isMobile ? theme.mut : "#aaa", textAlign:"center", padding:"8px 0 4px" }}>
               {checkedIdx.size === 0
                 ? "Check the fields you have left to spray."
                 : "Tap Calculate for chemical amounts."}
             </div>
           ) : (
             <>
-              <div style={sectionTitle}>Add to finish {fmtAcresShort(result.remAc, isMetric)}</div>
+              <div style={{ ...headT, marginTop: isMobile ? 6 : 0 }}>Add to finish {fmtAcresShort(result.remAc, isMetric)}</div>
 
               {result.perLoadAc > 0 ? (
                 <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:9 }}>
                   {result.loadCount > 0 && (
-                    <span style={{ background:"#f0f7e8", borderRadius:4, padding:"3px 8px", fontSize:11, color:"#2a5c0f", fontWeight:700, whiteSpace:"nowrap" }}>
+                    <span style={{ background: isMobile ? theme.tintGreen : "#f0f7e8", borderRadius: isMobile ? 7 : 4, padding: isMobile ? "4px 9px" : "3px 8px", fontSize:11, color: isMobile ? theme.onGreen : "#2a5c0f", fontWeight:700, whiteSpace:"nowrap" }}>
                       {result.loadCount} full load{result.loadCount > 1 ? "s" : ""} &middot; {volFmt(result.tankGal)}
                     </span>
                   )}
                   {result.hasLeftover && (
-                    <span style={{ background:"#fff3cd", borderRadius:4, padding:"3px 8px", fontSize:11, color:"#856404", fontWeight:700, whiteSpace:"nowrap" }}>
+                    <span style={{ background: isMobile ? theme.tintAmber : "#fff3cd", borderRadius: isMobile ? 7 : 4, padding: isMobile ? "4px 9px" : "3px 8px", fontSize:11, color: isMobile ? theme.amber : "#856404", fontWeight:700, whiteSpace:"nowrap" }}>
                       1 partial &middot; {toDisp(result.leftoverAc).toFixed(1)} {areaUnit} &middot; {volFmt(result.leftoverWater)}
                     </span>
                   )}
                 </div>
               ) : (
-                <div style={{ fontSize:11, color:"#888", marginBottom:9 }}>
+                <div style={{ fontSize:11, color: isMobile ? theme.mut : "#888", marginBottom:9 }}>
                   No tank size on this ticket — totals only.
                 </div>
               )}
 
               {result.chems.length === 0 && (
-                <div style={{ fontSize:12, color:"#888", marginBottom:9 }}>No chemicals on this ticket.</div>
+                <div style={{ fontSize:12, color: isMobile ? theme.mut : "#888", marginBottom:9 }}>No chemicals on this ticket.</div>
               )}
 
               {result.chems.map((c, i) => (
-                <div key={i} style={{ border:"1.5px solid #c8dbb0", borderRadius:7, padding:"9px 11px", marginBottom:7 }}>
+                <div key={i} style={isMobile
+                  ? { ...cardC, padding:"11px 13px", marginBottom:8 }
+                  : { border:"1.5px solid #c8dbb0", borderRadius:7, padding:"9px 11px", marginBottom:7 }}>
                   {/* Product left, total right — the left/right split ChemicalRow uses (:1274) */}
                   <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:"#2a5c0f" }}>{c.name}</div>
-                      <div style={{ fontSize:10, color:"#999" }}>
+                      <div style={{ fontSize: isMobile ? 14 : 13, fontWeight:700, color: isMobile ? theme.ink : "#2a5c0f" }}>{c.name}</div>
+                      <div style={{ fontSize: isMobile ? 11 : 10, color: isMobile ? theme.mut : "#999" }}>
                         {c.rate > 0 ? `${c.rate.toFixed(2)} ${c.unit}/ac` : "no rate on ticket"}
                       </div>
                     </div>
                     <div style={{ textAlign:"right", flexShrink:0 }}>
                       <div style={statLabel}>Total for remaining</div>
-                      <div style={{ fontSize:20, fontWeight:700, color:"#2a5c0f", lineHeight:1.1 }}>{c.totalFmt}</div>
+                      <div style={{ fontSize: isMobile ? 21 : 20, fontWeight:700, color: ink, lineHeight:1.1, fontFamily: numF }}>{c.totalFmt}</div>
                       {/* Exact oz under the rounded figure, as ChemicalRow does (:1286) */}
                       {c.roundQtr && c.totalRaw > 0 && (
-                        <div style={{ fontSize:9, color:"#aaa" }}>{Math.round(c.totalRaw)} oz exact</div>
+                        <div style={{ fontSize:9, color: isMobile ? theme.mut : "#aaa" }}>{Math.round(c.totalRaw)} oz exact</div>
                       )}
                     </div>
                   </div>
                   {/* Only worth breaking down once there's a full load: with
                       loadCount 0 the total IS the single partial load. */}
                   {c.rate > 0 && result.loadCount > 0 && (
-                    <div style={{ marginTop:6, paddingTop:6, borderTop:"1px dashed #c8dbb0", display:"flex", gap:16, flexWrap:"wrap" }}>
+                    <div style={{ marginTop:6, paddingTop:6, borderTop: `1px dashed ${isMobile ? theme.dash : "#c8dbb0"}`, display:"flex", gap:16, flexWrap:"wrap" }}>
                       <div>
                         <div style={statLabel}>Per full load &times;{result.loadCount}</div>
-                        <div style={{ fontSize:14, fontWeight:700, color:"#2a5c0f" }}>{c.fullFmt}</div>
+                        <div style={{ fontSize:14, fontWeight:700, color: ink, fontFamily: numF }}>{c.fullFmt}</div>
                       </div>
                       {c.leftoverFmt && (
                         <div>
-                          <div style={{ ...statLabel, color:"#e07020" }}>Partial ({toDisp(result.leftoverAc).toFixed(1)} {areaUnit})</div>
-                          <div style={{ fontSize:14, fontWeight:700, color:"#e07020" }}>{c.leftoverFmt}</div>
+                          <div style={{ ...statLabel, color: isMobile ? theme.amber : "#e07020" }}>Partial ({toDisp(result.leftoverAc).toFixed(1)} {areaUnit})</div>
+                          <div style={{ fontSize:14, fontWeight:700, color: isMobile ? theme.amber : "#e07020", fontFamily: numF }}>{c.leftoverFmt}</div>
                         </div>
                       )}
                     </div>
@@ -1656,16 +1692,16 @@ function PartialLoadCalc({ ticket, isMetric, isMobile, onClose }) {
                 </div>
               ))}
 
-              <div style={{ ...card, marginBottom:0, padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ ...cardC, marginBottom:0, padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <div>
-                  <div style={{ fontSize:11, fontWeight:800, color:"#3a6b1a", textTransform:"uppercase", letterSpacing:"0.08em" }}>Water / carrier</div>
+                  <div style={isMobile ? statLabel : { fontSize:11, fontWeight:800, color:"#3a6b1a", textTransform:"uppercase", letterSpacing:"0.08em" }}>Water / carrier</div>
                   {isTargetZone(ticket) && (
-                    <div style={{ fontSize:9, color:"#4a2a7a", fontWeight:700, marginTop:2 }}>
+                    <div style={{ fontSize: isMobile ? 10 : 9, color: isMobile ? theme.purple : "#4a2a7a", fontWeight:700, marginTop:2 }}>
                       at {fmtGpa(calcGpa(ticket).toFixed(2), isMetric)} effective
                     </div>
                   )}
                 </div>
-                <span style={{ fontSize:17, fontWeight:700, color:"#2a5c0f" }}>{volFmt(result.waterGal)}</span>
+                <span style={{ fontSize: isMobile ? 18 : 17, fontWeight:700, color: ink, fontFamily: numF }}>{volFmt(result.waterGal)}</span>
               </div>
             </>
           )}
@@ -7438,6 +7474,7 @@ export default function App() {
             ticket={ct}
             isMetric={isMetric}
             isMobile={isMobile}
+            theme={theme}
             onClose={() => setCalcTicketId(null)}
           />
         ) : null;
