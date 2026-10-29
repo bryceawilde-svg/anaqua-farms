@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { fmtAcres, fmtAcresShort, fmtTankVol, fmtGpa, fmtTemp, fmtWindSpeed, areaLabel, tankLabel, sprayRateLabel, windSpeedLabel, tempLabel, AC_TO_HA, GAL_TO_L } from "./utils/units";
+import { parseCSV, csvCell } from "./utils/csv";
 import FieldMapPicker from "./FieldMapPicker";
 import BoundaryAssignMap from "./BoundaryAssignMap";
 import ApplicatorView from "./ApplicatorView";
+import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
 import { buildTheme, ACCENTS } from "./utils/theme";
@@ -116,13 +118,13 @@ const FORM_LABELS  = {
 };
 
 const DEFAULT_CHEMICALS = [
-  { id: 1,  name: "Roundup PowerMAX 3", epa: "524-537",    rei: "4 hours",  unit: "oz", formType: "S" },
-  { id: 2,  name: "Atrazine 4L",        epa: "100-816",    rei: "12 hours", unit: "oz", formType: "L" },
-  { id: 3,  name: "2,4-D Amine 4",      epa: "62719-17",   rei: "48 hours", unit: "oz", formType: "L" },
-  { id: 4,  name: "Bicep II Magnum",    epa: "100-1077",   rei: "12 hours", unit: "oz", formType: "L" },
-  { id: 5,  name: "Headline SC",        epa: "7969-187",   rei: "12 hours", unit: "oz", formType: "L" },
-  { id: 6,  name: "Lorsban 4E",         epa: "62719-220",  rei: "24 hours", unit: "oz", formType: "E" },
-  { id: 7,  name: "Treflan HFP",        epa: "62719-176",  rei: "24 hours", unit: "oz", formType: "E" },
+  { id: 1,  name: "Roundup PowerMAX 3", epa: "524-537",    rei: "4 hours",  unit: "oz", formType: "S",   activeIngredient: "Glyphosate, potassium salt 48.7%" },
+  { id: 2,  name: "Atrazine 4L",        epa: "100-816",    rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "Atrazine 42.2%" },
+  { id: 3,  name: "2,4-D Amine 4",      epa: "62719-17",   rei: "48 hours", unit: "oz", formType: "L",   activeIngredient: "2,4-D, dimethylamine salt 46.3%" },
+  { id: 4,  name: "Bicep II Magnum",    epa: "100-1077",   rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "S-metolachlor 33.0%, Atrazine 26.1%" },
+  { id: 5,  name: "Headline SC",        epa: "7969-187",   rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "Pyraclostrobin 23.6%" },
+  { id: 6,  name: "Lorsban 4E",         epa: "62719-220",  rei: "24 hours", unit: "oz", formType: "E",   activeIngredient: "Chlorpyrifos 44.9%" },
+  { id: 7,  name: "Treflan HFP",        epa: "62719-176",  rei: "24 hours", unit: "oz", formType: "E",   activeIngredient: "Trifluralin 43.0%" },
 ];
 
 const DEFAULT_EQUIPMENT = [
@@ -160,9 +162,22 @@ function fmtOzAsDecimalGal(totalOz) {
   return fracStr ? `${whole}${fracStr} gal` : `${whole} gal`;
 }
 
-function calcTotals({ tankSize, galPerAcre, totalAcres, ratePerAcre }) {
+// Verified label data sent with every AI request so the model never guesses active ingredients
+function chemForAI(c) {
+  return { name: c.name, epa: c.epa || "", activeIngredient: c.activeIngredient || "", formType: c.formType || "" };
+}
+
+// Spot sprayers only cover part of each acre. The broadcast gal/acre stays on the
+// ticket for the operator; every tank and load calculation uses the reduced rate.
+function calcGpa({ galPerAcre, targetZone, targetZonePct }) {
+  const gpa = parseFloat(galPerAcre)    || 0;
+  const pct = parseFloat(targetZonePct) || 0;
+  return targetZone && pct > 0 && pct < 100 ? gpa * (1 - pct / 100) : gpa;
+}
+
+function calcTotals({ tankSize, galPerAcre, targetZone, targetZonePct, totalAcres, ratePerAcre }) {
   const ts  = parseFloat(tankSize)    || 0;
-  const gpa = parseFloat(galPerAcre)  || 0;
+  const gpa = calcGpa({ galPerAcre, targetZone, targetZonePct });
   const ta  = parseFloat(totalAcres)  || 0;
   const rpa = parseFloat(ratePerAcre) || 0;
   const acreLoads      = ts > 0 && gpa > 0 ? ts / gpa : 0;
@@ -219,6 +234,12 @@ function fmtJugCount(totalOz) {
 }
 
 const DRY_FORM_TYPES = ["WDG","WP","D","WG"];
+
+// Label formulation codes (as printed on the product) that mix in the same WALES step
+// as one of the app's bucket codes. Without this, SC/CS/EC products fall out of the
+// printed mixing sequence and sort to the end of the tank.
+const FORM_TYPE_ALIASES = { SC:"L", CS:"L", EC:"E" };
+const walesKey = (formType) => FORM_TYPE_ALIASES[formType] || formType;
 
 // True when a chemical's container size is measured in lb (not gal).
 function chemContainerIsLb(chem) {
@@ -404,7 +425,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   // Actual tank size for the "this load" case.
   // When partialAcres snapped to 0 (totalAcres ≈ acreLoadsRaw), treat as a full tank fill.
   const thisLoadTankGal = lessThanOneTank
-    ? (!hasPartial ? String(parseFloat(form.tankSize || 0)) : (parseFloat(totalAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2))
+    ? (!hasPartial ? String(parseFloat(form.tankSize || 0)) : (parseFloat(totalAcres) * calcGpa(form)).toFixed(2))
     : null;
 
   // Chem rows for when total acres < one full tank — use partial calc (= total acres × rate)
@@ -412,7 +433,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   const walesOrder2 = ["A","L","E","S","WDG","WP","D"];
   const circleColors2 = { A:"#4a7a20",L:"#2a5c0f",E:"#6a3a00",S:"#1a4a6a",WDG:"#5a3a7a",WP:"#7a3a00",D:"#4a4a00" };
   const sortByWales2 = (arr) => [...arr].sort((a,b) => {
-    const ai = walesOrder2.indexOf(a.chem.formType); const bi = walesOrder2.indexOf(b.chem.formType);
+    const ai = walesOrder2.indexOf(walesKey(a.chem.formType)); const bi = walesOrder2.indexOf(walesKey(b.chem.formType));
     return (ai===-1?99:ai) - (bi===-1?99:bi);
   });
   const colHdr = (isPartial) => `<tr>
@@ -436,8 +457,8 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     </tr>`;
     const rowTints = { A:"#f3faf0",L:"#f3faf0",E:"#fdf5f0",S:"#f0f5fa",WDG:"#f5f0fa",WP:"#faf0f0",D:"#f5f5f0" };
     return water + sorted.map(({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }, i) => {
-      const cc = circleColors2[chem.formType] || "#555";
-      const rowBg = rowTints[chem.formType] || "#fff";
+      const cc = circleColors2[walesKey(chem.formType)] || "#555";
+      const rowBg = rowTints[walesKey(chem.formType)] || "#fff";
       const rateLabel = parseFloat(effRate||0).toFixed(2) + " " + chem.unit + "/ac"
         + (roundQtr && isOzUnit ? " ↑¼gal" : "");
       const lbOzLine = lbOzFn ? lbOzFn({ chem, effRate, roundQtr, isOzUnit, isDryOzUnit, ...rest }) : null;
@@ -467,7 +488,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     ({fullJugs}) => fullJugs || null
   ) + fillRow2(form.tankSize||"—");
 
-  const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * parseFloat(form.galPerAcre || 0)).toFixed(2) : "0";
+  const partialTankGal  = hasPartial ? (parseFloat(partialAcres) * calcGpa(form)).toFixed(2) : "0";
   const partialChemCompact = hasPartial
     ? resolvedChems.map(({ chem, effRate, calc, roundQtr, isOzUnit, isDryOzUnit, jug2_5gal, partJugs }, pi) => {
         const amt = roundQtr && isOzUnit
@@ -537,11 +558,11 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
     { key:"WP",  color:"#7a3a00", label:"WETTABLE POWDERS",                detail:"Pre-slurry wettable powders before adding" },
     { key:"D",   color:"#4a4a00", label:"DRY FLOWABLES",                   detail:"Add dry flowables last" },
   ];
-  const usedTypes = [...new Set(resolvedChems.map(r => r.chem.formType).filter(Boolean))];
+  const usedTypes = [...new Set(resolvedChems.map(r => walesKey(r.chem.formType)).filter(Boolean))];
   const walesRows = walesSteps
     .filter(s => usedTypes.includes(s.key))
     .map((s, i) => {
-      const chems = resolvedChems.filter(r => r.chem.formType === s.key);
+      const chems = resolvedChems.filter(r => walesKey(r.chem.formType) === s.key);
       const names = chems.map(r => {
         const fmtAmt = r.roundQtr && r.isOzUnit
           ? (fmtOzAsDecimalGal(r.calc.totalPerTankRaw) || "—")
@@ -711,7 +732,7 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
       <div class="farm">${orgName || ""}</div>
     </div>
     <div>
-      <div class="ticket-title">Application Ticket${form.ticketNumber ? ` #${String(form.ticketNumber).padStart(3,'0')}` : ''}</div>
+      <div class="ticket-title">Application Ticket${form.ticketNumber ? ` #${String(form.ticketNumber).padStart(3,'0')}` : ''}${isTargetZone(form) ? ` <span style="display:inline-block;background:#f3eefc;color:#4a2a7a;border:1.5px solid #7a4ab0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:900;letter-spacing:.04em;vertical-align:middle;">SPOT SPRAY</span>` : ""}</div>
       <div class="ticket-meta">Date: ${form.date || "___________"} &nbsp;|&nbsp; ${form.crop||""} &nbsp;|&nbsp; Printed: ${new Date().toLocaleDateString()}</div>
     </div>
   </div>
@@ -809,7 +830,22 @@ function printTicket(form, chemicals, totalAcres, fieldSchedule, orgName, isMetr
   if (!w) URL.revokeObjectURL(url);
 }
 
-function downloadCSV(tickets, orgName, isMetric) {
+// Only EPA-registered pesticides belong on TDA/REI records: drop adjuvants and anything
+// without an EPA number. Keep in sync with supabase/functions/sheets-export.
+// Ticket snapshots don't carry the formulation, so classify by name against the library.
+const hasEpaNumber = (epa) => !/^(|n\/?a|none|-+|—)$/i.test((epa ?? "").trim());
+
+function reportableTickets(tickets, chemicals) {
+  const adjuvants = new Set(chemicals.filter(c => c.formType === "A").map(c => c.name?.trim().toLowerCase()));
+  return tickets.flatMap(t => {
+    const listed = t.chemicals.filter(c => hasEpaNumber(c.epa) && !adjuvants.has(c.name?.trim().toLowerCase()));
+    if (t.chemicals.length && !listed.length) return []; // nothing reportable was applied
+    return [{ ...t, chemicals: listed }];
+  });
+}
+
+function downloadCSV(allTickets, orgName, isMetric, chemicals) {
+  const tickets = reportableTickets(allTickets, chemicals);
   if (!tickets.length) return;
   const areaH  = isMetric ? "ha"    : "ac";
   const windH  = isMetric ? "km/h"  : "mph";
@@ -819,31 +855,31 @@ function downloadCSV(tickets, orgName, isMetric) {
   const header = [
     "App Date","Actual Start","Actual Stop",`Location/Field`,`Area (${areaH})`,"Crop/Site","Target Pest",
     `Field Wind Speed (${windH})`,"Field Wind Dir",`Field Air Temp (${tempH})`,
-    `Tank Size (${tankH})`,"Pressure (PSI)",spdH,"Acre Loads","Full Loads",`Partial Load (${areaH})`,
+    `Tank Size (${tankH})`,"Pressure (PSI)",spdH,"Target Zone %","Acre Loads","Full Loads",`Partial Load (${areaH})`,
     "Equipment","Licensed Applicator","Non-Licensed Applicator",
-    "Product Name","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
-  ].join(",");
+    "Product Name","Active Ingredient","EPA Reg #","REI","Rate/Acre","Unit","Total Applied","Notes"
+  ].map(csvCell).join(",");
 
   const rows = tickets.flatMap(t => {
     const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
-    const chems    = t.chemicals.length ? t.chemicals : [{ name:"", epa:"", rei:"", ratePerAcre:"", unit:"", totalPerTank:"" }];
+    const chems    = t.chemicals.length ? t.chemicals : [{ name:"", activeIngredient:"", epa:"", rei:"", ratePerAcre:"", unit:"", totalPerTank:"" }];
     return schedule.flatMap(fs =>
       chems.map(c => [
         fs.actualDateEnd || fs.actualDateStart || t.date,
         fs.actualTimeStart || fs.timeStart || "",
         fs.actualTimeEnd   || fs.timeEnd   || "",
-        `"${fs.name}"`, fs.acres,
-        t.crop, `"${t.targetPest||""}"`,
+        fs.name, fs.acres,
+        t.crop, t.targetPest||"",
         (fs.fieldWeather?.windSpeed ?? t.windSpeed) || "",
         (fs.fieldWeather?.windDir   ?? t.windDir)   || "",
         (fs.fieldWeather?.airTemp   ?? t.airTemp)   || "",
-        t.tankSize, t.pressure, t.galPerAcre, t.acreLoads, t.fullLoads, t.partialAcres||"0",
-        `"${t.equipmentType||""}"`, `"${t.licensedApplicant||""}"`, `"${t.nonLicensedApplicant||""}"`,
-        `"${c.name||""}"`, c.epa||"", c.rei||"",
+        t.tankSize, t.pressure, t.galPerAcre, isTargetZone(t) ? parseFloat(t.targetZonePct) : "", t.acreLoads, t.fullLoads, t.partialAcres||"0",
+        t.equipmentType||"", t.licensedApplicant||"", t.nonLicensedApplicant||"",
+        c.name||"", c.activeIngredient||"", c.epa||"", c.rei||"",
         c.ratePerAcre||"", c.unit||"",
         (() => { const r = parseFloat(c.ratePerAcre), a = parseFloat(fs.acres); return (!isNaN(r) && r > 0 && !isNaN(a) && a > 0) ? `${(r * a).toFixed(2)} ${c.unit||""}`.trim() : ""; })(),
-        `"${t.notes||""}"`
-      ].join(","))
+        t.notes||""
+      ].map(csvCell).join(","))
     );
   });
 
@@ -856,7 +892,32 @@ function downloadCSV(tickets, orgName, isMetric) {
   URL.revokeObjectURL(url);
 }
 
-function downloadTDAReport(tickets, orgName) {
+// Active ingredient strings are free text off a label; escape before interpolating into HTML.
+function escHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, ch => (
+    { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]
+  ));
+}
+
+// Round-trip export of the chemical library: edit in Excel, re-import to update in place.
+function downloadChemLibraryCSV(chemicals, orgName) {
+  if (!chemicals.length) return;
+  const header = ["ID","Chemical Name","EPA #","REI","Unit","Formulation Type","Container Size","Active Ingredient"];
+  const rows = chemicals.map(c => [
+    c.id, c.name || "", c.epa || "NA", c.rei || "", c.unit || "oz",
+    c.formType || "L", c.containerSize ?? "", c.activeIngredient || "",
+  ].map(csvCell).join(","));
+  const blob = new Blob([[header.map(csvCell).join(","), ...rows].join("\n")], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = `${(orgName || "Farm").replace(/\s+/g,"_")}_Chemical_Library_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadTDAReport(allTickets, orgName, chemicals) {
+  const tickets = reportableTickets(allTickets, chemicals);
   if (!tickets.length) return;
   const rows = tickets.flatMap(t => {
     const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
@@ -878,6 +939,7 @@ function downloadTDAReport(tickets, orgName) {
         <td>${t.crop}</td>
         <td>${pest}</td>
         <td>${c.name||"—"}</td>
+        <td>${escHtml(c.activeIngredient)||"—"}</td>
         <td>${c.epa||"—"}</td>
         <td>${c.ratePerAcre||"—"} ${c.unit||""}/ac</td>
         <td><strong>${totalAmt}</strong></td>
@@ -943,6 +1005,7 @@ function downloadTDAReport(tickets, orgName) {
         <th>Crop / Site</th>
         <th>Target Pest</th>
         <th>Product Name</th>
+        <th>Active Ingredient</th>
         <th>EPA Reg #</th>
         <th>Rate/Acre</th>
         <th>Total Applied</th>
@@ -1334,6 +1397,284 @@ function ChemicalRow({ chem, chemicals, tankSize, galPerAcre, totalAcres, onChan
   );
 }
 
+// ── Partial Load Calculator ────────────────────────────────────────────────────
+// READ-ONLY scratch pad. Tickets are state regulatory records: this panel must
+// never write to the ticket, the tickets table, or field_schedule. It takes no
+// setTickets and never touches supabase.
+function PartialLoadCalc({ ticket, isMetric, isMobile, onClose }) {
+  // Freeze the field list at open time. refreshTeamTickets polls every 15s and
+  // rewrites fieldSchedule, which would move acres under the operator's finger
+  // mid-calculation. Length check, not ||: normalizeTicket defaults it to [].
+  const [rows] = React.useState(() =>
+    ticket.fieldSchedule?.length
+      ? ticket.fieldSchedule
+      : buildFieldSchedule(ticket.selectedFields || [], ticket.timeStart, ticket.acresPerHour || 75)
+  );
+  // Both flags: ApplicatorView writes actualTimeEnd + actualDateEnd together,
+  // but the saved-ticket table lets you set actualDateEnd alone.
+  const isSprayed = (fs) => !!(fs.actualDateEnd || fs.actualTimeEnd);
+  // Nothing pre-selected — the operator picks what's actually left. Keyed by
+  // array index, since imported fields can arrive without an id.
+  const [checkedIdx, setCheckedIdx] = React.useState(() => new Set());
+  const [doneAcres, setDoneAcres] = React.useState("");
+  const [result,    setResult]    = React.useState(null);
+
+  const areaUnit = areaLabel(isMetric);
+  const toDisp   = (ac) => isMetric ? ac * AC_TO_HA : ac;
+  const volFmt   = (gal) => fmtTankVol(Math.round((gal || 0) * 10) / 10, isMetric);
+
+  const selectedAcres = rows.reduce((s, fs, i) => checkedIdx.has(i) ? s + (parseFloat(fs.acres) || 0) : s, 0);
+  const doneAc        = isMetric ? (parseFloat(doneAcres) || 0) / AC_TO_HA : (parseFloat(doneAcres) || 0);
+  const remRaw        = selectedAcres - doneAc;   // may be negative — show this
+  const remAc         = Math.max(0, remRaw);      // clamped — feed the math this
+  const overEntered   = doneAc > selectedAcres + 0.001;
+
+  const toggle = (i) => {
+    setResult(null);
+    setCheckedIdx(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  };
+
+  const calculate = () => {
+    // Spread the ticket, as the form paths do: calcTotals also reads targetZone
+    // / targetZonePct, and a spot-spray ticket mixes on the reduced gal/ac.
+    const geom       = calcTotals({ ...ticket, totalAcres: remAc, ratePerAcre: 0 });
+    const perLoadAc  = geom.acreLoadsRaw;    // tankSize / galPerAcre
+    const leftoverAc = geom.partialAcres;    // pre-snapped to 0 within 0.1 ac
+    // Derive the count here, replicating calcTotals' 0.002 snap. geom.fullLoads
+    // is the string "—" when zero, and geom.partialLoads reports 0 when under
+    // one tank — the common case for this panel. Neither is usable.
+    const rawCount   = perLoadAc > 0 ? remAc / perLoadAc : 0;
+    const loadCount  = (remAc > 0 && perLoadAc > 0)
+      ? (Math.abs(rawCount - Math.round(rawCount)) < 0.002 ? Math.round(rawCount) : Math.floor(rawCount))
+      : 0;
+    const hasLeftover = leftoverAc > 0.01;
+    const gpa = calcGpa(ticket);   // effective rate — reduced on a spot-spray ticket
+
+    // The ticket's stored chemicals, never the chemicals library: the snapshot
+    // is the regulatory record. ratePerAcre is already the effective rate.
+    const chems = (ticket.chemicals || []).map(c => {
+      const rate = parseFloat(c.ratePerAcre) || 0;
+      const calc = calcTotals({ ...ticket, totalAcres: remAc, ratePerAcre: rate });
+      // Same formatter the save (:2146) and print (:374) paths use: when the
+      // ticket set this chemical to ¼ gal, every amount shows that way —
+      // partials included — so the panel agrees with the printed ticket.
+      const isOzUnit = (c.unit || "oz").toLowerCase().replace(/\s+/g, "") === "oz";
+      const roundQtr = !!(c.roundQtrGal && isOzUnit);
+      const fmtFull  = (oz) => roundQtr ? (fmtOzAsDecimalGal(oz) || "—") : fmtTankAmount(oz, c.unit);
+      const totalRaw = rate * remAc;
+      return {
+        name: c.name,
+        unit: c.unit,
+        rate,
+        roundQtr,
+        totalRaw,
+        totalFmt:    rate > 0 ? fmtFull(totalRaw) : "—",
+        // Stored string, so the full-load figure matches the printed ticket.
+        fullFmt:     c.totalPerTankFmt || (rate > 0 ? fmtFull(calc.totalPerTankRaw) : "—"),
+        leftoverFmt: (rate > 0 && hasLeftover) ? fmtFull(calc.partialPerTankRaw) : null,
+      };
+    });
+
+    setResult({
+      remAc, perLoadAc, leftoverAc, loadCount, hasLeftover, chems,
+      waterGal:      remAc * gpa,
+      leftoverWater: leftoverAc * gpa,
+      tankGal:       parseFloat(ticket.tankSize) || 0,
+    });
+  };
+
+  const statLabel = { fontSize:9, color:"#888", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" };
+
+  return (
+    <>
+      <div style={{ position:"fixed", inset:0, zIndex:1000 }} onClick={onClose} />
+      <div style={{
+        position:"fixed",
+        bottom: isMobile ? 0 : 96,
+        right:  isMobile ? 0 : 28,
+        // Pin both edges on mobile rather than width:100vw — index.css gives
+        // #root a fixed 1126px, so the page overflows and 100vw runs past the
+        // visible viewport, cutting off the close button.
+        left:   isMobile ? 0 : "auto",
+        width:  isMobile ? "auto" : 420,
+        maxHeight: isMobile ? "88vh" : 620,
+        zIndex: 1001,
+        background:"#fff",
+        borderRadius: isMobile ? "16px 16px 0 0" : 10,
+        boxShadow:"0 8px 40px rgba(0,0,0,0.22)",
+        border:"1.5px solid #c8dbb0",
+        display:"flex", flexDirection:"column", overflow:"hidden",
+        fontFamily:"'Georgia','Times New Roman',serif",
+      }}>
+        {/* Header */}
+        <div style={{
+          background:"linear-gradient(135deg,#1e4a08 0%,#2a6610 60%,#3a8a1a 100%)",
+          padding:"12px 14px", display:"flex", alignItems:"center",
+          justifyContent:"space-between", flexShrink:0,
+        }}>
+          <div>
+            <div style={{ color:"#a8d878", fontSize:9, letterSpacing:"0.15em", fontWeight:700, textTransform:"uppercase" }}>Partial Load</div>
+            <div style={{ color:"#fff", fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:7 }}>
+              Ticket #{String(ticket.ticketNumber || "?").padStart(3,"0")}
+              <TargetZoneBadge ticket={ticket} size={9} />
+            </div>
+          </div>
+          <button onClick={onClose} aria-label="Close"
+            style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", fontSize:18,
+              cursor:"pointer", lineHeight:1, padding:"4px 9px", borderRadius:6, fontWeight:700 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex:1, overflowY:"auto", padding:"12px 14px" }}>
+          <div style={sectionTitle}>Fields left to spray</div>
+          {rows.length === 0 ? (
+            <div style={{ fontSize:12, color:"#888", marginBottom:12 }}>No fields on this ticket.</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:12 }}>
+              {rows.map((fs, i) => {
+                const on = checkedIdx.has(i);
+                return (
+                  <label key={i} style={{
+                    display:"flex", alignItems:"center", gap:10, cursor:"pointer",
+                    background: on ? "#f0f7e8" : "#fafafa",
+                    border:`1.5px solid ${on ? "#2a5c0f" : "#e4e4e4"}`,
+                    borderRadius:7, padding:"10px 12px",
+                  }}>
+                    <input type="checkbox" checked={on} onChange={() => toggle(i)}
+                      style={{ width:20, height:20, accentColor:"#2a5c0f", flexShrink:0, margin:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color: on ? "#2a5c0f" : "#999",
+                        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{fs.name}</div>
+                      <div style={{ fontSize:11, color:"#888" }}>
+                        {fmtAcresShort(fs.acres, isMetric)}
+                        {isSprayed(fs) && <span style={{ marginLeft:6, color:"#1a6b2f", fontWeight:700 }}>sprayed</span>}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <label style={labelStyle}>Already sprayed on current field ({areaUnit})</label>
+          <input type="number" inputMode="decimal" step="any" min="0" value={doneAcres} placeholder="0"
+            onChange={e => { setResult(null); setDoneAcres(e.target.value); }}
+            style={{ ...inp, marginBottom:12 }} />
+
+          {/* Remaining — live, independent of the Calculate button */}
+          <div style={{ ...card, marginBottom:12, padding:"11px 14px", textAlign:"center" }}>
+            <div style={statLabel}>Remaining</div>
+            <div style={{ fontSize:26, fontWeight:700, lineHeight:1.15, color: remRaw < 0 ? "#c07000" : "#2a5c0f" }}>
+              {toDisp(remRaw).toFixed(1)} {areaUnit}
+            </div>
+            {overEntered && (
+              <div style={{ fontSize:11, color:"#c07000", fontWeight:700, marginTop:3 }}>
+                More than selected ({fmtAcresShort(selectedAcres, isMetric)})
+              </div>
+            )}
+          </div>
+
+          <button onClick={calculate} disabled={remAc <= 0}
+            style={{
+              width:"100%", background: remAc > 0 ? "#2a5c0f" : "#bbb", color:"#fff", border:"none",
+              borderRadius:6, padding:"12px 16px", fontSize:15, fontWeight:700, fontFamily:"inherit",
+              cursor: remAc > 0 ? "pointer" : "default", marginBottom:12,
+            }}>Calculate</button>
+
+          {!result ? (
+            <div style={{ fontSize:12, color:"#aaa", textAlign:"center", padding:"8px 0 4px" }}>
+              {checkedIdx.size === 0
+                ? "Check the fields you have left to spray."
+                : "Tap Calculate for chemical amounts."}
+            </div>
+          ) : (
+            <>
+              <div style={sectionTitle}>Add to finish {fmtAcresShort(result.remAc, isMetric)}</div>
+
+              {result.perLoadAc > 0 ? (
+                <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:9 }}>
+                  {result.loadCount > 0 && (
+                    <span style={{ background:"#f0f7e8", borderRadius:4, padding:"3px 8px", fontSize:11, color:"#2a5c0f", fontWeight:700, whiteSpace:"nowrap" }}>
+                      {result.loadCount} full load{result.loadCount > 1 ? "s" : ""} &middot; {volFmt(result.tankGal)}
+                    </span>
+                  )}
+                  {result.hasLeftover && (
+                    <span style={{ background:"#fff3cd", borderRadius:4, padding:"3px 8px", fontSize:11, color:"#856404", fontWeight:700, whiteSpace:"nowrap" }}>
+                      1 partial &middot; {toDisp(result.leftoverAc).toFixed(1)} {areaUnit} &middot; {volFmt(result.leftoverWater)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize:11, color:"#888", marginBottom:9 }}>
+                  No tank size on this ticket — totals only.
+                </div>
+              )}
+
+              {result.chems.length === 0 && (
+                <div style={{ fontSize:12, color:"#888", marginBottom:9 }}>No chemicals on this ticket.</div>
+              )}
+
+              {result.chems.map((c, i) => (
+                <div key={i} style={{ border:"1.5px solid #c8dbb0", borderRadius:7, padding:"9px 11px", marginBottom:7 }}>
+                  {/* Product left, total right — the left/right split ChemicalRow uses (:1274) */}
+                  <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:"#2a5c0f" }}>{c.name}</div>
+                      <div style={{ fontSize:10, color:"#999" }}>
+                        {c.rate > 0 ? `${c.rate.toFixed(2)} ${c.unit}/ac` : "no rate on ticket"}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right", flexShrink:0 }}>
+                      <div style={statLabel}>Total for remaining</div>
+                      <div style={{ fontSize:20, fontWeight:700, color:"#2a5c0f", lineHeight:1.1 }}>{c.totalFmt}</div>
+                      {/* Exact oz under the rounded figure, as ChemicalRow does (:1286) */}
+                      {c.roundQtr && c.totalRaw > 0 && (
+                        <div style={{ fontSize:9, color:"#aaa" }}>{Math.round(c.totalRaw)} oz exact</div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Only worth breaking down once there's a full load: with
+                      loadCount 0 the total IS the single partial load. */}
+                  {c.rate > 0 && result.loadCount > 0 && (
+                    <div style={{ marginTop:6, paddingTop:6, borderTop:"1px dashed #c8dbb0", display:"flex", gap:16, flexWrap:"wrap" }}>
+                      <div>
+                        <div style={statLabel}>Per full load &times;{result.loadCount}</div>
+                        <div style={{ fontSize:14, fontWeight:700, color:"#2a5c0f" }}>{c.fullFmt}</div>
+                      </div>
+                      {c.leftoverFmt && (
+                        <div>
+                          <div style={{ ...statLabel, color:"#e07020" }}>Partial ({toDisp(result.leftoverAc).toFixed(1)} {areaUnit})</div>
+                          <div style={{ fontSize:14, fontWeight:700, color:"#e07020" }}>{c.leftoverFmt}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <div style={{ ...card, marginBottom:0, padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:800, color:"#3a6b1a", textTransform:"uppercase", letterSpacing:"0.08em" }}>Water / carrier</div>
+                  {isTargetZone(ticket) && (
+                    <div style={{ fontSize:9, color:"#4a2a7a", fontWeight:700, marginTop:2 }}>
+                      at {fmtGpa(calcGpa(ticket).toFixed(2), isMetric)} effective
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontSize:17, fontWeight:700, color:"#2a5c0f" }}>{volFmt(result.waterGal)}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function normalizeTicket(tk) {
   return {
     ...tk,
@@ -1345,6 +1686,8 @@ function normalizeTicket(tk) {
     timeStart:                tk.time_start                 || tk.timeStart                 || "",
     timeEnd:                  tk.time_end                   || tk.timeEnd                   || "",
     galPerAcre:               tk.gal_per_acre               || tk.galPerAcre                || "",
+    targetZone:               tk.target_zone                ?? tk.targetZone                ?? false,
+    targetZonePct:            tk.target_zone_pct != null ? String(tk.target_zone_pct) : (tk.targetZonePct || ""),
     tankSize:                 tk.tank_size                  || tk.tankSize                  || "",
     windSpeed:                tk.wind_speed                 || tk.windSpeed                 || "",
     windDir:                  tk.wind_dir                   || tk.windDir                   || "",
@@ -1416,6 +1759,7 @@ export default function App() {
   const [cropSeasons,   setCropSeasons]   = useState({});
   const [view,          setView]          = useState("form");
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
+  const [calcTicketId,  setCalcTicketId]  = useState(null);  // partial-load calculator
   const [editingActualTime, setEditingActualTime] = useState(null); // { ticketId, fieldIdx, key }
   const [tdaFrom,       setTdaFrom]       = useState("");
   const [tdaTo,         setTdaTo]         = useState("");
@@ -1478,6 +1822,8 @@ export default function App() {
     tankSize: "",
     pressure: "",
     galPerAcre: "",
+    targetZone: false,
+    targetZonePct: "28",
     primeBoom: false,
     flushCleanout: false,
     equipmentType: "New 4440 Sprayer",
@@ -1576,7 +1922,7 @@ export default function App() {
     if (!session) return;
     // Fast path: check for active membership without claiming first (saves one RPC round-trip for existing users)
     supabase.from("org_memberships")
-      .select("org_id, role, organizations(id, name, plan)")
+      .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops)")
       .eq("user_id", session.user.id)
       .eq("status", "active")
       .limit(1)
@@ -1589,7 +1935,7 @@ export default function App() {
           // No active org — claim pending invites (new user or invite recipient) then re-check
           await supabase.rpc("claim_pending_invites");
           const { data: claimed } = await supabase.from("org_memberships")
-            .select("org_id, role, organizations(id, name, plan)")
+            .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops)")
             .eq("user_id", session.user.id)
             .eq("status", "active")
             .limit(1)
@@ -1632,6 +1978,9 @@ export default function App() {
   const isOwner    = userRole === "owner";
   const isViewer   = userRole === "viewer" || userRole === "applicator";
   const isMetric   = currentOrg?.unit_system === "metric";
+  // Opt-in specialty features, enabled per org by the owner in the Team tab
+  const orgFeatures       = currentOrg?.features || {};
+  const targetZoneEnabled = !!orgFeatures.targetZone;
 
   // Org crop list — falls back to crops already assigned to fields if org list is empty
   const orgCrops = React.useMemo(() => {
@@ -1670,27 +2019,11 @@ export default function App() {
     setChatInput("");
     setChatLoading(true);
     try {
-      // Slim ticket summaries to keep payload manageable
-      const ticketData = tickets.map(t => ({
-        num:        t.ticketNumber,
-        date:       t.date,
-        crop:       t.crop,
-        fields:     (t.selectedFields || []).map(f => f.name).join(", "),
-        acres:      t.totalAcres,
-        chemicals:  (t.chemicals || []).map(c =>
-                      `${c.name}${c.ratePerAcre ? ` @ ${c.ratePerAcre}${c.unit || ""}/ac` : ""}`).join("; "),
-        pest:       Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest || ""),
-        applicator: t.licensedApplicant,
-        equipment:  t.equipmentType,
-        start:      t.timeStart,
-        end:        t.timeEnd,
-      }));
-      const fieldData = fieldLibrary.map(f => ({ name: f.name, crop: f.crop, acres: f.acres }));
-      const chemData  = chemicals.map(c => ({ name: c.name, epa: c.epa, rei: c.rei, formType: c.formType }));
       // Pass last 10 messages as history for multi-turn context
       const history = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
       const { data, error } = await supabase.functions.invoke("ai-assistant", {
-        body: { action: "advisor", question, history, tickets: ticketData, fields: fieldData, chemicals: chemData },
+        // The advisor looks up the operation's records itself, scoped by the user's login
+        body: { action: "advisor", question, history },
       });
       if (error) throw new Error(error.message);
       const parsed = JSON.parse(data.result);
@@ -1750,7 +2083,7 @@ export default function App() {
         cs.data.forEach(r => { seasons[r.crop_name] = r.season; });
         setCropSeasons(seasons);
       }
-      setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.formType || ch.form_type || "L", containerSize: ch.container_size ?? ch.containerSize ?? null })));
+      setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.form_type || ch.formType || "L", containerSize: ch.container_size ?? ch.containerSize ?? null, activeIngredient: ch.active_ingredient ?? ch.activeIngredient ?? "" })));
       setPestLibrary(p.data || []);
       setEquipment((e.data || []).map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })));
       setLicensed(la.data || []);
@@ -1824,8 +2157,18 @@ export default function App() {
   const removeField = (id) => set("selectedFields", form.selectedFields.filter(f => f.id !== id));
 
   const updateCropSeason = async (cropName, season) => {
+    const prev = cropSeasons[cropName];
     setCropSeasons(s => ({ ...s, [cropName]: season }));
-    await supabase.from("crop_seasons").upsert({ crop_name: cropName, season, user_id: session.user.id, org_id: currentOrg?.id });
+    const { error } = await supabase.from("crop_seasons").upsert(
+      { crop_name: cropName, season, user_id: session.user.id, org_id: currentOrg?.id },
+      { onConflict: "org_id,crop_name" }
+    );
+    if (error) {
+      setCropSeasons(s => ({ ...s, [cropName]: prev }));
+      showToast(isOwner
+        ? "Couldn't save crop season: " + error.message
+        : "Only the org owner can change crop seasons.");
+    }
   };
 
   const addChemRow    = (chemId) => {
@@ -1889,7 +2232,7 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c && c.epa?.trim() ? { name: c.name } : null;
+          return c && c.epa?.trim() ? chemForAI(c) : null;
         }).filter(Boolean);
         if (products.length < 2) { setAiCompatWarning(null); return; }
         const res = await callAI("compatibility", { products });
@@ -1917,7 +2260,7 @@ export default function App() {
     cropSafetyDebounceRef.current = setTimeout(async () => {
       setAiCropSafetyLoading(true);
       try {
-        const chems = filledRows.map(r => { const c = chemicals.find(x => x.id === r.chemId); return c && c.epa?.trim() ? { name: c.name, epa: c.epa } : null; }).filter(Boolean);
+        const chems = filledRows.map(r => { const c = chemicals.find(x => x.id === r.chemId); return c && c.epa?.trim() ? chemForAI(c) : null; }).filter(Boolean);
         if (!chems.length) { setAiCropSafety(null); return; }
         const res = await callAI("crop-safety", { fields: fieldsWithTraits, chemicals: chems });
         setAiCropSafety(res);
@@ -1938,7 +2281,7 @@ export default function App() {
       try {
         const products = filledRows.map(r => {
           const c = chemicals.find(x => x.id === r.chemId);
-          return c && c.epa?.trim() ? { name: c.name } : null;
+          return c && c.epa?.trim() ? chemForAI(c) : null;
         }).filter(Boolean);
         if (!products.length) { setAiAdjuvants(null); return; }
         const res = await callAI("suggest-adjuvants", { products });
@@ -1979,6 +2322,7 @@ export default function App() {
         const partialFmt = calc.partialAcres > 0.01 ? fmtFull(partRaw) : null;
         return {
           name: c.name, epa: c.epa, rei: c.rei, unit: c.unit,
+          activeIngredient: c.activeIngredient || "",
           ratePerAcre: parseFloat(effRate||0).toFixed(4),
           roundQtrGal: r.roundQtrGal || false,
           jug2_5gal: r.jug2_5gal || false,
@@ -2040,6 +2384,8 @@ export default function App() {
       tank_size:                  t.tankSize,
       pressure:                   t.pressure,
       gal_per_acre:               t.galPerAcre,
+      target_zone:                !!t.targetZone,
+      target_zone_pct:            t.targetZone && parseFloat(t.targetZonePct) > 0 ? parseFloat(t.targetZonePct) : null,
       prime_boom:                 t.primeBoom,
       flush_cleanout:             t.flushCleanout,
       equipment_type:             t.equipmentType,
@@ -2059,30 +2405,55 @@ export default function App() {
       field_schedule:             t.fieldSchedule,
     });
 
+    // The phone sometimes never hears back even though the save went through, which left
+    // the button stuck on "Saving…". Give each attempt a time limit, then retry with an
+    // upsert on the ticket id: it is safe to repeat and also confirms whether the first one landed.
+    const withTimeout = (promise, ms) => Promise.race([
+      promise,
+      new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), ms)),
+    ]);
+    const isEdit = !!editingId;
+    const existingNum = isEdit ? (tickets.find(x => x.id === editingId)?.ticketNumber || 0) : null;
+    const row = {
+      ...dbRow(newTicket),
+      ...(isEdit ? { ticket_number: existingNum } : {}),
+      user_id: session.user.id, org_id: currentOrg?.id,
+    };
+
     let assignedTicketNumber;
-    if (editingId) {
-      const existingNum = tickets.find(x => x.id === editingId)?.ticketNumber || 0;
-      const finalTicket = { ...newTicket, ticketNumber: existingNum };
-      setTickets(prev => prev.map(x => x.id === editingId ? finalTicket : x));
-      const { error } = await supabase.from("tickets")
-        .update({ ...dbRow(finalTicket), ticket_number: existingNum, user_id: session.user.id, org_id: currentOrg?.id })
-        .eq("id", editingId);
-      if (error) { setIsSaving(false); showToast("Failed to save ticket: " + error.message); return null; }
-      assignedTicketNumber = existingNum;
-    } else {
-      // Let the DB sequence assign ticket_number — omit it from the insert payload
-      const { data, error } = await supabase.from("tickets")
-        .insert({ ...dbRow(newTicket), user_id: session.user.id, org_id: currentOrg?.id })
-        .select("id, ticket_number")
-        .single();
-      if (error) { setIsSaving(false); showToast("Failed to save ticket: " + error.message); return null; }
-      assignedTicketNumber = data.ticket_number;
-      const finalTicket = { ...newTicket, ticketNumber: assignedTicketNumber };
-      // Realtime INSERT will also fire; guard in the subscription prevents duplication
-      setTickets(prev => [finalTicket, ...prev]);
+    try {
+      let res = await withTimeout(
+        isEdit
+          ? supabase.from("tickets").update(row).eq("id", editingId)
+          : supabase.from("tickets").insert(row).select("id, ticket_number").single(),
+        15000
+      );
+      if (res.timedOut) {
+        res = await withTimeout(
+          supabase.from("tickets").upsert(row, { onConflict: "id" }).select("id, ticket_number").single(),
+          15000
+        );
+      }
+      if (res.timedOut) {
+        showToast("No answer from the server, so the save couldn't be confirmed. Check your signal, then open the Saved tab to see if the ticket is there before saving again.");
+        return null;
+      }
+      if (res.error) { showToast("Failed to save ticket: " + res.error.message); return null; }
+      assignedTicketNumber = isEdit ? existingNum : res.data?.ticket_number;
+    } catch (e) {
+      showToast("Failed to save ticket: " + (e?.message || "unknown error"));
+      return null;
+    } finally {
+      setIsSaving(false);
     }
 
-    setIsSaving(false);
+    const finalTicket = { ...newTicket, ticketNumber: assignedTicketNumber };
+    // Realtime may also deliver this row; the subscription guard prevents duplicates
+    setTickets(prev => isEdit
+      ? prev.map(x => x.id === editingId ? finalTicket : x)
+      : [finalTicket, ...prev.filter(x => x.id !== finalTicket.id)]);
+    showToast(`Ticket #${String(assignedTicketNumber || "").padStart(3, "0")} ${isEdit ? "updated" : "saved"}`, "success");
+
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -2537,7 +2908,7 @@ export default function App() {
   const chemFileRef     = useRef();
   const scanLabelRef    = useRef();
   const [chemUpMsg,       setChemUpMsg]       = useState("");
-  const [newChem,         setNewChem]         = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
+  const [newChem,         setNewChem]         = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"" });
   const [scanLabelLoading, setScanLabelLoading] = useState(false);
   const [chemDupWarning,  setChemDupWarning]  = useState("");
   const [editingChemId,   setEditingChemId]   = useState(null);
@@ -2580,6 +2951,7 @@ export default function App() {
           unit:          ["oz","dry oz","lb"].includes(parsed.unit) ? parsed.unit : c.unit,
           formType:      ["L","E","S","WDG","WP","D","A"].includes(parsed.formType) ? parsed.formType : c.formType,
           containerSize: parsed.containerSize || c.containerSize,
+          activeIngredient: (parsed.activeIngredient && parsed.activeIngredient !== "NA" ? parsed.activeIngredient : "") || c.activeIngredient,
         }));
         const dup = findChemDup(filledName, filledEpa);
         if (dup) setChemDupWarning(`Already in library: "${dup.name}" (EPA ${dup.epa})`);
@@ -2597,21 +2969,48 @@ export default function App() {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const lines = ev.target.result.split("\n").filter(Boolean);
-      let imported = 0, skipped = 0;
-      const added = [];
-      lines.slice(1).forEach(line => {
-        const p = line.split(",").map(s => s.trim().replace(/^"|"$/g,""));
-        if (!p[0] || !p[1] || !p[2]) { skipped++; return; }
-        // Columns: Name, EPA #, REI, Unit, Formulation Type
-        added.push({ id: Date.now() + imported, name:p[0], epa:p[1], rei:p[2], unit:p[3]||"oz", formType:p[4]||"L", containerSize: p[5] ? parseFloat(p[5]) : null });
-        imported++;
+      const rows = parseCSV(ev.target.result);
+      // Columns: ID, Chemical Name, EPA #, REI, Unit, Formulation Type, Container Size, Active Ingredient
+      // The leading ID column is optional — a list without it still imports.
+      const hasId = (rows[0]?.[0] || "").trim().toLowerCase() === "id";
+      let addedCount = 0, updatedCount = 0, skipped = 0, epaChanged = 0;
+      const recs = [];
+      rows.slice(1).forEach(cols => {
+        const [name, epa, rei, unit, formType, containerSize, activeIngredient] =
+          (hasId ? cols.slice(1) : cols).map(v => (v ?? "").trim());
+        // Only the name is required: adjuvants legitimately have no EPA # or REI.
+        if (!name) { skipped++; return; }
+        const rawId = hasId ? parseInt(cols[0], 10) : NaN;
+        // Match by id, else by exact name. Never by EPA alone — some products share one.
+        const match = (!isNaN(rawId) && chemicals.find(c => c.id === rawId))
+          || chemicals.find(c => c.name?.trim().toLowerCase() === name.toLowerCase())
+          || null;
+        if (match?.epa && epa && match.epa.trim().toLowerCase() !== epa.toLowerCase()) epaChanged++;
+        recs.push({
+          id: match ? match.id : Date.now() + addedCount,
+          name,
+          epa:  epa  || match?.epa || "NA",
+          rei:  rei  || match?.rei || "",
+          unit: unit || match?.unit || "oz",
+          formType: formType || match?.formType || "L",
+          containerSize: containerSize ? parseFloat(containerSize) : (match?.containerSize ?? null),
+          // A blank cell never wipes an existing value — this list gets filled in over several passes.
+          activeIngredient: activeIngredient || match?.activeIngredient || "",
+        });
+        match ? updatedCount++ : addedCount++;
       });
-      setChemicals(c => [...c, ...added]);
-      supabase.from("chemicals").upsert(added.map(a => ({ ...a, form_type: a.formType, container_size: a.containerSize ?? null, user_id: session.user.id, org_id: currentOrg?.id }))).then(({ error }) => {
+      setChemicals(prev => {
+        const byId = new Map(recs.map(r => [r.id, r]));
+        const seen = new Set(prev.map(c => c.id));
+        return prev.map(c => byId.get(c.id) || c).concat(recs.filter(r => !seen.has(r.id)));
+      });
+      supabase.from("chemicals").upsert(recs.map(a => {
+        const { formType: ft, containerSize: cs, activeIngredient: ai, ...rest } = a;
+        return { ...rest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id };
+      })).then(({ error }) => {
         if (error) showToast("Failed to import chemicals: " + error.message);
       });
-      setChemUpMsg(`✓ Imported ${imported} chemical(s)${skipped ? `, skipped ${skipped}` : ""}.`);
+      setChemUpMsg(`✓ ${updatedCount} updated, ${addedCount} added${epaChanged ? `, ${epaChanged} EPA # changed` : ""}${skipped ? `, ${skipped} skipped` : ""}.`);
       setTimeout(() => setChemUpMsg(""), 4000);
     };
     reader.readAsText(file);
@@ -2619,17 +3018,19 @@ export default function App() {
   };
 
   const addManualChem = () => {
-    if (!newChem.name || !newChem.epa || !newChem.rei) return alert("Name, EPA #, and REI are required.");
+    const adjuvant = newChem.formType === "A";
+    if (!newChem.name || (!adjuvant && (!newChem.epa || !newChem.rei)))
+      return alert(adjuvant ? "Name is required." : "Name, EPA #, and REI are required.");
     const dup = findChemDup(newChem.name, newChem.epa);
     if (dup) { setChemDupWarning(`Already in library: "${dup.name}" (EPA ${dup.epa})`); return; }
     setChemDupWarning("");
     const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
-    const { formType: ft, containerSize: cs, ...chemRest } = newChemRec;
-    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    const { formType: ft, containerSize: cs, activeIngredient: ai, ...chemRest } = newChemRec;
+    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to save chemical: " + error.message);
     });
-    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"" });
+    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"" });
   };
   const deleteChem = (id) => {
     setChemicals(c => c.filter(x => x.id !== id));
@@ -2654,14 +3055,16 @@ export default function App() {
     });
   };
   const saveChemEdit = () => {
-    if (!editChemDraft.name || !editChemDraft.epa || !editChemDraft.rei) return alert("Name, EPA #, and REI are required.");
+    const adjuvant = editChemDraft.formType === "A";
+    if (!editChemDraft.name || (!adjuvant && (!editChemDraft.epa || !editChemDraft.rei)))
+      return alert(adjuvant ? "Name is required." : "Name, EPA #, and REI are required.");
     const updated = {
       ...editChemDraft,
       containerSize: editChemDraft.containerSize ? parseFloat(editChemDraft.containerSize) : null,
     };
     setChemicals(c => c.map(x => x.id === updated.id ? updated : x));
-    const { formType, containerSize, ...rest } = updated;
-    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    const { formType, containerSize, activeIngredient, ...rest } = updated;
+    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, active_ingredient: activeIngredient?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to update chemical: " + error.message);
       else showToast("Chemical saved.", "success");
     });
@@ -3161,7 +3564,7 @@ export default function App() {
                             pest: form.targetPest.join(", "),
                             month: new Date().toLocaleString("default", { month: "long" }),
                             equipment: form.equipmentType || "",
-                            chemLib: chemicals.map(c => ({ id: c.id, name: c.name, formType: c.formType, epa: c.epa })),
+                            chemLib: chemicals.map(c => ({ id: c.id, ...chemForAI(c) })),
                           });
                           setAiSuggestions(res.suggestions || []);
                         } catch (e) {
@@ -3535,6 +3938,33 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Target zone (spot spray) — calc-only rate reduction */}
+              {(targetZoneEnabled || form.targetZone) && <div style={{ marginBottom:10, background: form.targetZone ? "#f3eefc" : "#f4fbee",
+                border:`1.5px solid ${form.targetZone ? "#7a4ab0" : "#c8dbb0"}`, borderRadius:7, padding:"12px 14px" }}>
+                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+                  <input type="checkbox" checked={!!form.targetZone}
+                    onChange={e => setForm(f => ({ ...f, targetZone: e.target.checked, targetZonePct: f.targetZonePct || "28" }))}
+                    style={{ width:20, height:20, accentColor:"#7a4ab0", flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color: form.targetZone ? "#4a2a7a" : "#2a5c0f" }}>Target Zone</div>
+                    <div style={{ fontSize:10, color:"#888" }}>Spot sprayer — calculations only, ticket still shows broadcast rate</div>
+                  </div>
+                </label>
+                {form.targetZone && (
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:10, flexWrap:"wrap" }}>
+                    <input type="number" value={form.targetZonePct}
+                      onChange={e => set("targetZonePct", e.target.value)}
+                      style={{ ...inp, width:80 }} min="1" max="99" step="0.1" placeholder="28"/>
+                    <span style={{ fontSize:13, color:"#4a2a7a", fontWeight:600 }}>% less than broadcast</span>
+                    {parseFloat(form.galPerAcre) > 0 && parseFloat(form.targetZonePct) > 0 && parseFloat(form.targetZonePct) < 100 && (
+                      <span style={{ fontSize:12, color:"#666" }}>
+                        {form.galPerAcre} gal/ac → <strong style={{ color:"#4a2a7a" }}>{calcGpa(form).toFixed(2)} gal/ac</strong> effective
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>}
+
               {/* Prime boom + Flush checkboxes — compact side by side */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
                 <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer",
@@ -3566,9 +3996,12 @@ export default function App() {
               {/* ── Full-loads optimizer ── */}
               {(() => {
                 const ts  = parseFloat(form.tankSize)   || 0;
-                const gpa = parseFloat(form.galPerAcre) || 0;
+                const broadcastGpa = parseFloat(form.galPerAcre) || 0;
+                const gpa = calcGpa(form);
                 const ta  = totalAcres;
                 if (!ts || !gpa || !ta) return null;
+                // Suggestions are computed on the effective rate but offered as broadcast rates
+                const toBroadcast = (eff) => parseFloat((eff * broadcastGpa / gpa).toFixed(4));
                 const currentLoads = ts > 0 && gpa > 0 ? ta / (ts / gpa) : 0;
 
                 // Candidate whole-load counts: round and round+1
@@ -3599,7 +4032,8 @@ export default function App() {
 
                 // Filter: meaningful difference, and only suggest 5–15 gal/acre range, cap at 2
                 const filtered = suggestions
-                  .filter(s => Math.abs(s.idealGpa - gpa) > 0.005 && s.idealGpa >= 5 && s.idealGpa <= 15)
+                  .map(s => ({ ...s, broadcastGpa: toBroadcast(s.idealGpa) }))
+                  .filter(s => Math.abs(s.broadcastGpa - broadcastGpa) > 0.005 && s.broadcastGpa >= 5 && s.broadcastGpa <= 15)
                   .slice(0, 2);
                 if (!filtered.length) return (
                   <div style={{ background:"#d4e8c2", borderRadius:6, padding:"5px 10px", fontSize:11, color:"#2a5c0f", fontWeight:600, marginBottom:8 }}>
@@ -3614,14 +4048,14 @@ export default function App() {
                       {filtered.map(s => {
                         const partAc = ta - s.n * (ts / s.idealGpa);
                         return (
-                          <button key={s.n} onClick={() => set("galPerAcre", String(s.idealGpa))}
+                          <button key={s.n} onClick={() => set("galPerAcre", String(s.broadcastGpa))}
                             style={{
                               flex:1, border:"1.5px solid #c0a020", borderRadius:6, padding:"5px 8px",
                               background:"#fffbe6", cursor:"pointer", fontFamily:"inherit",
                               display:"flex", flexDirection:"column", alignItems:"flex-start", gap:1
                             }}>
                             <span style={{ fontSize:13, fontWeight:800, color:"#2a5c0f" }}>
-                              {s.idealGpa % 1 === 0 ? s.idealGpa : s.idealGpa.toFixed(2)} gal/ac
+                              {s.broadcastGpa % 1 === 0 ? s.broadcastGpa : s.broadcastGpa.toFixed(2)} gal/ac
                             </span>
                             <span style={{ fontSize:10, color:"#7a5800" }}>
                               {s.n} load{s.n!==1?"s":""} · {(ts/s.idealGpa).toFixed(1)} ac/tank
@@ -3674,7 +4108,9 @@ export default function App() {
                       <div style={{ fontSize:11, color:"#4a7a20", fontWeight:700, letterSpacing:"0.05em" }}>ACRES / LOAD</div>
                       <div style={{ fontSize:28, fontWeight:700, color:"#2a5c0f" }}>{acreLoads}</div>
                       <div style={{ fontSize:11, color:"#7aaa40" }}>
-                        Tank ÷ {form.galPerAcre ? <strong style={{ color:"#2a5c0f" }}>{form.galPerAcre} gal/ac</strong> : "Gal/Acre"}
+                        Tank ÷ {form.galPerAcre
+                          ? <strong style={{ color:"#2a5c0f" }}>{form.targetZone && calcGpa(form) !== parseFloat(form.galPerAcre) ? `${calcGpa(form).toFixed(2)} gal/ac target zone` : `${form.galPerAcre} gal/ac`}</strong>
+                          : "Gal/Acre"}
                       </div>
                     </div>
                     <div>
@@ -3806,7 +4242,7 @@ export default function App() {
                   {form.chemRows.map(row => (
                     <ChemicalRow
                       key={row.id} chem={row} chemicals={chemicals}
-                      tankSize={form.tankSize} galPerAcre={form.galPerAcre} totalAcres={totalAcres}
+                      tankSize={form.tankSize} galPerAcre={calcGpa(form)} totalAcres={totalAcres}
                       onChange={(k,v) => updateChemRow(row.id,k,v)}
                       onRemove={() => removeChemRow(row.id)}
                       isMobile={isMobile}
@@ -4089,7 +4525,11 @@ export default function App() {
 
                   {/* ── Collapsed row — always visible, tap to toggle */}
                   {isMobile ? (
-                    <div onClick={() => setExpandedTicket(isOpen ? null : t.id)}
+                    <div onClick={() => {
+                        const next = isOpen ? null : t.id;
+                        setExpandedTicket(next);
+                        if (calcTicketId && calcTicketId !== next) setCalcTicketId(null);
+                      }}
                       style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", cursor:"pointer", userSelect:"none" }}>
                       <div style={{
                         flexShrink:0, width:36, height:36, borderRadius:10, background: theme.tintGreen,
@@ -4104,6 +4544,10 @@ export default function App() {
                           {t.team_view && (
                             <span style={{ display:"inline-flex", alignItems:"center", gap:3, background: theme.tintGreen, color: theme.onGreen, borderRadius:6, padding:"2px 6px", fontSize:9.5, fontWeight:800, whiteSpace:"nowrap" }}>● CAB</span>
                           )}
+                          {isTargetZone(t) && (
+                            <span title="Spot sprayed: loads and tank mix are calculated on the target zone rate"
+                              style={{ display:"inline-flex", alignItems:"center", background: theme.tintPurple, color: theme.purple, borderRadius:6, padding:"2px 6px", fontSize:9.5, fontWeight:800, whiteSpace:"nowrap" }}>◎ SPOT</span>
+                          )}
                         </div>
                         <div style={{ fontSize:11.5, color: theme.mut, marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                           {t.selectedFields?.map(f=>f.name).join(", ") || "No fields"}
@@ -4117,7 +4561,11 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                  <div onClick={() => setExpandedTicket(isOpen ? null : t.id)}
+                  <div onClick={() => {
+                      const next = isOpen ? null : t.id;
+                      setExpandedTicket(next);
+                      if (calcTicketId && calcTicketId !== next) setCalcTicketId(null);
+                    }}
                     style={{
                       display:"flex", alignItems:"center", gap:10, padding:"12px 16px",
                       cursor:"pointer", userSelect:"none",
@@ -4131,6 +4579,7 @@ export default function App() {
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                         {t.crop && <span style={{ fontSize:12, color:"#2a5c0f", fontWeight:600 }}>{t.crop}</span>}
+                        <TargetZoneBadge ticket={t} />
                         {allDates && <span style={{ fontSize:10, fontWeight:700, background:"#d4edda", color:"#1a6b2f", borderRadius:4, padding:"1px 6px" }}>Completed</span>}
                         {!allDates && anyDate && <span style={{ fontSize:10, fontWeight:700, background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 6px" }}>In Progress</span>}
                       </div>
@@ -4174,7 +4623,9 @@ export default function App() {
                       <div style={{ display:"flex", gap:8, fontSize:12, color: isMobile ? theme.ink2 : "#555", flexWrap:"wrap", marginBottom:isMobile?12:10 }}>
                         {[
                           t.totalAcres        && fmtAcres(t.totalAcres, isMetric),
-                          t.galPerAcre        && fmtGpa(t.galPerAcre, isMetric),
+                          t.galPerAcre        && (isTargetZone(t)
+                            ? `${fmtGpa(t.galPerAcre, isMetric)} broadcast · ${fmtGpa(calcGpa(t).toFixed(2), isMetric)} effective`
+                            : fmtGpa(t.galPerAcre, isMetric)),
                           t.equipmentType,
                           t.licensedApplicant,
                         ].filter(Boolean).map((item, i) => (
@@ -4304,6 +4755,8 @@ export default function App() {
                             tankSize:    t.tankSize || "",
                             pressure:    t.pressure || "",
                             galPerAcre:  t.galPerAcre || "",
+                            targetZone:  !!t.targetZone,
+                            targetZonePct: t.targetZonePct || "28",
                             acresPerHour: t.acresPerHour || 75,
                             equipmentType: t.equipmentType || "",
                             licensedApplicant: t.licensedApplicant || "",
@@ -4321,6 +4774,7 @@ export default function App() {
                           setManualTank(!tankPresets.map(String).includes(String(t.tankSize)));
                           setEditingId(null);
                           setExpandedTicket(null);
+                          setCalcTicketId(null);
                           setView("form");
                         }} style={isMobile ? {
                           flex:1, padding:11, borderRadius:11, border:`1.5px solid ${theme.inputLine}`,
@@ -4365,6 +4819,7 @@ export default function App() {
                           setShowAcresInput(false);
                           setManualGpa(false);
                           setExpandedTicket(null);
+                          setCalcTicketId(null);
                           setView("form");
                         }} style={isMobile ? {
                           flex:1, padding:11, borderRadius:11, border:`1.5px solid ${theme.inputLine}`,
@@ -4373,6 +4828,29 @@ export default function App() {
                           background:"#2a5c0f", color:"#fff", border:"none", borderRadius:5,
                           padding:"7px 16px", cursor:"pointer", fontSize:13, fontWeight:700
                         }}>Edit</button>
+                        <button
+                          onClick={() => setCalcTicketId(t.id)}
+                          title="Partial load calculator"
+                          aria-label="Partial load calculator"
+                          style={{
+                            background:"#f0f7e8", color:"#2a5c0f", border:"1.5px solid #c8dbb0", borderRadius:5,
+                            cursor:"pointer", width: isMobile ? 44 : 36, height: isMobile ? 44 : 36,
+                            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, padding:0
+                          }}>
+                          {/* Inline SVG: 🖩 (U+1F5A9) renders as tofu on iOS/Android and 🧮 is an abacus */}
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="4" y="2" width="16" height="20" rx="2" />
+                            <line x1="8" y1="6" x2="16" y2="6" />
+                            <line x1="8" y1="11" x2="8" y2="11" />
+                            <line x1="12" y1="11" x2="12" y2="11" />
+                            <line x1="16" y1="11" x2="16" y2="11" />
+                            <line x1="8" y1="15" x2="8" y2="15" />
+                            <line x1="12" y1="15" x2="12" y2="15" />
+                            <line x1="16" y1="15" x2="16" y2="18" />
+                            <line x1="8" y1="18" x2="12" y2="18" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -6046,14 +6524,20 @@ export default function App() {
             <div style={{...cardT, padding:"14px 16px"}}>
               <div style={sectionTitleT}>Upload Chemical List (CSV)</div>
               <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
-                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>Name, EPA #, REI, Unit, Formulation Type, Container Size (optional)</code> — first row is header.<br/>
-                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, E, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
+                CSV format: <code style={{ background:"#e6f5d0", padding:"1px 5px", borderRadius:3 }}>ID, Name, EPA #, REI, Unit, Formulation Type, Container Size, Active Ingredient</code> — first row is header.<br/>
+                <span style={{ fontSize:11, color:"#888" }}>Download the library below, fill in <strong>Active Ingredient</strong> from the product labels, then re-upload — rows with a matching ID or name are <strong>updated in place</strong>, not duplicated. Values containing commas are fine.</span><br/>
+                <span style={{ fontSize:11, color:"#888" }}>Unit options: <strong>oz</strong> (liquid fl oz), <strong>dry oz</strong> (dry ounce → shows lb+oz), <strong>lb</strong> &nbsp;·&nbsp; Form type: <strong>L, SC, CS, E, EC, S, WDG, WP, D, A</strong> &nbsp;·&nbsp; Container size in gal (oz) or lb (dry/lb); leave blank for tote/bulk</span>
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <button onClick={() => chemFileRef.current.click()} style={{
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
                 }}>📂 Upload CSV</button>
+                <button onClick={() => downloadChemLibraryCSV(chemicals, currentOrg?.name)} disabled={!chemicals.length} style={{
+                  background:"#fff", color:"#2a5c0f", border:"1.5px solid #2a5c0f", borderRadius:6,
+                  padding:"8px 18px", cursor: chemicals.length ? "pointer" : "not-allowed",
+                  fontSize:13, fontWeight:700, opacity: chemicals.length ? 1 : 0.5
+                }}>⬇ Download Library CSV</button>
                 {chemUpMsg && <span style={{ color:"#2a8a10", fontSize:13, fontWeight:600 }}>{chemUpMsg}</span>}
               </div>
             </div>
@@ -6088,8 +6572,8 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
-                {[["name","Chemical Name","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 1.6fr 1fr 1fr 1fr 1fr 1fr", gap:10, alignItems:"end" }}>
+                {[["name","Chemical Name","text"],["activeIngredient","Active Ingredient","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelT}>{lbl}</label>
                     <input type={type} value={newChem[k]} onChange={e => { setNewChem(c=>({...c,[k]:e.target.value})); if (k==="name"||k==="epa") setChemDupWarning(""); }} style={inp} placeholder={lbl}/>
@@ -6117,8 +6601,11 @@ export default function App() {
                 <div>
                   <label style={labelT}>Formulation Type</label>
                   <select value={newChem.formType||"L"} onChange={e => setNewChem(c=>({...c,formType:e.target.value}))} style={sel}>
-                    <option value="L">L — Liquid Flowable / SC</option>
-                    <option value="E">E — EC</option>
+                    <option value="L">L — Liquid Flowable</option>
+                    <option value="SC">SC — Suspension Concentrate</option>
+                    <option value="CS">CS — Capsule Suspension</option>
+                    <option value="E">E — Emulsifiable</option>
+                    <option value="EC">EC — Emulsifiable Concentrate</option>
                     <option value="S">S — Soluble Liquid</option>
                     <option value="WDG">WDG — Dispersible Granule</option>
                     <option value="WP">WP — Wettable Powder</option>
@@ -6330,7 +6817,7 @@ export default function App() {
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                   <thead>
-                    <tr>{["Chemical Name","Form.","EPA #","REI","Unit","Container",""].map(h=>(
+                    <tr>{["Chemical Name","Active Ingredient","Form.","EPA #","REI","Unit","Container",""].map(h=>(
                       <th key={h} style={th}>{h}</th>
                     ))}</tr>
                   </thead>
@@ -6341,11 +6828,15 @@ export default function App() {
                         const draftIsDryOrLb = chemContainerIsLb(editChemDraft);
                         return (
                           <tr key={c.id} style={{ background:"#f5fff0" }}>
-                            <td style={td} colSpan={7}>
-                              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"6px 0" }}>
+                            <td style={td} colSpan={8}>
+                              <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1.6fr 1fr 1fr 1fr 1fr 1fr auto", gap:6, alignItems:"end", padding:"6px 0" }}>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Chemical Name</label>
                                   <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelT, fontSize:10 }}>Active Ingredient</label>
+                                  <input value={editChemDraft.activeIngredient||""} onChange={e=>setEditChemDraft(d=>({...d,activeIngredient:e.target.value}))} style={{ ...inp, fontSize:12, padding:"3px 6px" }} placeholder="from label" />
                                 </div>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>EPA #</label>
@@ -6378,7 +6869,10 @@ export default function App() {
                                   <label style={{ ...labelT, fontSize:10 }}>Form. Type</label>
                                   <select value={editChemDraft.formType||"L"} onChange={e=>setEditChemDraft(d=>({...d,formType:e.target.value}))} style={{ ...sel, fontSize:12, padding:"3px 6px" }}>
                                     <option value="L">L</option>
+                                    <option value="SC">SC</option>
+                                    <option value="CS">CS</option>
                                     <option value="E">E</option>
+                                    <option value="EC">EC</option>
                                     <option value="S">S</option>
                                     <option value="WDG">WDG</option>
                                     <option value="WP">WP</option>
@@ -6414,6 +6908,9 @@ export default function App() {
                       return (
                         <tr key={c.id}>
                           <td style={{ ...td, fontWeight:600 }}>{c.name}</td>
+                          <td style={{ ...td, fontSize:12 }}>
+                            {c.activeIngredient || <span style={{ color:"#c9a227" }} title="Required on TDA records">— missing</span>}
+                          </td>
                           <td style={td}>{c.formType||"—"}</td>
                           <td style={td}>{c.epa}</td>
                           <td style={td}>{c.rei}</td>
@@ -6621,6 +7118,40 @@ export default function App() {
               </div>
             )}
 
+            {/* Operation Features — opt-in specialty tools */}
+            {isOwner && (
+              <div style={{ ...card, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitle, marginBottom:6 }}>Operation Features</div>
+                <div style={{ fontSize:12, color:"#555", marginBottom:10 }}>
+                  Turn on specialty tools for your operation. They apply to everyone in this org; turned-off tools stay hidden.
+                </div>
+                {[
+                  ["targetZone", "Target Zone / Spot Spray",
+                   "Adds a Target Zone option to Tank Setup. Loads and tank mix are calculated on a reduced rate while the ticket still shows the broadcast gal/acre."],
+                ].map(([key, label, desc]) => {
+                  const on = !!orgFeatures[key];
+                  return (
+                    <label key={key} style={{ display:"flex", alignItems:"flex-start", gap:10, cursor:"pointer",
+                      background: on ? "#f3eefc" : "#f4fbee", border:`1.5px solid ${on ? "#7a4ab0" : "#c8dbb0"}`,
+                      borderRadius:7, padding:"12px 14px", marginBottom:6 }}>
+                      <input type="checkbox" checked={on}
+                        onChange={async e => {
+                          const next = { ...orgFeatures, [key]: e.target.checked };
+                          const { error } = await supabase.from("organizations").update({ features: next }).eq("id", currentOrg.id);
+                          if (error) showToast("Failed to update: " + error.message);
+                          else setCurrentOrg(prev => ({ ...prev, features: next }));
+                        }}
+                        style={{ width:20, height:20, accentColor:"#7a4ab0", flexShrink:0, marginTop:1 }}/>
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:14, color: on ? "#4a2a7a" : "#2a5c0f" }}>{label}</div>
+                        <div style={{ fontSize:11, color:"#777", marginTop:2 }}>{desc}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Farm Location */}
             {isOwner && (
               <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
@@ -6809,7 +7340,7 @@ export default function App() {
                   title="Report to date"/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button onClick={() => downloadCSV(tickets, currentOrg?.name, isMetric)} disabled={!tickets.length} style={{
+                <button onClick={() => downloadCSV(tickets, currentOrg?.name, isMetric, chemicals)} disabled={!tickets.length} style={{
                   flex:1, background: tickets.length ? "#2a5c0f" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
                   cursor: tickets.length ? "pointer" : "default", fontSize:14, fontWeight:700
@@ -6824,7 +7355,7 @@ export default function App() {
                     return true;
                   });
                   if (!filtered.length) return alert("No tickets in selected date range.");
-                  downloadTDAReport(filtered, currentOrg?.name);
+                  downloadTDAReport(filtered, currentOrg?.name, chemicals);
                 }} disabled={!tickets.length} style={{
                   flex:1, background: tickets.length ? "linear-gradient(135deg,#1a6a40,#0e4a28)" : "#ccc",
                   color:"#fff", border:"none", borderRadius:6, padding:"11px 0",
@@ -6895,10 +7426,27 @@ export default function App() {
 
       </div>
 
+      {/* ── Partial Load Calculator ───────────────────────────────────── */}
+      {/* Mounted once, outside filtered.map — an inline panel would unmount as
+          soon as the log search box filtered this ticket out of the list. */}
+      {view === "log" && calcTicketId && (() => {
+        // tickets.find can miss: realtime DELETE, or setTickets([]) on org switch
+        const ct = tickets.find(x => x.id === calcTicketId);
+        return ct ? (
+          <PartialLoadCalc
+            key={ct.id}              /* reset state when switching tickets */
+            ticket={ct}
+            isMetric={isMetric}
+            isMobile={isMobile}
+            onClose={() => setCalcTicketId(null)}
+          />
+        ) : null;
+      })()}
+
       {/* ── Floating Sector Chat (Pro only) ──────────────────────────── */}
 
-      {/* Floating bubble — hidden when chat is open, and hidden on mobile (bottom nav takes that space) */}
-      {isPro && !isViewer && !chatOpen && !isMobile && (
+      {/* Floating bubble — hidden when chat is open, the calculator is up, or on mobile (bottom nav takes that space) */}
+      {isPro && !isViewer && !chatOpen && !calcTicketId && !isMobile && (
         <button
           onClick={() => setChatOpen(true)}
           title="Application Sector Advisor"

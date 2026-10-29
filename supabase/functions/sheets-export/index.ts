@@ -13,9 +13,13 @@ const HEADERS = [
   "Field", "Acres", "Crop / Site", "Target Pest",
   "Wind Speed (mph)", "Wind Dir", "Air Temp (°F)",
   "Equipment", "Licensed Applicator", "License #", "Non-Licensed Applicator",
-  "Product Name", "EPA Reg #", "REI", "Rate/Acre", "Unit", "Total Applied",
+  "Product Name", "Active Ingredient", "EPA Reg #", "REI", "Rate/Acre", "Unit", "Total Applied",
   "Notes",
 ];
+
+// Only EPA-registered pesticides belong on the REI posting: drop adjuvants and anything
+// without an EPA number. Keep in sync with reportableTickets() in AnaquaFarms_AppTicket.jsx.
+const hasEpaNumber = (epa: string | null | undefined) => !/^(|n\/?a|none|-+|—)$/i.test((epa ?? "").trim());
 
 function fmtTime(t: string | null | undefined): string {
   if (!t) return "";
@@ -83,14 +87,33 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Ticket snapshots don't carry the formulation, so classify adjuvants by name.
+  const { data: library, error: libError } = await supabase
+    .from("chemicals")
+    .select("name, form_type");
+
+  if (libError) {
+    return new Response(JSON.stringify({ error: libError.message }), {
+      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+
+  const adjuvants = new Set(
+    (library ?? []).filter(c => c.form_type === "A").map(c => (c.name ?? "").trim().toLowerCase()),
+  );
+  const isReportable = (c: { name?: string; epa?: string }) =>
+    hasEpaNumber(c.epa) && !adjuvants.has((c.name ?? "").trim().toLowerCase());
+
   // Flatten into one row per field × chemical, with Total Applied calculated
   const rows: (string | number)[][] = [];
 
   for (const t of tickets ?? []) {
     const schedule: { name: string; acres: string | number; timeStart?: string; timeEnd?: string }[] =
       t.field_schedule ?? t.selected_fields ?? [];
-    const chems: { name?: string; epa?: string; rei?: string; ratePerAcre?: string | number; unit?: string }[] =
+    const allChems: { name?: string; activeIngredient?: string; epa?: string; rei?: string; ratePerAcre?: string | number; unit?: string }[] =
       t.chemicals ?? [];
+    const chems = allChems.filter(isReportable);
+    if (allChems.length && !chems.length) continue; // nothing reportable was applied
     const pest: string = Array.isArray(t.target_pest)
       ? t.target_pest.join(", ")
       : (typeof t.target_pest === "string"
@@ -125,6 +148,7 @@ Deno.serve(async (req) => {
           t.licensed_applicant_license ?? "",
           t.non_licensed_applicant ?? "",
           c.name ?? "",
+          c.activeIngredient ?? "",
           c.epa  ?? "",
           c.rei  ?? "",
           c.ratePerAcre ?? "",

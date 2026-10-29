@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ApplicatorMapView from "./ApplicatorMapView";
+import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 
 
 function cropChip(crop) {
@@ -231,6 +232,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                   </span>
                   {t.crop && <span style={{ color: "#555", fontSize: 18, fontWeight: 800 }}>{t.crop}</span>}
                   <span style={{ background: statusBadge.bg, color: statusBadge.color, borderRadius: 4, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{statusBadge.label}</span>
+                  <TargetZoneBadge ticket={t} />
                 </div>
               </div>
               {isOwner && (
@@ -260,6 +262,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                     #{String(t.ticketNumber || t.ticket_number || "").padStart(3, "0")}
                   </span>
                   {t.crop && <span style={{ fontSize: 13, color: "#888" }}>{t.crop}</span>}
+                  <TargetZoneBadge ticket={t} size={10} />
                   <span style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>{(t.selectedFields||[]).length} fields</span>
                   {isOwner && (
                     <button onClick={(e) => { e.stopPropagation(); onToggleQueue && onToggleQueue(t.id, false); }}
@@ -385,6 +388,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
           <div style={{ fontWeight: 800, fontSize: 15, color: isMobile ? t_.ink : "#1a4a0a" }}>
             #{ticketNum}{t.crop && (isMobile ? <span style={{ color: t_.ink2, fontSize:12, fontWeight:700, marginLeft:6 }}>{t.crop}</span> : cropChip(t.crop))}
           </div>
+          {isTargetZone(t) && <div style={{ margin: "3px 0" }}><TargetZoneBadge ticket={t} /></div>}
           <div style={{ fontSize: 12, color: isMobile ? t_.mut : "#888" }}>
             {pendingFields.length} field{pendingFields.length !== 1 ? "s" : ""} remaining · {pendingFields.reduce((sum, f) => sum + (parseFloat(f.acres) || 0), 0).toFixed(1)} ac
           </div>
@@ -400,6 +404,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
               ["Gal/Acre",   t.galPerAcre   || t.gal_per_acre],
               ["Pressure",   t.pressure     ? `${t.pressure} PSI` : null],
               ["Tank Size",  t.tankSize     || t.tank_size ? `${t.tankSize || t.tank_size} gal` : null],
+              ["Spot Spray", isTargetZone(t) ? "Yes" : null],
             ].filter(([,v]) => v).map(([label, val]) => (
               <div key={label}>
                 <div style={{ fontSize: 10, color: isMobile ? t_.mut : "#aaa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
@@ -414,6 +419,8 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
       <div style={{ margin: "10px 12px 0" }}>
         <ApplicatorMapView
           fields={enriched}
+          libraryFields={fieldLibrary}
+          onFieldClick={(id) => { if (pendingFields.some(f => f.id === id)) setFocusFieldId(id); }}
           focusFieldId={focusFieldId}
           completedFieldIds={completedFields.map(f => f.id)}
           height={250}
@@ -494,28 +501,39 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
                 }}>
                   {reorderMode ? (isTapped ? tapPos + 1 : "·") : listIdx + 1}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: isMobile ? t_.ink : "#1a1a1a" }}>{f.name}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: isMobile ? t_.ink : "#1a1a1a", lineHeight: 1.25 }}>{f.name}</div>
                   <div style={{ fontSize: 12, color: isMobile ? t_.mut : "#888" }}>
                     {parseFloat(f.acres || 0).toFixed(2)} ac
-                    {started && !reorderMode && <span style={{ marginLeft: 6, color: isMobile ? t_.green : "#2a5c0f", fontWeight: 600 }}>▶ {fmtHHMM(entry.actualTimeStart)}</span>}
+                    {started && !reorderMode && <span style={{ marginLeft: 6, color: isMobile ? t_.green : "#2a5c0f", fontWeight: 600, whiteSpace: "nowrap" }}>{"\u25B6\uFE0E"} {fmtHHMM(entry.actualTimeStart)}</span>}
                   </div>
                 </div>
+                {!reorderMode && (f.centroid_lat && f.centroid_lng ? (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${f.centroid_lat},${f.centroid_lng}&travelmode=driving`}
+                    target="_blank" rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={`Directions to ${f.name}`}
+                    aria-label={`Directions to ${f.name}`}
+                    style={{ width: 76, height: 44, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+                      borderRadius: isMobile ? 11 : 6, border: `1.5px solid ${isMobile ? t_.green : "#2a5c0f"}`, background: isMobile ? t_.card : "#fff", color: isMobile ? t_.onGreen : "#2a5c0f", boxSizing: "border-box",
+                      fontFamily: isMobile ? "inherit" : "Arial, sans-serif", fontWeight: 700, fontSize: 11, textDecoration: "none" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 20v-7a4 4 0 0 1 4-4h11" />
+                      <path d="M15 4l5 5-5 5" />
+                    </svg>
+                    Directions
+                  </a>
+                ) : (
+                  <div style={{ width: 76, flexShrink: 0 }} />
+                ))}
                 {/* Start/Stop — hidden in reorder mode */}
                 {!reorderMode && (
-                  !started ? (
-                    <button onClick={(e) => { e.stopPropagation(); handleStart(f); }}
-                      style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-                        background: isMobile ? t_.green : "#2a5c0f", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>
-                      ▶ Start
-                    </button>
-                  ) : (
-                    <button onClick={(e) => { e.stopPropagation(); handleStop(f); }}
-                      style={{ padding: "6px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-                        background: "#c0392b", color: "#fff", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>
-                      ■ Stop
-                    </button>
-                  )
+                  <button onClick={(e) => { e.stopPropagation(); started ? handleStop(f) : handleStart(f); }}
+                    style={{ width: 76, height: 44, flexShrink: 0, borderRadius: isMobile ? 11 : 6, border: "none", cursor: "pointer",
+                      background: started ? "#c0392b" : (isMobile ? t_.green : "#2a5c0f"), color: "#fff", fontWeight: 700, fontSize: 13, whiteSpace: "nowrap" }}>
+                    {started ? "■ Stop" : "\u25B6\uFE0E Start"}
+                  </button>
                 )}
               </div>
             </div>

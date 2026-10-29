@@ -17,6 +17,7 @@ const LIGHT_BASE = {
   fill: "#f1f4ee", fill2: "#eef1ec", input: "#fbfcfa",
   ink: "#16211b", ink2: "#54635a", mut: "#94a399",
   blue: "#1f6f8b", tintBlue: "#e6f1f4", amber: "#b9810f", tintAmber: "#faf1da",
+  purple: "#5b3394", tintPurple: "#f1ecfa",
   fieldTint: "#f4f8f2", fieldLine: "#e0ece4", dash: "#c5d2c9", navOff: "#a6b3aa",
   headerSub: "#a9d9bd", btnDark: "#16211b",
 };
@@ -26,6 +27,7 @@ const DARK_BASE = {
   fill: "#232e27", fill2: "#1f2a23", input: "#1d2722",
   ink: "#eef3ee", ink2: "#aebcb2", mut: "#7e8d83",
   blue: "#5fb6cf", tintBlue: "#15303a", amber: "#e3ab43", tintAmber: "#33290f",
+  purple: "#c4a8f0", tintPurple: "#2a2140",
   fieldTint: "#1d2922", fieldLine: "#2c3a31", dash: "#3a473f", navOff: "#6e7d73",
   headerSub: "#9fcdb1", btnDark: "#0b1410",
 };

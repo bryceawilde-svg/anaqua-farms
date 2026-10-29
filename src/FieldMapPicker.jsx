@@ -9,20 +9,24 @@ const CROP_COLORS = {
   Soybean: "#7CFC00",  // lawn green
 };
 const DEFAULT_COLOR = "#FF8C00";  // orange for no-crop / unknown
+const OTHER_COLOR   = "#E000E0";  // magenta for fields outside the selected crop
 
-function fillColor(crop) {
-  return CROP_COLORS[crop] || DEFAULT_COLOR;
+const matchesCrop = (field, cropFilter) => !cropFilter || field.crop === cropFilter;
+
+function fillColor(field, cropFilter) {
+  if (!matchesCrop(field, cropFilter)) return OTHER_COLOR;
+  return CROP_COLORS[field.crop] || DEFAULT_COLOR;
 }
 
-function styleFor(crop, selected) {
-  const c = fillColor(crop);
+function styleFor(field, cropFilter, selected) {
+  const c = fillColor(field, cropFilter);
   return selected
     ? { color: "#fff",  weight: 3,   fillColor: c, fillOpacity: 0.72, opacity: 1 }
-    : { color: c,       weight: 2,   fillColor: c, fillOpacity: 0.38, opacity: 1 };
+    : { color: c,       weight: 2,   fillColor: c, fillOpacity: matchesCrop(field, cropFilter) ? 0.38 : 0.25, opacity: 1 };
 }
 
-function hoverStyle(crop) {
-  const c = fillColor(crop);
+function hoverStyle(field, cropFilter) {
+  const c = fillColor(field, cropFilter);
   return   { color: "#fff",  weight: 2.5, fillColor: c, fillOpacity: 0.58, opacity: 1 };
 }
 
@@ -74,24 +78,20 @@ export default function FieldMapPicker({ fields, selectedFields, onAdd, onRemove
         try { gj = JSON.parse(field.boundary_geojson); } catch { return; }
 
         const isSelected = () => stateRef.current.selectedFields.some(sf => sf.id === field.id);
-        const matchesCrop = () => {
-          const cf = stateRef.current.cropFilter;
-          return !cf || !field.crop || field.crop === cf;
-        };
+        const currentStyle = () => styleFor(field, stateRef.current.cropFilter, isSelected());
 
-        const layer = L.geoJSON(gj, { style: styleFor(field.crop, isSelected()) });
+        const layer = L.geoJSON(gj, { style: currentStyle() });
 
         layer.on("click", (e) => {
           L.DomEvent.stopPropagation(e);
-          if (!matchesCrop()) return;
           if (isSelected()) stateRef.current.onRemove(field.id);
           else              stateRef.current.onAdd(field);
         });
         layer.on("mouseover", () => {
-          if (!isSelected()) layer.setStyle(hoverStyle(field.crop));
+          if (!isSelected()) layer.setStyle(hoverStyle(field, stateRef.current.cropFilter));
         });
         layer.on("mouseout", () => {
-          layer.setStyle(styleFor(field.crop, isSelected()));
+          layer.setStyle(currentStyle());
         });
         layer.bindTooltip(
           `<strong style="font-size:13px">${field.name}</strong><br/>${parseFloat(field.acres || 0).toFixed(2)} ac${field.crop ? ` · ${field.crop}` : ""}`,
@@ -102,37 +102,38 @@ export default function FieldMapPicker({ fields, selectedFields, onAdd, onRemove
         layersRef.current[field.id] = { layer, field };
       });
 
-    // Fit to crop-filtered or all visible fields
+    // Fit to the selected crop's fields, or all fields
     const cf = stateRef.current.cropFilter;
-    const visible = Object.values(layersRef.current)
-      .filter(({ field: f }) => !cf || !f.crop || f.crop === cf);
-    fitVisible(map, visible.length ? visible : Object.values(layersRef.current));
+    const all = Object.values(layersRef.current);
+    const matching = all.filter(({ field: f }) => matchesCrop(f, cf));
+    fitVisible(map, matching.length ? matching : all);
   }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Show/hide layers and re-fit when crop filter changes
+  // Restyle and re-fit when crop filter changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const entries = Object.values(layersRef.current);
-    entries.forEach(({ layer, field }) => {
-      const visible = !cropFilter || !field.crop || field.crop === cropFilter;
-      if (visible && !map.hasLayer(layer)) layer.addTo(map);
-      if (!visible && map.hasLayer(layer))  layer.remove();
-    });
-    const visible = entries.filter(({ field }) => !cropFilter || !field.crop || field.crop === cropFilter);
-    if (visible.length) fitVisible(map, visible);
+    const matching = entries.filter(({ field }) => matchesCrop(field, cropFilter));
+    if (matching.length) fitVisible(map, matching);
   }, [cropFilter]);
 
-  // Update styles when selection changes
+  // Update styles when selection or crop filter changes
   useEffect(() => {
     const selectedIds = new Set(selectedFields.map(f => f.id));
     Object.entries(layersRef.current).forEach(([id, { layer, field }]) => {
-      layer.setStyle(styleFor(field.crop, selectedIds.has(Number(id))));
+      layer.setStyle(styleFor(field, cropFilter, selectedIds.has(Number(id))));
     });
-  }, [selectedFields]);
+    // Highlighted crop draws above magenta fields so its borders stay visible
+    Object.values(layersRef.current).forEach(({ layer, field }) => {
+      if (matchesCrop(field, cropFilter)) layer.bringToFront();
+    });
+  }, [selectedFields, cropFilter]);
 
   const noGeoCount = fields.filter(f => !f.boundary_geojson).length;
-  const legend = Object.entries(CROP_COLORS);
+  const legend = cropFilter
+    ? [[cropFilter, CROP_COLORS[cropFilter] || DEFAULT_COLOR], ["Other fields", OTHER_COLOR]]
+    : [...Object.entries(CROP_COLORS), ["Other", DEFAULT_COLOR]];
 
   return (
     <div>
@@ -148,10 +149,6 @@ export default function FieldMapPicker({ fields, selectedFields, onAdd, onRemove
               {crop}
             </span>
           ))}
-          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#555" }}>
-            <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: DEFAULT_COLOR, border: "1px solid #999" }} />
-            Other
-          </span>
         </div>
         {noGeoCount > 0 && (
           <span style={{ fontSize: 11, color: "#aaa" }}>
