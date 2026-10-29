@@ -1855,6 +1855,9 @@ export default function App() {
   const noteT = { fontSize:12.5, color: theme.ink2, lineHeight:1.45 };
   // Mobile secondary button (Rename, Cancel, CSV…).
   const softBtnT = { background: theme.fill, color: theme.ink2, border:"none", borderRadius:10, padding:"8px 13px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap", fontFamily:"inherit" };
+  // Mobile 32px delete (×) button on library cards; theme red so it reads in dark mode.
+  const delBtnT = { width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color: theme.red,
+    fontSize:18, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 };
   // Mobile primary "+ Add" button beside an input.
   const addBtnT = (enabled = true) => ({
     background: enabled ? theme.green : theme.fill, color: enabled ? "#fff" : theme.mut, border:"none", borderRadius:10,
@@ -2758,6 +2761,83 @@ export default function App() {
     }
     return null;
   };
+
+  // Shapefile (.zip) import. Lives at App scope (not inside the importer card) because
+  // the always-mounted file input that the mobile sheet triggers needs to reach it.
+  const handleFmZip = async (file) => {
+    if (!file) return;
+    setFmParsing(true); setFmParseError("");
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const shpEntry = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith(".shp"));
+      const dbfEntry = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith(".dbf"));
+      if (!shpEntry || !dbfEntry) throw new Error("No .shp / .dbf found in zip.");
+      const [shpBuf, dbfBuf] = await Promise.all([
+        shpEntry.async("arraybuffer"),
+        dbfEntry.async("arraybuffer"),
+      ]);
+      const features = [];
+      const source = await shapefile.open(shpBuf, dbfBuf);
+      let result = await source.read();
+      while (!result.done) { features.push(result.value); result = await source.read(); }
+
+      const firstProps = features[0]?.properties || {};
+      const cols = Object.keys(firstProps);
+
+      // Auto-detect which column serves each role
+      const detect = (...candidates) => candidates.find(c => cols.includes(c)) || "";
+      const detected = {
+        nameCol: detect("FLD_NM","NAME","Field Name","FieldName","FIELD_NAME","FIELD_NM","Name","label","Label","FIELDNAME","name"),
+        idCol:   detect("FLD_FMID","FIELD_ID","FieldId","GlobalID","GLOBALID","FID","ID","field_id"),
+        farmCol: detect("FARM_NM","FARM_NAME","FarmName","Farm","FARMNAME","farm_name","Farm Name","FARM"),
+        cropCol: detect("CROP_CYCLE","CROP","Crop","Year","YEAR","Season","SEASON","CropYear","crop"),
+      };
+
+      setFmFeatures(features);
+      setFmColMap(detected);
+
+      if ("FLD_FMID" in firstProps) {
+        // FarmMobile format — skip mapping, build match state and go straight to review
+        const ms = {};
+        features.forEach(feat => {
+          const fmid = feat.properties.FLD_FMID;
+          const name = feat.properties.FLD_NM || "";
+          if (!fmid) return;
+          const byFmid = fieldLibrary.find(f => f.fmid && f.fmid === fmid);
+          if (byFmid) { ms[fmid] = { status:"auto", fieldId: byFmid.id, confirmed: true }; return; }
+          const byName = fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
+          if (byName) { ms[fmid] = { status:"auto", fieldId: byName.id, confirmed: true }; return; }
+          let best = null, bestScore = 0;
+          fieldLibrary.forEach(f => { const s = fmSimilarity(name, f.name); if (s > bestScore) { bestScore = s; best = f; } });
+          ms[fmid] = best && bestScore >= 0.8
+            ? { status:"suggested", fieldId: best.id, confirmed: false }
+            : { status:"unmatched", fieldId: "__new__", confirmed: false };
+        });
+        setFmMatches(ms);
+        setFmStage("review");
+      } else {
+        // Unknown format — show column mapping stage
+        setFmAvailCols(cols);
+        setFmStage("mapping");
+      }
+    } catch (err) {
+      setFmParseError("Parse error: " + err.message);
+    } finally {
+      setFmParsing(false);
+      if (fmFileRef.current) fmFileRef.current.value = "";
+    }
+  };
+
+  // Mobile: the add-field sheet only handles picking the file. When an import moves
+  // on to column mapping / review, close the sheet so its card (rendered in the
+  // Fields view) is visible. Declared after fmStage / csvStage to avoid a TDZ.
+  useEffect(() => {
+    if (!isMobile) return;
+    if (["mapping", "review"].includes(fmStage) || ["mapping", "review"].includes(csvStage)) {
+      setAddFieldOpen(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [isMobile, fmStage, csvStage]);
 
   const handleFieldCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -5169,10 +5249,12 @@ export default function App() {
               </div>
             )}
 
-            {/* Desktop: full import/add cards (hidden on mobile) */}
-            {!isMobile && (<>
+            {/* Desktop: full import/add cards. On mobile the bottom sheet only covers picking
+                a file — once an import reaches column mapping / review, its card shows here
+                (the sheet closes itself; see the effect next to handleFmZip). */}
+            {(!isMobile || fmStage !== "upload" || csvStage !== "idle") && (<>
             {/* ── FarmMobile Shapefile Importer ─────────────────────────────── */}
-            {(() => {
+            {(!isMobile || fmStage !== "upload") && (() => {
               const resetFm = () => {
                 setFmStage("upload"); setFmFeatures([]); setFmMatches({});
                 setFmParseError(""); setFmImportError(""); setFmResult(null);
@@ -5210,70 +5292,6 @@ export default function App() {
                 });
                 setFmMatches(ms);
                 setFmStage("review");
-              };
-
-              const handleFmZip = async (file) => {
-                if (!file) return;
-                setFmParsing(true); setFmParseError("");
-                try {
-                  const zip = await JSZip.loadAsync(file);
-                  const shpEntry = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith(".shp"));
-                  const dbfEntry = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith(".dbf"));
-                  if (!shpEntry || !dbfEntry) throw new Error("No .shp / .dbf found in zip.");
-                  const [shpBuf, dbfBuf] = await Promise.all([
-                    shpEntry.async("arraybuffer"),
-                    dbfEntry.async("arraybuffer"),
-                  ]);
-                  const features = [];
-                  const source = await shapefile.open(shpBuf, dbfBuf);
-                  let result = await source.read();
-                  while (!result.done) { features.push(result.value); result = await source.read(); }
-
-                  const firstProps = features[0]?.properties || {};
-                  const cols = Object.keys(firstProps);
-
-                  // Auto-detect which column serves each role
-                  const detect = (...candidates) => candidates.find(c => cols.includes(c)) || "";
-                  const detected = {
-                    nameCol: detect("FLD_NM","NAME","Field Name","FieldName","FIELD_NAME","FIELD_NM","Name","label","Label","FIELDNAME","name"),
-                    idCol:   detect("FLD_FMID","FIELD_ID","FieldId","GlobalID","GLOBALID","FID","ID","field_id"),
-                    farmCol: detect("FARM_NM","FARM_NAME","FarmName","Farm","FARMNAME","farm_name","Farm Name","FARM"),
-                    cropCol: detect("CROP_CYCLE","CROP","Crop","Year","YEAR","Season","SEASON","CropYear","crop"),
-                  };
-
-                  setFmFeatures(features);
-                  setFmColMap(detected);
-
-                  if ("FLD_FMID" in firstProps) {
-                    // FarmMobile format — skip mapping, build match state and go straight to review
-                    const ms = {};
-                    features.forEach(feat => {
-                      const fmid = feat.properties.FLD_FMID;
-                      const name = feat.properties.FLD_NM || "";
-                      if (!fmid) return;
-                      const byFmid = fieldLibrary.find(f => f.fmid && f.fmid === fmid);
-                      if (byFmid) { ms[fmid] = { status:"auto", fieldId: byFmid.id, confirmed: true }; return; }
-                      const byName = fieldLibrary.find(f => f.name.toLowerCase() === name.toLowerCase());
-                      if (byName) { ms[fmid] = { status:"auto", fieldId: byName.id, confirmed: true }; return; }
-                      let best = null, bestScore = 0;
-                      fieldLibrary.forEach(f => { const s = fmSimilarity(name, f.name); if (s > bestScore) { bestScore = s; best = f; } });
-                      ms[fmid] = best && bestScore >= 0.8
-                        ? { status:"suggested", fieldId: best.id, confirmed: false }
-                        : { status:"unmatched", fieldId: "__new__", confirmed: false };
-                    });
-                    setFmMatches(ms);
-                    setFmStage("review");
-                  } else {
-                    // Unknown format — show column mapping stage
-                    setFmAvailCols(cols);
-                    setFmStage("mapping");
-                  }
-                } catch (err) {
-                  setFmParseError("Parse error: " + err.message);
-                } finally {
-                  setFmParsing(false);
-                  if (fmFileRef.current) fmFileRef.current.value = "";
-                }
               };
 
               const handleMapAssign = (fmid, fieldId) => {
@@ -5699,6 +5717,7 @@ export default function App() {
               );
             })()}
 
+            {(!isMobile || csvStage !== "idle") && (
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitleT}>Import Fields from CSV</div>
 
@@ -5897,7 +5916,9 @@ export default function App() {
                 </div>
               )}
             </div>
+            )}
 
+            {!isMobile && (
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitleT}>Add Field Manually</div>
               <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr auto", gap:10, alignItems:"end" }}>
@@ -5946,6 +5967,7 @@ export default function App() {
                 </div>
               )}
             </div>
+            )}
             </>)}
 
             {/* ── Crop Season Status ──────────────────────────────────────────── */}
@@ -5960,12 +5982,34 @@ export default function App() {
               return (
                 <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
                   <div style={sectionTitleT}>Crop Season Status</div>
-                  <div style={{ fontSize:11, color:"#888", marginBottom:10 }}>
+                  <div style={isMobile ? { ...noteT, marginBottom:12 } : { fontSize:11, color:"#888", marginBottom:10 }}>
                     Set the current growing stage for each crop. Pre-Season and Post-Harvest suppress crop safety warnings for chemicals used to manage volunteer plants.
                   </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  <div style={{ display:"flex", flexDirection:"column", gap: isMobile ? 12 : 8 }}>
                     {crops.map(crop => {
                       const current = cropSeasons[crop] || "in_season";
+                      // Mobile: name above a full-width segmented control; the active
+                      // season takes its own color (blue / green / amber).
+                      if (isMobile) {
+                        const tone = { pre_season: [theme.tintBlue, theme.blue], in_season: [theme.tintGreen, theme.onGreen], post_harvest: [theme.tintAmber, theme.amber] };
+                        return (
+                          <div key={crop}>
+                            <div style={{ fontSize:14, fontWeight:700, color: theme.ink, marginBottom:6 }}>{crop}</div>
+                            <div style={{ display:"flex", background: theme.fill, borderRadius:11, padding:3, gap:2 }}>
+                              {SEASONS.map(s => {
+                                const active = current === s.key;
+                                return (
+                                  <button key={s.key} onClick={() => updateCropSeason(crop, s.key)} style={{
+                                    flex:1, padding:"8px 0", border:"none", borderRadius:8, cursor:"pointer", fontSize:12.5, fontWeight:700, fontFamily:"inherit",
+                                    background: active ? tone[s.key][0] : "transparent", color: active ? tone[s.key][1] : theme.mut,
+                                    boxShadow: active ? `inset 0 0 0 1.5px ${tone[s.key][1]}` : "none",
+                                  }}>{s.label}</button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div key={crop} style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                           <span style={{ fontSize:13, fontWeight:700, color:"#2a5c0f", minWidth:110 }}>{crop}</span>
@@ -5995,20 +6039,40 @@ export default function App() {
             })()}
 
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
-              <div style={{ ...sectionTitleT, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ ...sectionTitleT, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+                {isMobile ? (
+                  <div style={{ minWidth:0 }}>
+                    <div>Field Library</div>
+                    <div style={{ fontSize:12, fontWeight:500, color: theme.mut, marginTop:1 }}>
+                      {fieldLibrary.length} fields · <span style={{ fontFamily:"'Space Grotesk',monospace" }}>{fmtAcresShort(fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0), isMetric)}</span>
+                    </div>
+                  </div>
+                ) : (
                 <span>Field Library — {fieldLibrary.length} fields · {fieldLibrary.reduce((s,f)=>s+(parseFloat(f.acres)||0),0).toFixed(1)} total acres</span>
+                )}
                 {isOwner && <button onClick={() => { setFieldMergeMode(m => !m); setFieldMergeIds(new Set()); setFieldMergeName(""); setFieldMergeKeepId(null); }}
-                  style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1.5px solid #1a6bbf", background: fieldMergeMode ? "#1a6bbf" : "#fff", color: fieldMergeMode ? "#fff" : "#1a6bbf", cursor:"pointer" }}>
-                  ⊕ Merge
+                  style={isMobile
+                    ? { ...softBtnT, background: fieldMergeMode ? theme.blue : theme.tintBlue, color: fieldMergeMode ? theme.card : theme.blue }
+                    : { fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1.5px solid #1a6bbf", background: fieldMergeMode ? "#1a6bbf" : "#fff", color: fieldMergeMode ? "#fff" : "#1a6bbf", cursor:"pointer" }}>
+                  {isMobile && fieldMergeMode ? "Done" : "⊕ Merge"}
                 </button>}
               </div>
+              {/* Mobile merge hint — fields are picked by tapping their cards below */}
+              {isMobile && isOwner && fieldMergeMode && fieldMergeIds.size < 2 && (
+                <div style={{ background: theme.tintBlue, color: theme.blue, borderRadius:10, padding:"9px 12px", fontSize:12.5, fontWeight:600, marginBottom:10 }}>
+                  Tap fields below to select them — pick at least 2 to merge{fieldMergeIds.size === 1 ? " (1 selected)" : ""}.
+                </div>
+              )}
               {(() => {
                 const cropOptions = [...new Set(fieldLibrary.map(f => f.crop).filter(Boolean))].sort();
                 if (cropOptions.length < 2) return null;
                 return (
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
                     {["All", ...cropOptions].map(c => (
-                      <button key={c} onClick={() => setFieldCropFilter(c === "All" ? "" : c)} style={{
+                      <button key={c} onClick={() => setFieldCropFilter(c === "All" ? "" : c)} style={isMobile ? {
+                        padding:"6px 13px", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
+                        ...pillBtn(c === "All" ? !fieldCropFilter : fieldCropFilter === c), borderRadius:9,
+                      } : {
                         background: (c === "All" ? !fieldCropFilter : fieldCropFilter === c) ? "#2a5c0f" : "#f0f0f0",
                         color:      (c === "All" ? !fieldCropFilter : fieldCropFilter === c) ? "#fff" : "#333",
                         border:"none", borderRadius:5, padding:"4px 12px", cursor:"pointer", fontSize:12, fontWeight:700
@@ -6019,11 +6083,15 @@ export default function App() {
               })()}
               {/* Merge controls */}
               {isOwner && fieldMergeMode && fieldMergeIds.size >= 2 && (
-                <div style={{ background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:6, padding:"10px 14px", marginBottom:10 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:"#1a3a6a", marginBottom:8 }}>
+                <div style={isMobile
+                  ? { background: theme.tintBlue, border:`1.5px solid ${theme.blue}`, borderRadius:14, padding:"12px 13px", marginBottom:10 }
+                  : { background:"#e8f0ff", border:"1.5px solid #1a6bbf", borderRadius:6, padding:"10px 14px", marginBottom:10 }}>
+                  <div style={{ fontSize: isMobile ? 13 : 12, fontWeight:700, color: isMobile ? theme.blue : "#1a3a6a", marginBottom: isMobile ? 10 : 8, lineHeight: isMobile ? 1.4 : undefined }}>
                     Merge {fieldMergeIds.size} fields — boundaries will be unioned, acres recalculated from geometry
                   </div>
-                  <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                  <div style={isMobile
+                    ? { display:"flex", flexDirection:"column", gap:10, alignItems:"stretch" }
+                    : { display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
                     <div>
                       <label style={{ ...labelT, fontSize:11 }}>Keep name:</label>
                       <select value={fieldMergeKeepId || ""}
@@ -6032,7 +6100,7 @@ export default function App() {
                           const f = fieldLibrary.find(x => x.id === Number(e.target.value));
                           if (f) setFieldMergeName(f.name);
                         }}
-                        style={{ ...inp, fontSize:12, marginRight:6 }}>
+                        style={isMobile ? sel : { ...inp, fontSize:12, marginRight:6 }}>
                         <option value="">— pick a field —</option>
                         {[...fieldMergeIds].map(id => {
                           const f = fieldLibrary.find(x => x.id === id);
@@ -6043,18 +6111,23 @@ export default function App() {
                     <div style={{ flex:1, minWidth:160 }}>
                       <label style={{ ...labelT, fontSize:11 }}>Final name (edit if needed):</label>
                       <input value={fieldMergeName} onChange={e => setFieldMergeName(e.target.value)}
-                        style={{ ...inp, fontSize:12 }} placeholder="Merged field name" />
+                        style={isMobile ? inp : { ...inp, fontSize:12 }} placeholder="Merged field name" />
                     </div>
                     <div style={{ display:"flex", gap:6, alignItems:"flex-end", paddingBottom:1 }}>
                       <button onClick={runFieldMerge}
                         disabled={!fieldMergeKeepId || !fieldMergeName.trim() || fieldMerging}
-                        style={{ background: fieldMergeKeepId && fieldMergeName.trim() ? "#1a4a8a" : "#ccc",
+                        style={isMobile ? {
+                          ...softBtnT, flex:1, minHeight:42,
+                          background: fieldMergeKeepId && fieldMergeName.trim() ? theme.blue : theme.fill,
+                          color: fieldMergeKeepId && fieldMergeName.trim() ? theme.card : theme.mut,
+                          cursor: fieldMergeKeepId ? "pointer" : "default",
+                        } : { background: fieldMergeKeepId && fieldMergeName.trim() ? "#1a4a8a" : "#ccc",
                           color:"#fff", border:"none", borderRadius:5, padding:"6px 14px",
                           cursor: fieldMergeKeepId ? "pointer" : "default", fontSize:12, fontWeight:700 }}>
                         {fieldMerging ? "Merging…" : "Merge Fields"}
                       </button>
                       <button onClick={() => { setFieldMergeIds(new Set()); setFieldMergeName(""); setFieldMergeKeepId(null); }}
-                        style={{ background:"none", border:"1px solid #ccc", borderRadius:5, padding:"6px 10px",
+                        style={isMobile ? { ...softBtnT, minHeight:42, background: theme.card } : { background:"none", border:"1px solid #ccc", borderRadius:5, padding:"6px 10px",
                           cursor:"pointer", fontSize:12, color:"#666" }}>Cancel</button>
                     </div>
                   </div>
@@ -6116,11 +6189,26 @@ export default function App() {
                         </div>
                       );
                     }
+                    // Merge mode: the whole card toggles selection (same set the desktop checkboxes use).
+                    const merging  = isOwner && fieldMergeMode;
+                    const selected = merging && fieldMergeIds.has(f.id);
+                    const toggleMerge = () => setFieldMergeIds(prev => {
+                      const s = new Set(prev);
+                      s.has(f.id) ? s.delete(f.id) : s.add(f.id);
+                      return s;
+                    });
                     return (
-                      <div key={f.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"flex-start", gap:12 }}>
+                      <div key={f.id} onClick={merging ? toggleMerge : undefined} role={merging ? "checkbox" : undefined} aria-checked={merging ? selected : undefined}
+                        style={{ background: selected ? theme.tintBlue : theme.card, borderRadius:14, padding:"13px 14px", border:`1.5px solid ${selected ? theme.blue : theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"flex-start", gap:12, cursor: merging ? "pointer" : "default" }}>
+                        {merging ? (
+                          <span style={{ width:34, height:34, borderRadius:10, background: selected ? theme.blue : theme.fill, color: theme.card, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, border: selected ? "none" : `1.5px solid ${theme.dash}`, boxSizing:"border-box" }}>
+                            {selected && <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>}
+                          </span>
+                        ) : (
                         <span style={{ width:34, height:34, borderRadius:10, background: theme.tintGreen, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={theme.onGreen} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 20h18M5 20V9l7-5 7 5v11"/><path d="M9 20v-5h6v5"/></svg>
                         </span>
+                        )}
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{f.name}</div>
                           <div style={{ fontSize:11.5, color: theme.mut, marginBottom:6 }}>{f.crop || "No crop set"}</div>
@@ -6134,14 +6222,13 @@ export default function App() {
                           <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:14, fontWeight:700, color: theme.onGreen }}>
                             {isMetric ? (parseFloat(f.acres||0)*0.404686).toFixed(1) : parseFloat(f.acres||0).toFixed(1)}
                           </span>
-                          <div style={{ display:"flex", gap:6 }}>
+                          {!merging && <div style={{ display:"flex", gap:6 }}>
                             <button onClick={() => { setEditingFieldId(f.id); setEditFieldDraft({...f, traits: f.traits||[]}); }} aria-label={`Edit ${f.name}`}
                               style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color: theme.ink2, display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M14 6l4 4" /></svg>
                             </button>
-                            <button onClick={() => deleteField(f.id)} aria-label={`Delete ${f.name}`}
-                              style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color:"#c0392b", fontSize:18, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
-                          </div>
+                            <button onClick={() => deleteField(f.id)} aria-label={`Delete ${f.name}`} style={delBtnT}>×</button>
+                          </div>}
                         </div>
                       </div>
                     );
@@ -6372,7 +6459,7 @@ export default function App() {
                     <span style={{ background: p._kind==="lic" ? theme.tintGreen : theme.fill, color: p._kind==="lic" ? theme.onGreen : theme.ink2, borderRadius:6, padding:"3px 8px", fontSize:10, fontWeight:800 }}>
                       {p._kind==="lic" ? "LIC" : "NON-LIC"}
                     </span>
-                    {isOwner && <button onClick={() => deletePerson(p)} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18, marginLeft:4 }}>×</button>}
+                    {isOwner && <button onClick={() => deletePerson(p)} aria-label={`Delete ${p.name}`} style={delBtnT}>×</button>}
                   </div>
                 ))}
                 {people.length === 0 && (
@@ -6459,7 +6546,7 @@ export default function App() {
                   });
                   nameEl.value = "";
                   aphEl.value  = "75";
-                }} style={{
+                }} style={isMobile ? addBtnT() : {
                   background:"#2a5c0f", color:"#fff", border:"none", borderRadius:6,
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
@@ -6485,7 +6572,7 @@ export default function App() {
                         supabase.from("equipment").delete().eq("id", eq.id).then(({ error }) => {
                           if (error) showToast("Failed to delete equipment: " + error.message);
                         });
-                      }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18, marginLeft:4 }}>×</button>}
+                      }} aria-label={`Delete ${eq.name}`} style={delBtnT}>×</button>}
                     </div>
                   ))}
                   {equipment.length === 0 && (
@@ -6525,6 +6612,10 @@ export default function App() {
               )}
             </div>
 
+            {/* Licensed / Non-Licensed Applicators — desktop only; on mobile they live
+                under Library › People (with its own add sheet), so showing them on the
+                Equip tab too was a duplicate. */}
+            {!isMobile && <>
             {/* Licensed Applicators */}
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "14px 16px"}}>
               <div style={sectionTitleT}>Licensed Applicators</div>
@@ -6548,31 +6639,6 @@ export default function App() {
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
               </div>}
-              {isMobile ? (
-                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
-                  {licensed.map(op => (
-                    <div key={op.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
-                      <span style={{ width:38, height:38, borderRadius:11, background: theme.header, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13, fontWeight:800 }}>
-                        {op.name.split(" ").map(p=>p[0]).slice(0,2).join("").toUpperCase()}
-                      </span>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{op.name}</div>
-                        <div style={{ fontSize:11.5, color: theme.mut }}>Licensed applicator</div>
-                      </div>
-                      {isOwner && <button onClick={() => {
-                        if (!confirmDelete(op.name, "applicator")) return;
-                        setLicensed(ops=>ops.filter(x=>x.id!==op.id));
-                        supabase.from("licensed_applicators").delete().eq("id", op.id).then(({ error }) => {
-                          if (error) showToast("Failed to delete applicator: " + error.message);
-                        });
-                      }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18 }}>×</button>}
-                    </div>
-                  ))}
-                  {licensed.length === 0 && (
-                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No licensed applicators added yet.</div>
-                  )}
-                </div>
-              ) : (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
@@ -6600,7 +6666,6 @@ export default function App() {
                   )}
                 </tbody>
               </table>
-              )}
             </div>
 
             {/* Non-Licensed Applicators */}
@@ -6626,31 +6691,6 @@ export default function App() {
                   padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap"
                 }}>+ Add</button>
               </div>}
-              {isMobile ? (
-                <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
-                  {nonLicensed.map(p => (
-                    <div key={p.id} style={{ background: theme.card, borderRadius:14, padding:"13px 14px", border:`1px solid ${theme.line}`, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)", display:"flex", alignItems:"center", gap:12 }}>
-                      <span style={{ width:38, height:38, borderRadius:11, background: theme.fill, color: theme.ink2, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13, fontWeight:800 }}>
-                        {p.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}
-                      </span>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:14, fontWeight:700, color: theme.ink }}>{p.name}</div>
-                        <div style={{ fontSize:11.5, color: theme.mut }}>Non-licensed</div>
-                      </div>
-                      {isOwner && <button onClick={() => {
-                        if (!confirmDelete(p.name, "applicator")) return;
-                        setNonLicensed(ops=>ops.filter(x=>x.id!==p.id));
-                        supabase.from("non_licensed_applicators").delete().eq("id", p.id).then(({ error }) => {
-                          if (error) showToast("Failed to delete applicator: " + error.message);
-                        });
-                      }} style={{ background:"none", border:"none", cursor:"pointer", color: theme.mut, fontSize:18 }}>×</button>}
-                    </div>
-                  ))}
-                  {nonLicensed.length === 0 && (
-                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No non-licensed applicators added yet.</div>
-                  )}
-                </div>
-              ) : (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead><tr>
                   <th style={th}>Name</th>
@@ -6678,8 +6718,8 @@ export default function App() {
                   )}
                 </tbody>
               </table>
-              )}
             </div>
+            </>}
           </div>
         )}
 
@@ -6988,8 +7028,7 @@ export default function App() {
                               style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color: theme.ink2, display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M14 6l4 4" /></svg>
                             </button>
-                            <button onClick={() => deleteChem(c.id)} aria-label={`Delete ${c.name}`}
-                              style={{ width:32, height:32, borderRadius:9, background: theme.fill, border:"none", cursor:"pointer", color:"#c0392b", fontSize:18, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
+                            <button onClick={() => deleteChem(c.id)} aria-label={`Delete ${c.name}`} style={delBtnT}>×</button>
                           </div>
                         )}
                       </div>
@@ -7134,15 +7173,19 @@ export default function App() {
                 </div>
               )}
               {pestLibrary.length === 0
-                ? <p style={{ color:"#aaa", fontSize:13 }}>No pests in library yet.</p>
+                ? <p style={{ color: isMobile ? theme.mut : "#aaa", fontSize:13 }}>No pests in library yet.</p>
                 : (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                     {pestLibrary.map(p => (
-                      <span key={p.id} style={{ display:"inline-flex", alignItems:"center", gap:5, background:"#f9fdf5", border:"1.5px solid #c8dbb0", borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#2a5c0f" }}>
+                      <span key={p.id} style={isMobile
+                        ? { display:"inline-flex", alignItems:"center", gap:2, background: theme.fill, borderRadius:9, padding: isOwner ? "2px 2px 2px 11px" : "7px 11px", fontSize:13, fontWeight:700, color: theme.ink2 }
+                        : { display:"inline-flex", alignItems:"center", gap:5, background:"#f9fdf5", border:"1.5px solid #c8dbb0", borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#2a5c0f" }}>
                         {p.name}
                         {isOwner && (
-                          <button onClick={() => deletePest(p.id)}
-                            style={{ background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:14, lineHeight:1, padding:0 }}>×</button>
+                          <button onClick={() => deletePest(p.id)} aria-label={`Delete ${p.name}`}
+                            style={isMobile
+                              ? { background:"none", border:"none", cursor:"pointer", color: theme.red, fontSize:17, width:28, height:28, lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center" }
+                              : { background:"none", border:"none", cursor:"pointer", color:"#c0392b", fontSize:14, lineHeight:1, padding:0 }}>×</button>
                         )}
                       </span>
                     ))}
