@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ApplicatorMapView from "./ApplicatorMapView";
 import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 
@@ -89,6 +89,11 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
   const [reorderMode,       setReorderMode]       = useState(false);
   const [tapOrder,          setTapOrder]          = useState([]);  // field IDs in tapped sequence
   const [syncing,           setSyncing]           = useState(false);
+
+  // Mobile: opening a ticket (or going back to the queue) starts at the top of the page.
+  useEffect(() => {
+    if (isMobile) window.scrollTo(0, 0);
+  }, [selectedTicket?.id, isMobile]);
 
   const enrichFields = (selectedFields) =>
     (selectedFields || []).map(f => ({
