@@ -3353,7 +3353,7 @@ export default function App() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
   );
   // Desktop Tickets table: no. · crop · fields · acres · applicator · date · status · queue
-  const deskTicketCols = "52px 130px minmax(0,1fr) 76px minmax(0,170px) 64px 96px 34px";
+  const deskTicketCols = "48px 112px minmax(0,1fr) 72px minmax(0,150px) 60px 96px 34px";
   const queuedCount = tickets.filter(t => t.team_view && t.queue_status !== "completed").length;
   const deskNav = [
     { key:"log", label:"Tickets", go:() => setView("log"), active: view === "log" || view === "form",
@@ -5400,17 +5400,25 @@ export default function App() {
                       <div
                         onDragOver={e => e.preventDefault()}
                         onDrop={e => { e.preventDefault(); handleFmZip(e.dataTransfer.files[0]); }}
-                        style={{ border:`2px dashed ${theme.line}`, borderRadius:8, padding:"28px 20px",
-                          textAlign:"center", color: theme.mut, marginBottom:12, background: theme.fill, cursor:"pointer" }}
+                        style={{ border:`2px dashed ${theme.dash}`, borderRadius:14, padding:"30px 20px",
+                          textAlign:"center", color: theme.mut, marginBottom:4, background: theme.fieldTint, cursor:"pointer",
+                          display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
                         onClick={() => fmFileRef.current.click()}
                       >
                         {fmParsing ? (
                           <span style={{ color: theme.onGreen, fontWeight:600 }}>⏳ Parsing shapefile…</span>
                         ) : (
                           <>
-                            <div style={{ fontSize:28, marginBottom:6 }}>🗺</div>
-                            <div style={{ fontSize:13, fontWeight:600 }}>Drop shapefile .zip here or click to browse</div>
-                            <div style={{ fontSize:11, marginTop:4 }}>ZIP must contain .shp + .dbf files</div>
+                            <div style={{ width:56, height:56, borderRadius:16, background: theme.tintGreen, color: theme.onGreen, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:4 }}>
+                              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg>
+                            </div>
+                            <div style={{ fontSize:16, fontWeight:800, color: theme.ink }}>Drag &amp; drop to import</div>
+                            <div style={{ fontSize:13, color: theme.ink2, maxWidth:440 }}>Drop a zipped <b>shapefile</b> (.zip with .shp / .dbf) to import field boundaries &amp; acreage, or click to browse.</div>
+                            <div style={{ display:"flex", gap:7, marginTop:4 }}>
+                              {[".zip", ".shp", ".dbf"].map(x => (
+                                <span key={x} style={{ background: theme.card, border:`1px solid ${theme.line}`, color: theme.ink2, borderRadius:7, padding:"3px 9px", fontSize:11, fontWeight:700 }}>{x}</span>
+                              ))}
+                            </div>
                           </>
                         )}
                       </div>
@@ -6762,7 +6770,7 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <div style={{ display:"grid", gridTemplateColumns: isNarrowDesk ? "repeat(4, minmax(0,1fr))" : "2fr 1.6fr 1fr 1fr 1fr 1.3fr 1fr", gap:12, alignItems:"end" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr", gap:12, alignItems:"end" }}>
                 {[["name","Chemical Name","text"],["activeIngredient","Active Ingredient","text"],["epa","EPA #","text"],["rei","REI","text"]].map(([k,lbl,type]) => (
                   <div key={k}>
                     <label style={labelT}>{lbl}</label>
@@ -7031,7 +7039,7 @@ export default function App() {
                         return (
                           <tr key={c.id} style={{ background: theme.fieldTint }}>
                             <td style={{ ...td, boxShadow:`inset 3px 0 0 ${theme.green}` }} colSpan={8}>
-                              <div style={{ display:"grid", gridTemplateColumns: isNarrowDesk ? "repeat(4, minmax(0,1fr))" : "2fr 1.6fr 1fr 1fr 1fr 1fr 1fr auto", gap:8, alignItems:"end", padding:"6px 0" }}>
+                              <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr", gap:8, alignItems:"end", padding:"6px 0" }}>
                                 <div>
                                   <label style={{ ...labelT, fontSize:10 }}>Chemical Name</label>
                                   <input value={editChemDraft.name||""} onChange={e=>setEditChemDraft(d=>({...d,name:e.target.value}))} style={{ ...inp, fontSize:13, padding:"6px 8px" }} />
@@ -7470,9 +7478,9 @@ export default function App() {
               ) : (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
-                  <tr style={{ background: theme.fill }}>
+                  <tr>
                     {["Email","Role","Status", isOwner ? "Remove" : ""].filter(Boolean).map(h => (
-                      <th key={h} style={{ padding:"6px 8px", textAlign:"left", fontWeight:700, color: theme.onGreen, borderBottom:`1.5px solid ${theme.line}` }}>{h}</th>
+                      <th key={h} style={{ ...th, padding:"8px" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -7484,7 +7492,7 @@ export default function App() {
                       </td>
                       <td style={{ padding:"6px 8px" }}>
                         {isOwner && m.user_id !== session.user.id ? (
-                          <select value={m.role} onChange={e => changeMemberRole(m, e.target.value)} style={{ border:`1px solid ${theme.line}`, borderRadius:4, fontSize:11, padding:"2px 4px", fontFamily:"inherit" }}>
+                          <select value={m.role} onChange={e => changeMemberRole(m, e.target.value)} style={{ border:`1px solid ${theme.inputLine}`, borderRadius:7, fontSize:12, padding:"4px 6px", fontFamily:"inherit", background: theme.input, color: theme.ink }}>
                             <option value="owner">Owner</option>
                             <option value="member">Member</option>
                             <option value="applicator">Applicator</option>
