@@ -2020,6 +2020,13 @@ export default function App() {
     return () => ro.disconnect();
   }, [view, libTab, isMobile, cabDetailOpen]);
 
+  // Mobile: start each tab (and Library sub-tab) at the top. Otherwise the previous
+  // tab's scroll position carries over and the new page opens partway down, with its
+  // first items (e.g. "+ Add chemical") hidden above the fixed header.
+  useEffect(() => {
+    if (isMobile) window.scrollTo(0, 0);
+  }, [view, libTab]);
+
   const showToast = (message, type = "error") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4500);

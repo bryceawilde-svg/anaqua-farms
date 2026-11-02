@@ -118,6 +118,13 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
     return () => onDetailChange?.(false);
   }, [onStage]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Mobile: opening a ticket (or going back to the queue) starts at the top of the
+  // page. Declared after the stage effects so that on close the body-overflow
+  // cleanup above has already restored scrolling by the time this runs.
+  useEffect(() => {
+    if (isMobile) window.scrollTo(0, 0);
+  }, [selectedTicket?.id, isMobile]);
+
   const enrichFields = (selectedFields) =>
     (selectedFields || []).map(f => ({
       ...f,
