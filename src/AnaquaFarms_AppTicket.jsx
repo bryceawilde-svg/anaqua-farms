@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase, SUPABASE_URL } from "./supabaseClient";
 import { fmtAcres, fmtAcresShort, fmtTankVol, fmtGpa, fmtTemp, fmtWindSpeed, areaLabel, tankLabel, sprayRateLabel, windSpeedLabel, tempLabel, AC_TO_HA, GAL_TO_L } from "./utils/units";
 import { parseCSV, csvCell } from "./utils/csv";
 import FieldMapPicker from "./FieldMapPicker";
@@ -1064,6 +1064,30 @@ function newReiToken() {
 
 const reiPostingUrl = (token) => `${window.location.origin}/r/${token}`;
 
+// 43 base64url chars (32 bytes). Longer than a posting token because this one is a
+// credential: it pulls the full TDA record, licence numbers included.
+function newExportToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+const appsScriptSnippet = (token) => `// BoomLog TDA export — paste over the sign-in part of your Apps Script.
+// Keep this token secret: it reads your full spray records.
+const BOOMLOG_TOKEN = '${token}';
+
+function fetchBoomLogRows() {
+  const res = UrlFetchApp.fetch('${SUPABASE_URL}/functions/v1/sheets-export', {
+    method: 'post',
+    headers: { Authorization: 'Bearer ' + BOOMLOG_TOKEN },
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('BoomLog export failed: ' + res.getContentText());
+  }
+  return JSON.parse(res.getContentText()); // { headers, rows }
+}`;
+
 const BROWSER_TZ = (() => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; }
 })();
@@ -1806,6 +1830,9 @@ export default function App() {
   const [reiWindowDays,    setReiWindowDays]    = useState(30);
   const [tzDraft,          setTzDraft]          = useState("");
   const [tzSaving,         setTzSaving]         = useState(false);
+  const [exportTokens,     setExportTokens]     = useState([]);
+  const [exportWorking,    setExportWorking]    = useState(false);
+  const [revealedToken,    setRevealedToken]    = useState(null);
   const [resetAction,      setResetAction]      = useState(null);   // "fields" | "chemicals" | "account"
   const [resetConfirm,     setResetConfirm]     = useState("");
   const [resetWorking,     setResetWorking]     = useState(false);
@@ -2076,6 +2103,38 @@ export default function App() {
       .order("created_at", { ascending: false })
       .then(({ data }) => { if (data) setReiLinks(data); });
   }, [currentOrg]);
+
+  // Export tokens are owner-only by RLS, so a member's query simply comes back empty.
+  useEffect(() => {
+    if (!currentOrg) return;
+    supabase.from("export_tokens")
+      .select("id, token, label, created_at, last_used_at, expires_at, revoked_at")
+      .eq("org_id", currentOrg.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (data) setExportTokens(data); });
+  }, [currentOrg]);
+
+  const createExportToken = async () => {
+    if (!currentOrg?.id || !session?.user?.id) return;
+    setExportWorking(true);
+    const token = newExportToken();
+    const { data, error } = await supabase.from("export_tokens").insert({
+      org_id: currentOrg.id, token, created_by: session.user.id, label: "Google Sheets",
+    }).select("id, token, label, created_at, last_used_at, expires_at, revoked_at").single();
+    setExportWorking(false);
+    if (error) { showToast("Could not create export token: " + error.message); return; }
+    setExportTokens(ts => [data, ...ts]);
+    setRevealedToken(data.id);
+    showToast("Export token created. Paste the snippet into your Apps Script.", "success");
+  };
+
+  const revokeExportToken = async (id) => {
+    const { error } = await supabase.from("export_tokens")
+      .update({ revoked_at: new Date().toISOString() }).eq("id", id);
+    if (error) { showToast("Could not revoke: " + error.message); return; }
+    setExportTokens(ts => ts.map(t => t.id === id ? { ...t, revoked_at: new Date().toISOString() } : t));
+    showToast("Export token revoked.", "success");
+  };
 
   const saveOrgTimezone = async (tz) => {
     if (!tz || !currentOrg?.id) return;
@@ -7505,6 +7564,53 @@ export default function App() {
                     those shows nothing when scanned.
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Sheets export token */}
+            {isOwner && (
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitleT, marginBottom:6 }}>Sheets export</div>
+                <div style={{ ...noteT, marginBottom:12 }}>
+                  A token for the Google Sheet that pulls your TDA records. It replaces the
+                  email and password the Apps Script used to send — delete those from the script
+                  once you have switched, and change that password, since it has been sitting in
+                  the script.
+                </div>
+
+                {exportTokens.filter(t => !t.revoked_at).length === 0 && (
+                  <button onClick={createExportToken} disabled={exportWorking} style={addBtnT(!exportWorking)}>
+                    {exportWorking ? "…" : "Create export token"}
+                  </button>
+                )}
+
+                {exportTokens.filter(t => !t.revoked_at).map(t => {
+                  const shown = revealedToken === t.id;
+                  return (
+                    <div key={t.id} style={{ border:`1.5px solid ${theme.inputLine}`, borderRadius:11, padding:"12px 13px" }}>
+                      <div style={{ fontSize:11.5, fontWeight:800, color: theme.mut, textTransform:"uppercase", letterSpacing:0.5, marginBottom:5 }}>
+                        {t.last_used_at
+                          ? `Last used ${new Date(t.last_used_at).toLocaleString()}`
+                          : "Never used yet"}
+                      </div>
+                      <div style={{ fontSize:12, color: theme.ink2, wordBreak:"break-all", fontFamily:"ui-monospace, Consolas, monospace",
+                                    background: theme.fill, borderRadius:8, padding:"8px 10px" }}>
+                        {shown ? t.token : `${t.token.slice(0, 6)}${"•".repeat(24)}`}
+                      </div>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:10 }}>
+                        <button onClick={() => {
+                          navigator.clipboard?.writeText(appsScriptSnippet(t.token))
+                            .then(() => showToast("Apps Script snippet copied.", "success"))
+                            .catch(() => showToast("Could not copy — reveal the token and copy it by hand."));
+                        }} style={addBtnT(true)}>Copy Apps Script snippet</button>
+                        <button onClick={() => setRevealedToken(shown ? null : t.id)} style={softBtnT}>
+                          {shown ? "Hide" : "Reveal"}
+                        </button>
+                        <button onClick={() => revokeExportToken(t.id)} style={{ ...softBtnT, color: theme.red }}>Revoke</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
