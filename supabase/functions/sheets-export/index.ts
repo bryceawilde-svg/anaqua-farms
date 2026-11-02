@@ -1,12 +1,25 @@
+// TDA records export, pulled by the Apps Script on the Google Sheet.
+//
+// POST with `Authorization: Bearer <export token>`; the token is minted per org in
+// Account. It used to take an email and password in the request body, which meant
+// the Apps Script stored an account password and this function — which is
+// verify_jwt false — was a credential-stuffing target for every account in the
+// project. That path is gone; a token that is revoked in the UI dies immediately.
+//
+// The response shape ({ headers, rows }) is unchanged, so the sheet-writing half of
+// the Apps Script does not need to be touched.
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type, authorization",
 };
+
+const JSON_HEADERS = { ...CORS, "Content-Type": "application/json" };
 
 const HEADERS = [
   "Date", "Ticket #", "Time Start", "Time End",
@@ -30,73 +43,58 @@ function fmtTime(t: string | null | undefined): string {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+const fail = (status: number, error: string) =>
+  new Response(JSON.stringify({ error }), { status, headers: JSON_HEADERS });
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-  let email: string, password: string;
-  try {
-    ({ email, password } = await req.json());
-    if (!email || !password) throw new Error("missing credentials");
-  } catch {
-    return new Response(JSON.stringify({ error: "email and password required" }), {
-      status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+  const auth  = req.headers.get("authorization") ?? "";
+  const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  if (!/^[A-Za-z0-9_-]{32,64}$/.test(token)) {
+    return fail(401, "Send an export token as 'Authorization: Bearer <token>'. Generate one in BoomLog under Account → Sheets export.");
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-  if (authError || !authData.user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401, headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
+  const { data: row } = await db
+    .from("export_tokens")
+    .select("id, org_id, expires_at, revoked_at")
+    .eq("token", token)
+    .maybeSingle();
 
-  // Check pro plan (user OR org)
-  const { data: profile } = await supabase
-    .from("profiles")
+  const dead = !row
+    || row.revoked_at !== null
+    || (row.expires_at !== null && new Date(row.expires_at).getTime() <= Date.now());
+  if (dead) return fail(401, "This export token is no longer active.");
+
+  const orgId: string = row.org_id;
+
+  const { data: org } = await db
+    .from("organizations")
     .select("plan")
-    .eq("id", authData.user.id)
+    .eq("id", orgId)
     .single();
 
-  const { data: membership } = await supabase
-    .from("org_memberships")
-    .select("organizations(plan)")
-    .eq("user_id", authData.user.id)
-    .eq("status", "active")
-    .limit(1)
-    .single();
+  if (org?.plan !== "pro") return fail(403, "Pro plan required");
 
-  const orgPlan = (membership?.organizations as { plan?: string } | null)?.plan;
-  const isPro   = profile?.plan === "pro" || orgPlan === "pro";
-
-  if (!isPro) {
-    return new Response(JSON.stringify({ error: "Pro plan required" }), {
-      status: 403, headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
-
-  const { data: tickets, error: dbError } = await supabase
+  // Service role bypasses RLS, so every read below MUST be scoped to this token's
+  // org or the export would reach across tenants.
+  const { data: tickets, error: dbError } = await db
     .from("tickets")
     .select("*")
+    .eq("org_id", orgId)
     .order("date", { ascending: false });
 
-  if (dbError) {
-    return new Response(JSON.stringify({ error: dbError.message }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
+  if (dbError) return fail(500, dbError.message);
 
   // Ticket snapshots don't carry the formulation, so classify adjuvants by name.
-  const { data: library, error: libError } = await supabase
+  const { data: library, error: libError } = await db
     .from("chemicals")
-    .select("name, form_type");
+    .select("name, form_type")
+    .eq("org_id", orgId);
 
-  if (libError) {
-    return new Response(JSON.stringify({ error: libError.message }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
+  if (libError) return fail(500, libError.message);
 
   const adjuvants = new Set(
     (library ?? []).filter(c => c.form_type === "A").map(c => (c.name ?? "").trim().toLowerCase()),
@@ -160,7 +158,9 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ headers: HEADERS, rows }), {
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
+  // Best effort: a failed touch must not fail the export.
+  db.from("export_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.id)
+    .then(() => {}, () => {});
+
+  return new Response(JSON.stringify({ headers: HEADERS, rows }), { headers: JSON_HEADERS });
 });

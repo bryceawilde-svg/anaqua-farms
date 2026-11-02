@@ -39,7 +39,15 @@ export function buildTheme(darkMode, accent = ACCENTS[0]) {
   const header = darkMode ? mix(accent, "#000000", 0.55) : mix(accent, "#000000", 0.18);
   const onGreen = darkMode ? mix(accent, "#ffffff", 0.55) : mix(accent, "#000000", 0.18);
   const tintGreen = darkMode ? mix(accent, "#000000", 0.82) : mix(accent, "#ffffff", 0.92);
-  return { ...base, darkMode, accent, green, header, onGreen, tintGreen };
+  // Desktop office sidebar: a deep shade of the accent, with muted accent-tinted text.
+  const side = {
+    side:     mix(accent, "#000000", darkMode ? 0.74 : 0.58),
+    side2:    mix(accent, "#000000", darkMode ? 0.8 : 0.66),
+    sideInk:  mix(accent, "#ffffff", 0.62),
+    sideMut:  mix(accent, "#ffffff", 0.32),
+    sideHi:   mix(accent, "#ffffff", 0.42),
+  };
+  return { ...base, darkMode, accent, green, header, onGreen, tintGreen, ...side };
 }
 
 export const DEFAULT_THEME = buildTheme(false, ACCENTS[0]);

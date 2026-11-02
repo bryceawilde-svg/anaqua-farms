@@ -14,13 +14,17 @@ const ME_ICON = L.divIcon({
   iconAnchor: [9, 9],
 });
 
-export default function ApplicatorMapView({ fields, libraryFields = [], focusFieldId, completedFieldIds = [], onFieldClick, height = 280, borderRadius = 6 }) {
+// padBottom keeps fields clear of anything covering the foot of the map — in
+// the cab that's the details sheet you drag up over it.
+export default function ApplicatorMapView({ fields, libraryFields = [], focusFieldId, completedFieldIds = [], onFieldClick, height = 280, borderRadius = 6, padBottom = 0 }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
   const layersRef    = useRef({});  // ticket field id → L.geoJSON layer
   const libLayersRef = useRef([]);
   const onClickRef   = useRef(onFieldClick);
   onClickRef.current = onFieldClick;
+  const padRef       = useRef(padBottom);
+  padRef.current     = padBottom;
   const meMarkerRef  = useRef(null);
   const meCircleRef  = useRef(null);
   const watchIdRef   = useRef(null);
@@ -38,6 +42,16 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
       map.remove(); mapRef.current = null;
     };
+  }, []);
+
+  // The cab mounts us inside a stage whose size settles a tick after we're
+  // created, so keep Leaflet's idea of the container in step with the real one.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => mapRef.current?.invalidateSize());
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const startLocating = () => {
@@ -97,12 +111,17 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
     startLocating();
   };
 
+  const fitPad = (n) => ({
+    paddingTopLeft:     [n, n],
+    paddingBottomRight: [n, n + padRef.current],
+  });
+
   const addFieldLayer = (map, field, style, onClick) => {
     let gj; try { gj = JSON.parse(field.boundary_geojson); } catch { return null; }
     const layer = L.geoJSON(gj, { style });
     layer.bindTooltip(field.name, { sticky: true, opacity: 0.9 });
     layer.on("click", () => {
-      try { map.flyToBounds(layer.getBounds(), { padding: [40, 40], duration: 0.6 }); } catch { /* no-op */ }
+      try { map.flyToBounds(layer.getBounds(), { ...fitPad(40), duration: 0.6 }); } catch { /* no-op */ }
       onClick?.();
     });
     layer.addTo(map);
@@ -140,8 +159,9 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
     });
 
     if (allBounds.length) {
+      map.invalidateSize();   // fit against the container's real size, not a stale one
       const merged = allBounds.reduce((a, b) => a.extend(b), L.latLngBounds(allBounds[0]));
-      map.fitBounds(merged, { padding: [24, 24] });
+      map.fitBounds(merged, fitPad(24));
     }
   }, [fieldKey, libKey]); // eslint-disable-line
 
@@ -159,7 +179,7 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
       try {
         mapRef.current?.flyToBounds(
           layersRef.current[focusFieldId].getBounds(),
-          { padding: [40, 40], duration: 0.6 }
+          { ...fitPad(40), duration: 0.6 }
         );
       } catch { /* no-op */ }
     }
@@ -172,8 +192,10 @@ export default function ApplicatorMapView({ fields, libraryFields = [], focusFie
   return (
     // isolation: Leaflet's panes/controls use z-index up to 1000; contain them so the
     // map can't paint over the app's fixed header and bottom nav when scrolled.
-    <div style={{ position: "relative", isolation: "isolate" }}>
-      <div ref={containerRef} style={{ height, width: "100%", borderRadius, overflow: "hidden" }} />
+    // The height lives on the wrapper too, so callers can hand us a percentage
+    // and have it resolve against their own box (the cab's map/sheet stage).
+    <div style={{ position: "relative", isolation: "isolate", height }}>
+      <div ref={containerRef} style={{ height: "100%", width: "100%", borderRadius, overflow: "hidden" }} />
       <button type="button" onClick={onLocateClick}
         title="Show my location" aria-label="Show my location"
         style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, width: 44, height: 44,

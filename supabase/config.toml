@@ -1,0 +1,7 @@
+project_id = "mlxaljozizaarvdcssew"
+
+# The posting page is scanned by farm workers who have no account, so this
+# function must answer without an Authorization header. It is not open access:
+# it requires a live rei_links token and returns only that org's posting.
+[functions.rei-report]
+verify_jwt = false
