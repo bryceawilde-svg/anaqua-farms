@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ApplicatorMapView from "./ApplicatorMapView";
 import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 
@@ -76,7 +77,7 @@ const LIGHT_FALLBACK = {
   navOff:"#999", inputLine:"#c8dbb0",
 };
 
-export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue, farmLat, farmLng, onRefresh, isMobile, theme }) {
+export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSchedule, onReorderFields, isOwner, onPrintTicket, onToggleQueue, farmLat, farmLng, onRefresh, isMobile, theme, topInset = 0, bottomInset = 0, headerSlot = null, onDetailChange }) {
   const t_ = theme || LIGHT_FALLBACK;
   const [selectedTicket,    setSelectedTicket]    = useState(null);
   const [focusFieldId,      setFocusFieldId]      = useState(null);
@@ -84,6 +85,38 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
   const [reorderMode,       setReorderMode]       = useState(false);
   const [tapOrder,          setTapOrder]          = useState([]);  // field IDs in tapped sequence
   const [syncing,           setSyncing]           = useState(false);
+
+  // ── Mobile map/sheet stage ──────────────────────────────────────────────
+  // The map holds the top of the screen and the details ride a sheet you drag
+  // up over it (John Deere Ops Center). Three stops: peek, half, nearly full.
+  const stageRef            = useRef(null);
+  const [stageH, setStageH] = useState(0);
+  const [snap,   setSnap]   = useState(0);     // 0 peek · 1 half · 2 full
+  const [dragH,  setDragH]  = useState(null);  // live sheet height while dragging
+  const dragRef             = useRef(null);
+  const onStage             = isMobile && !!selectedTicket;
+
+  useEffect(() => {
+    if (!onStage) return;
+    const measure = () => { if (stageRef.current) setStageH(stageRef.current.clientHeight); };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [onStage]);
+
+  // The stage is fixed to the viewport, so stop the page behind it scrolling.
+  useEffect(() => {
+    if (!onStage) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [onStage]);
+
+  // Tells the app bar to hand its space over to the open ticket's header.
+  useEffect(() => {
+    onDetailChange?.(onStage);
+    return () => onDetailChange?.(false);
+  }, [onStage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enrichFields = (selectedFields) =>
     (selectedFields || []).map(f => ({
@@ -275,94 +308,120 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
   const boxStyle = { borderRadius: isMobile ? 18 : 16, border:`1px solid ${t_.line}`, overflow:"hidden", background:t_.card, boxShadow:"0 6px 18px -9px rgba(20,40,26,0.16)" };
   const boxHeadStyle = { padding: isMobile ? "7px 12px" : "10px 16px", background:t_.fill, borderBottom:`1px solid ${t_.divider}`, fontSize:11.5, fontWeight:800, color:t_.mut, letterSpacing:"0.06em" };
 
-  // Mobile: boxes run the full content width (the page already has side padding).
+  // Mobile: boxes stack inside the drag-up sheet, which supplies the padding.
   // Desktop: boxes stack in the right-hand column beside the map.
-  const boxMargin = isMobile ? "8px 0 0" : "0 0 14px";
+  const boxMargin = isMobile ? "0 0 12px" : "0 0 14px";
   const remainingAc = pendingFields.reduce((sum, f) => sum + (parseFloat(f.acres) || 0), 0).toFixed(1);
   const backToQueue = () => { setSelectedTicket(null); setFocusFieldId(null); setReorderMode(false); setTapOrder([]); };
   const sync = async () => { setSyncing(true); await onRefresh?.(); setSyncing(false); };
   const iconBtn = { width: 40, height: 40, flexShrink: 0, borderRadius: 11, border: "none", background: t_.fill, color: t_.onGreen,
     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, padding: 0 };
 
-  return (
-    <div style={{ maxWidth: isMobile ? 640 : "none", margin: "0 auto", paddingBottom: isMobile ? 16 : 40 }}>
-      {/* One compact row: back · ticket title + remaining · sync */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "2px 0 4px" : "0 0 4px" }}>
-          <button onClick={backToQueue} aria-label="Back to queue" style={iconBtn}>‹</button>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 800, fontSize: isMobile ? 16 : 19, color: t_.ink, fontFamily: "'Space Grotesk',monospace" }}>No.{ticketNum}</span>
-              {t.crop && <span style={{ fontWeight: 700, fontSize: isMobile ? 14 : 17, color: t_.ink }}>{t.crop}</span>}
-              {isTargetZone(t) && <TargetZoneBadge ticket={t} size={10} />}
-            </div>
-            <div style={{ fontSize: 12, color: t_.mut }}>
-              {pendingFields.length} field{pendingFields.length !== 1 ? "s" : ""} left · <span style={{ fontFamily: "'Space Grotesk',monospace" }}>{remainingAc} ac</span>
-            </div>
-          </div>
-          <button onClick={sync} disabled={syncing} title="Sync latest data" aria-label="Sync latest data" style={iconBtn}>⟳</button>
-        </div>
+  const machineChips = [
+    (t.galPerAcre || t.gal_per_acre) && `${t.galPerAcre || t.gal_per_acre} gal/ac`,
+    t.pressure && `${t.pressure} PSI`,
+    (t.tankSize || t.tank_size) && `${t.tankSize || t.tank_size} gal tank`,
+  ].filter(Boolean);
 
-      {/* Machine settings — mobile: one line of chips; desktop: boxed */}
-      {(t.galPerAcre || t.gal_per_acre || t.pressure || t.tankSize || t.tank_size) && (
-        <div style={{ display: "flex", gap: isMobile ? 5 : 7, flexWrap: "wrap", marginTop: 6, marginLeft: isMobile ? 0 : 50 }}>
-          {[
-            (t.galPerAcre || t.gal_per_acre) && `${t.galPerAcre || t.gal_per_acre} gal/ac`,
-            t.pressure && `${t.pressure} PSI`,
-            (t.tankSize || t.tank_size) && `${t.tankSize || t.tank_size} gal tank`,
-          ].filter(Boolean).map(v => (
-            <span key={v} style={{ background: t_.card, border: `1px solid ${t_.line}`, borderRadius: 8, padding: "4px 9px", fontSize: 12.5, fontWeight: 700, color: t_.ink, fontFamily: "'Space Grotesk',monospace", whiteSpace: "nowrap" }}>{v}</span>
+  // ── Sheet drag ──────────────────────────────────────────────────────────
+  // Peek leaves the handle, the list header and the next couple of fields
+  // showing; the map is fitted above it, so every field stays in sight.
+  const PEEK       = 190;
+  const snapHeight = (i) => (i === 0 ? PEEK : Math.round(stageH * (i === 1 ? 0.6 : 0.92)));
+  const sheetH     = dragH != null ? dragH : snapHeight(snap);
+  const dragging   = dragH != null;
+  // Buttons inside the grab strip must not start a drag.
+  const stopDrag   = (e) => e.stopPropagation();
+
+  const grabDown = (e) => {
+    if (!stageH) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = { y: e.clientY, h: sheetH, moved: false };
+    setDragH(sheetH);
+  };
+  const grabMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dy = e.clientY - d.y;
+    if (Math.abs(dy) > 4) d.moved = true;
+    setDragH(Math.min(Math.max(d.h - dy, 56), Math.round(stageH * 0.94)));
+  };
+  const grabUp = () => {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    const h = dragH != null ? dragH : d.h;
+    setDragH(null);
+    if (!d.moved) { setSnap(s => (s + 1) % 3); return; }   // a tap cycles the stops
+    const stops = [snapHeight(0), snapHeight(1), snapHeight(2)];
+    setSnap(stops.reduce((best, c, i) => (Math.abs(c - h) < Math.abs(stops[best] - h) ? i : best), 0));
+  };
+
+  // Picking a field on the map brings the list up; picking one in the list
+  // drops the sheet back down so you can see where the map flew to.
+  const focusFromMap  = (id) => { if (pendingFields.some(f => f.id === id)) { setFocusFieldId(id); if (onStage) setSnap(1); } };
+  const focusFromList = (id) => { setFocusFieldId(id); if (onStage && id) setSnap(0); };
+
+  const fieldsTitle = reorderMode
+    ? `TAP IN SPRAY ORDER (${tapOrder.length}/${pendingFields.length})`
+    : `FIELDS TO SPRAY${pendingFields.length > 0 ? ` (${pendingFields.length})` : " — ALL DONE ✓"}`;
+
+  const headBtn = { padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+    border: `1.5px solid ${t_.inputLine}`, borderRadius: 8, background: t_.card, color: t_.onGreen };
+
+  const fieldsControls = (
+    <>
+      {pendingFields.length > 1 && !reorderMode && (
+        <button onPointerDown={stopDrag} onClick={enterReorder} style={headBtn}>⇅ Prioritize</button>
+      )}
+      {reorderMode && (
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <button onPointerDown={stopDrag} onClick={exitReorder} style={{ ...headBtn, color: t_.mut }}>Cancel</button>
+          <button onPointerDown={stopDrag} onClick={saveReorder} style={{ ...headBtn, border: "none", background: t_.green, color: "#fff" }}>✓ Save Order</button>
+        </div>
+      )}
+    </>
+  );
+
+  // Header for the green app bar: the same controls the page used to carry,
+  // in white on the header green.
+  const hdrBtn = { width: 38, height: 38, flexShrink: 0, borderRadius: 12, border: "none", padding: 0,
+    background: "rgba(255,255,255,0.14)", color: "#fff", cursor: "pointer", fontFamily: "inherit",
+    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, fontWeight: 700 };
+
+  const headerContent = (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <button onClick={backToQueue} aria-label="Back to queue" style={hdrBtn}>‹</button>
+        <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.01em", fontFamily: "'Space Grotesk',monospace" }}>No.{ticketNum}</span>
+        {t.crop && <span style={{ fontSize: 17, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.crop}</span>}
+      </div>
+      {machineChips.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {machineChips.map(v => (
+            <span key={v} style={{ background: "rgba(255,255,255,0.14)", borderRadius: 9, padding: "4px 9px",
+              fontSize: 12, fontWeight: 700, fontFamily: "'Space Grotesk',monospace", whiteSpace: "nowrap" }}>{v}</span>
           ))}
         </div>
       )}
-      <div style={isMobile ? undefined : { display: "grid", gridTemplateColumns: "minmax(0,1.15fr) minmax(360px,1fr)", gap: 20, alignItems: "start", marginTop: 16 }}>
-      {/* Map — mobile: bleeds to the screen edges (cancels the page's 10px side padding) and is taller.
-          Desktop: stays in view beside the field list. */}
-      <div style={isMobile ? { margin: "8px -10px 0" } : { position: "sticky", top: 92, borderRadius: 16, overflow: "hidden", border: `1px solid ${t_.line}`, boxShadow: "0 6px 18px -9px rgba(20,40,26,0.16)" }}>
-        <ApplicatorMapView
-          fields={enriched}
-          libraryFields={fieldLibrary}
-          onFieldClick={(id) => { if (pendingFields.some(f => f.id === id)) setFocusFieldId(id); }}
-          focusFieldId={focusFieldId}
-          completedFieldIds={completedFields.map(f => f.id)}
-          height={isMobile ? "min(52vh, 440px)" : "calc(100vh - 124px)"}
-          borderRadius={0}
-        />
-      </div>
-      <div>
+    </>
+  );
 
-      {/* Fields to spray */}
-      <div style={{ margin: boxMargin, ...boxStyle }}>
-        <div style={{ ...boxHeadStyle, background: reorderMode ? (t_.tintAmber) : boxHeadStyle.background, color: reorderMode ? (t_.amber) : boxHeadStyle.color, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <span>
-            {reorderMode
-              ? `TAP IN SPRAY ORDER (${tapOrder.length}/${pendingFields.length})`
-              : `FIELDS TO SPRAY${pendingFields.length > 0 ? ` (${pendingFields.length})` : " — ALL DONE ✓"}`}
-          </span>
-          {pendingFields.length > 1 && !reorderMode && (
-            <button onClick={enterReorder}
-              style={{ padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                border: `1.5px solid ${t_.inputLine}`, borderRadius: 8,
-                background: t_.card, color: t_.onGreen }}>
-              ⇅ Prioritize
-            </button>
-          )}
-          {reorderMode && (
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={exitReorder}
-                style={{ padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                  border: `1.5px solid ${t_.inputLine}`, borderRadius: 8,
-                  background: t_.card, color: t_.mut }}>
-                Cancel
-              </button>
-              <button onClick={saveReorder}
-                style={{ padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                  border: "none", borderRadius: 8,
-                  background: t_.green, color: "#fff" }}>
-                ✓ Save Order
-              </button>
-            </div>
-          )}
-        </div>
+  const mapEl = (
+    <ApplicatorMapView
+      fields={enriched}
+      libraryFields={fieldLibrary}
+      onFieldClick={focusFromMap}
+      focusFieldId={focusFieldId}
+      completedFieldIds={completedFields.map(f => f.id)}
+      height={onStage ? "100%" : (isMobile ? "min(52vh, 440px)" : "calc(100vh - 124px)")}
+      borderRadius={0}
+      padBottom={onStage ? PEEK + 12 : 0}
+    />
+  );
+
+  const fieldRows = (
+    <>
         {pendingFields.length === 0 && (
           <div style={{ padding: "12px 14px", fontSize: 13, color: t_.mut }}>All fields completed.</div>
         )}
@@ -376,7 +435,7 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
           // In reorder mode the whole row is the tap target
           const rowClick = reorderMode
             ? () => tapField(f.id)
-            : () => setFocusFieldId(isFocused ? null : f.id);
+            : () => focusFromList(isFocused ? null : f.id);
 
           return (
             <div key={f.id}
@@ -442,8 +501,11 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
             </div>
           );
         })}
-      </div>
+    </>
+  );
 
+  const otherBoxes = (
+    <>
       {/* Completed fields — collapsible */}
       {completedFields.length > 0 && (
         <div style={{ margin: boxMargin, ...boxStyle }}>
@@ -534,7 +596,98 @@ export default function ApplicatorView({ tickets, fieldLibrary, onSaveFieldSched
           </div>
         )}
       </div>
+    </>
+  );
+
+  // ── Mobile: map on top, details on a sheet you drag up over it ───────────
+  if (onStage) {
+    return (
+      <div ref={stageRef} style={{ position: "fixed", top: topInset, left: 0, right: 0, bottom: bottomInset,
+        zIndex: 40, overflow: "hidden", background: t_.canvas || t_.card }}>
+
+        {/* The ticket's own header takes over the app's green bar */}
+        {headerSlot && createPortal(headerContent, headerSlot)}
+
+        <div style={{ position: "absolute", inset: 0 }}>{mapEl}</div>
+
+        {/* The sheet */}
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 500,
+          height: stageH ? sheetH : PEEK, background: t_.canvas || t_.card,
+          borderRadius: "22px 22px 0 0", boxShadow: "0 -10px 34px rgba(10,25,16,0.30)",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+          transition: dragging ? "none" : "height 0.28s cubic-bezier(0.32,0.72,0,1)" }}>
+
+          {/* Grab strip — drag it, or tap to step through peek / half / full */}
+          <div
+            onPointerDown={grabDown} onPointerMove={grabMove} onPointerUp={grabUp} onPointerCancel={grabUp}
+            role="button" aria-label="Resize the details panel"
+            style={{ flexShrink: 0, padding: "8px 14px 10px", touchAction: "none", cursor: dragging ? "grabbing" : "grab",
+              userSelect: "none", WebkitUserSelect: "none", borderBottom: `1px solid ${t_.divider}` }}
+          >
+            <div style={{ width: 44, height: 5, borderRadius: 999, background: t_.mut, opacity: 0.55, margin: "0 auto 10px" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              {/* The app bar carries only the ticket, so the acres left sit here */}
+              <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: "0.06em", minWidth: 0, color: reorderMode ? t_.amber : t_.mut }}>
+                {fieldsTitle}
+                {!reorderMode && pendingFields.length > 0 && (
+                  <span style={{ fontFamily: "'Space Grotesk',monospace" }}> · {remainingAc} AC</span>
+                )}
+              </div>
+              {fieldsControls}
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
+            <div style={{ background: t_.card }}>{fieldRows}</div>
+            <div style={{ padding: "12px 12px 28px" }}>{otherBoxes}</div>
+          </div>
+        </div>
       </div>
+    );
+  }
+
+  // ── Desktop: sticky map beside the detail column ─────────────────────────
+  return (
+    <div style={{ margin: "0 auto", paddingBottom: 40 }}>
+      {/* One compact row: back · ticket title + remaining · sync */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 4px" }}>
+        <button onClick={backToQueue} aria-label="Back to queue" style={iconBtn}>‹</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 800, fontSize: 19, color: t_.ink, fontFamily: "'Space Grotesk',monospace" }}>No.{ticketNum}</span>
+            {t.crop && <span style={{ fontWeight: 700, fontSize: 17, color: t_.ink }}>{t.crop}</span>}
+            {isTargetZone(t) && <TargetZoneBadge ticket={t} size={10} />}
+          </div>
+          <div style={{ fontSize: 12, color: t_.mut }}>
+            {pendingFields.length} field{pendingFields.length !== 1 ? "s" : ""} left · <span style={{ fontFamily: "'Space Grotesk',monospace" }}>{remainingAc} ac</span>
+          </div>
+        </div>
+        <button onClick={sync} disabled={syncing} title="Sync latest data" aria-label="Sync latest data" style={iconBtn}>⟳</button>
+      </div>
+
+      {machineChips.length > 0 && (
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 6, marginLeft: 50 }}>
+          {machineChips.map(v => (
+            <span key={v} style={{ background: t_.card, border: `1px solid ${t_.line}`, borderRadius: 8, padding: "4px 9px", fontSize: 12.5, fontWeight: 700, color: t_.ink, fontFamily: "'Space Grotesk',monospace", whiteSpace: "nowrap" }}>{v}</span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.15fr) minmax(360px,1fr)", gap: 20, alignItems: "start", marginTop: 16 }}>
+        <div style={{ position: "sticky", top: 92, borderRadius: 16, overflow: "hidden", border: `1px solid ${t_.line}`, boxShadow: "0 6px 18px -9px rgba(20,40,26,0.16)" }}>
+          {mapEl}
+        </div>
+        <div>
+          <div style={{ margin: boxMargin, ...boxStyle }}>
+            <div style={{ ...boxHeadStyle, background: reorderMode ? t_.tintAmber : boxHeadStyle.background, color: reorderMode ? t_.amber : boxHeadStyle.color,
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span>{fieldsTitle}</span>
+              {fieldsControls}
+            </div>
+            {fieldRows}
+          </div>
+          {otherBoxes}
+        </div>
       </div>
     </div>
   );

@@ -1892,6 +1892,9 @@ export default function App() {
   const adjuvantDebounceRef    = useRef(null);
   const headerRef              = useRef(null);
   const [headerH, setHeaderH]  = useState(74);
+  // The cab fills this slot with the open ticket's header instead of "Cab".
+  const [cabHeaderEl,  setCabHeaderEl]  = useState(null);
+  const [cabDetailOpen, setCabDetailOpen] = useState(false);
   const [aiCropSafety,        setAiCropSafety]        = useState(null);
   const [aiCropSafetyLoading, setAiCropSafetyLoading] = useState(false);
   const [aiAdjuvants,         setAiAdjuvants]         = useState(null);
@@ -1902,9 +1905,18 @@ export default function App() {
   const [chatLoading,  setChatLoading]  = useState(false);
   const chatBottomRef = useRef(null);
 
+  // The cab's ticket header lives in this bar, so its height changes with the
+  // ticket — watch the element rather than re-measuring on view changes alone.
   useEffect(() => {
-    if (isMobile && headerRef.current) setHeaderH(headerRef.current.offsetHeight);
-  }, [view, libTab, isMobile]);
+    const el = headerRef.current;
+    if (!isMobile || !el) return;
+    const measure = () => setHeaderH(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [view, libTab, isMobile, cabDetailOpen]);
 
   const showToast = (message, type = "error") => {
     setToast({ message, type });
@@ -3415,6 +3427,10 @@ export default function App() {
         // Safe-area inset: installed to the home screen, iOS draws under a
         // black-translucent status bar (index.html), so the title would sit under the clock.
         <div ref={headerRef} style={{ position:"fixed", top:0, left:0, right:0, zIndex:100, background: theme.header, padding:"calc(14px + env(safe-area-inset-top)) 18px 16px", color:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap" }}>
+          {view === "applicator" && cabDetailOpen ? (
+            // Filled by ApplicatorView: back · ticket · sync, and the machine chips.
+            <div ref={setCabHeaderEl} style={{ flex:1, minWidth:0 }} />
+          ) : (
           <div>
             <div style={{ fontSize:23, fontWeight:800, letterSpacing:"-0.01em" }}>
               {view === "form" ? (editingId ? "Edit Ticket" : "New Ticket")
@@ -3434,6 +3450,7 @@ export default function App() {
                 : null}
             </div>
           </div>
+          )}
           {view === "form" ? (
             <button onClick={() => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); }}
               style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", borderRadius:11, cursor:"pointer" }}>
@@ -3580,6 +3597,12 @@ export default function App() {
             )}
             isMobile={isMobile}
             theme={theme}
+            // The cab's ticket detail is a fixed map/sheet stage — it needs to
+            // know where the header ends and the bottom nav starts.
+            headerSlot={cabHeaderEl}
+            onDetailChange={setCabDetailOpen}
+            topInset={isMobile ? headerH : 0}
+            bottomInset={isMobile && !isViewer ? "calc(58px + max(22px, env(safe-area-inset-bottom)))" : "env(safe-area-inset-bottom)"}
           />
         )}
 
