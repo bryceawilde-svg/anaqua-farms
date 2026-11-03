@@ -6,6 +6,9 @@ import FieldMapPicker from "./FieldMapPicker";
 import BoundaryAssignMap from "./BoundaryAssignMap";
 import ApplicatorView from "./ApplicatorView";
 import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
+import { SetupWizard, GetStartedCard, EmptyLibrary } from "./Onboarding";
+import { buildSetupSteps } from "./utils/setupSteps";
+import HelpDrawer from "./HelpDrawer";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
 import { QRCodeSVG } from "qrcode.react";
@@ -60,19 +63,6 @@ function rGrid(mobileCols, desktopCols, isMobile) {
   return `repeat(${cols}, 1fr)`;
 }
 
-const DEFAULT_FIELDS = [
-  { id: 1,  name: "North Field A",  acres: 42.5, crop: "Cotton"  },
-  { id: 2,  name: "North Field B",  acres: 38.0, crop: "Cotton"  },
-  { id: 3,  name: "South Field 1",  acres: 55.2, crop: "Corn"    },
-  { id: 4,  name: "South Field 2",  acres: 61.8, crop: "Corn"    },
-  { id: 5,  name: "East Pasture",   acres: 29.0, crop: "Sorghum" },
-  { id: 6,  name: "West Pasture",   acres: 33.5, crop: "Sorghum" },
-  { id: 7,  name: "River Bottom",   acres: 48.0, crop: "Cotton"  },
-  { id: 8,  name: "Ridge Top",      acres: 22.3, crop: "Fallow"  },
-  { id: 9,  name: "Front 40",       acres: 40.0, crop: "Cotton"  },
-  { id: 10, name: "Back 80",        acres: 80.0, crop: "Corn"    },
-];
-
 const WALES_ORDER  = ["W","A","L","E","S","WDG","WP","D"];
 
 // ── GMO Trait × Herbicide Tolerance Reference ────────────────────────────────
@@ -117,24 +107,6 @@ const FORM_LABELS  = {
   L:"Liquid Flowable / SC", E:"Emulsifiable Concentrate (EC)", S:"Soluble Liquid (SL)",
   WDG:"Water Dispersible Granule / DF", WP:"Wettable Powder", D:"Dry Flowable", A:"Adjuvant / Surfactant",
 };
-
-const DEFAULT_CHEMICALS = [
-  { id: 1,  name: "Roundup PowerMAX 3", epa: "524-537",    rei: "4 hours",  unit: "oz", formType: "S",   activeIngredient: "Glyphosate, potassium salt 48.7%" },
-  { id: 2,  name: "Atrazine 4L",        epa: "100-816",    rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "Atrazine 42.2%" },
-  { id: 3,  name: "2,4-D Amine 4",      epa: "62719-17",   rei: "48 hours", unit: "oz", formType: "L",   activeIngredient: "2,4-D, dimethylamine salt 46.3%" },
-  { id: 4,  name: "Bicep II Magnum",    epa: "100-1077",   rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "S-metolachlor 33.0%, Atrazine 26.1%" },
-  { id: 5,  name: "Headline SC",        epa: "7969-187",   rei: "12 hours", unit: "oz", formType: "L",   activeIngredient: "Pyraclostrobin 23.6%" },
-  { id: 6,  name: "Lorsban 4E",         epa: "62719-220",  rei: "24 hours", unit: "oz", formType: "E",   activeIngredient: "Chlorpyrifos 44.9%" },
-  { id: 7,  name: "Treflan HFP",        epa: "62719-176",  rei: "24 hours", unit: "oz", formType: "E",   activeIngredient: "Trifluralin 43.0%" },
-];
-
-const DEFAULT_EQUIPMENT = [
-  { id: 1, name: "New 4440 Sprayer", acresPerHour: 75 },
-  { id: 2, name: "8R370 Tractor",   acresPerHour: 75 },
-];
-
-const DEFAULT_LICENSED = [{ id:1, name:"Glenn Wilde 0186663", license:"" }];   // { id, name, license }
-const DEFAULT_NONLICENSED = [{ id:1, name:"Bryce" }]; // { id, name }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const OZ_PER_GAL = 128;
@@ -913,6 +885,20 @@ function downloadChemLibraryCSV(chemicals, orgName) {
   const a    = document.createElement("a");
   a.href = url;
   a.download = `${(orgName || "Farm").replace(/\s+/g,"_")}_Chemical_Library_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Blank CSV carrying exactly the columns handleChemCSV reads, so a list filled in
+// off the labels imports with no column mapping. Header only, on purpose: an
+// example row would import as a real chemical, and this library feeds filed records.
+function downloadChemTemplateCSV() {
+  const header = ["Chemical Name","EPA #","REI","Unit","Formulation Type","Container Size","Active Ingredient"];
+  const blob = new Blob([header.map(csvCell).join(",") + "\n"], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = "BoomLog_Chemical_Library_TEMPLATE.csv";
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -1836,6 +1822,11 @@ export default function App() {
   const [resetAction,      setResetAction]      = useState(null);   // "fields" | "chemicals" | "account"
   const [resetConfirm,     setResetConfirm]     = useState("");
   const [resetWorking,     setResetWorking]     = useState(false);
+  // First-run setup. wizardOpen is decided once the org and its libraries have
+  // loaded (see the effect below) so an established org never sees the wizard.
+  const [wizardOpen,       setWizardOpen]       = useState(false);
+  const [wizardSkipped,    setWizardSkipped]    = useState(false);
+  const [helpOpen,         setHelpOpen]         = useState(false);
 
   const [fieldLibrary,  setFieldLibrary]  = useState([]);
   const [chemicals,     setChemicals]     = useState([]);
@@ -1928,7 +1919,35 @@ export default function App() {
   });
 
   // ── Form state
-  const blank = () => ({
+  // The applicator and sprayer this org last actually filed a ticket with, kept
+  // per org on this device. It replaces the hardcoded names that used to sit in
+  // blank(): a remembered choice is one someone here made, and it's re-checked
+  // against the current library before being offered again.
+  const lastUsedKey = () => `boomlog_last_used_${currentOrg?.id || "none"}`;
+  const readLastUsed = () => {
+    try { return JSON.parse(localStorage.getItem(lastUsedKey())) || {}; }
+    catch { return {}; }
+  };
+  const rememberLastUsed = (t) => {
+    try {
+      localStorage.setItem(lastUsedKey(), JSON.stringify({
+        equipmentType: t.equipmentType || "",
+        licensedApplicant: t.licensedApplicant || "",
+        licensedApplicantLicense: t.licensedApplicantLicense || "",
+      }));
+    } catch { /* private browsing, or storage full — the defaults just stay blank */ }
+  };
+
+  const blank = () => {
+    const last = readLastUsed();
+    // Only offer a remembered name that is still in the library; otherwise fall
+    // back to the single obvious choice, and otherwise to nothing. These land on
+    // a filed TDA record, so a blank the user must fill beats a guess.
+    const lastEquip = equipment.find(e => e.name === last.equipmentType);
+    const lastLic   = licensed.find(l => l.name === last.licensedApplicant);
+    const equip = lastEquip || (equipment.length === 1 ? equipment[0] : null);
+    const lic   = lastLic   || (licensed.length === 1  ? licensed[0]  : null);
+    return {
     date: new Date().toISOString().slice(0,10),
     timeStart: (() => {
       const d = new Date(); d.setHours(d.getHours() + 1);
@@ -1948,14 +1967,15 @@ export default function App() {
     targetZonePct: "28",
     primeBoom: false,
     flushCleanout: false,
-    equipmentType: "New 4440 Sprayer",
+    equipmentType: equip?.name || "",
     equipmentTypeCustom: "",
-    licensedApplicant: "Glenn Wilde 0186663",
-    licensedApplicantLicense: "",
-    nonLicensedApplicant: "Bryce",
+    licensedApplicant: lic?.name || "",
+    licensedApplicantLicense: lic?.license || "",
+    nonLicensedApplicant: "",
     notes: "",
     chemRows: [],
-  });
+    };
+  };
   const [form,        setForm]        = useState(blank());
   const [fieldSearch,     setFieldSearch]     = useState("");
   const [fieldCropFilter, setFieldCropFilter] = useState("");
@@ -2212,6 +2232,83 @@ export default function App() {
   useEffect(() => {
     if (isViewer) setView("applicator");
   }, [isViewer]); // eslint-disable-line
+
+  // ── First-run setup ─────────────────────────────────────────────────────────
+  // Progress is derived from real row counts rather than a stored flag, so the
+  // checklist can't claim a step is done when the library behind it is empty.
+  const setupSteps = React.useMemo(() => buildSetupSteps({
+    fields:    fieldLibrary.length,
+    chemicals: chemicals.length,
+    equipment: equipment.length,
+    licensed:  licensed.length,
+    tickets:   tickets.length,
+  }), [fieldLibrary.length, chemicals.length, equipment.length, licensed.length, tickets.length]);
+  const setupComplete = setupSteps.every(s => s.done);
+  const showSetupCard = isOwner && !setupComplete && !orgFeatures.setupHidden;
+
+  // The wizard is only for a genuinely untouched org — an established one is
+  // never interrupted by it, whether or not it has the flag.
+  useEffect(() => {
+    if (dbLoading || !currentOrg || !isOwner || wizardSkipped) return;
+    if (orgFeatures.setupDone) return;
+    const untouched = !fieldLibrary.length && !chemicals.length && !equipment.length
+      && !licensed.length && !tickets.length;
+    if (untouched) setWizardOpen(true);
+  }, [dbLoading, currentOrg?.id, isOwner, orgFeatures.setupDone, wizardSkipped]); // eslint-disable-line
+
+  const markSetupDone = async (patch) => {
+    const next = { ...orgFeatures, ...patch };
+    const { error } = await supabase.from("organizations").update({ features: next }).eq("id", currentOrg.id);
+    if (error) { showToast("Couldn't save that: " + error.message); return; }
+    setCurrentOrg(prev => ({ ...prev, features: next }));
+  };
+
+  // Everything the wizard collected, saved in one pass. Each library write is
+  // reported on its own so a failure names the thing that didn't land.
+  const completeWizard = async (data) => {
+    const patch = {
+      unit_system: data.unitSystem,
+      crops: data.crops,
+      features: { ...orgFeatures, setupDone: true },
+    };
+    if (data.farmLat != null) {
+      patch.farm_zip = data.farmZip;
+      patch.farm_lat = data.farmLat;
+      patch.farm_lng = data.farmLng;
+    }
+    const { error } = await supabase.from("organizations").update(patch).eq("id", currentOrg.id);
+    if (error) { showToast("Couldn't save your setup: " + error.message); return; }
+    setCurrentOrg(prev => ({ ...prev, ...patch }));
+
+    if (data.equipment) {
+      const rec = { id: Date.now(), name: data.equipment.name, acresPerHour: data.equipment.acresPerHour };
+      setEquipment([rec]);
+      const { error: eqErr } = await supabase.from("equipment").upsert({
+        id: rec.id, name: rec.name, acres_per_hour: rec.acresPerHour,
+        user_id: session.user.id, org_id: currentOrg.id,
+      });
+      if (eqErr) showToast("The sprayer didn't save: " + eqErr.message);
+    }
+    if (data.licensed) {
+      const rec = { id: Date.now() + 1, name: data.licensed.name, license: data.licensed.license };
+      setLicensed([rec]);
+      const { error: licErr } = await supabase.from("licensed_applicators").upsert({
+        ...rec, user_id: session.user.id, org_id: currentOrg.id,
+      });
+      if (licErr) showToast("The applicator didn't save: " + licErr.message);
+    }
+
+    setWizardOpen(false);
+    setView(data.destination === "fields" ? "fieldMgr" : "log");
+  };
+
+  // Checklist "Go" targets map onto the shell's own views.
+  const goToSetupStep = (target) => {
+    if (target === "newTicket") { setForm(blank()); setEditingId(null); setView("form"); return; }
+    if (target === "people")    { setView("equipMgr"); setLibTab("people"); return; }
+    if (target === "equipMgr")  { setView("equipMgr"); setLibTab("equip");  return; }
+    setView(target);
+  };
 
   const toggleTeamView = async (ticketId, current) => {
     const next = !current;
@@ -2676,6 +2773,7 @@ export default function App() {
       : [finalTicket, ...prev.filter(x => x.id !== finalTicket.id)]);
     showToast(`Ticket #${String(assignedTicketNumber || "").padStart(3, "0")} ${isEdit ? "updated" : "saved"}`, "success");
 
+    rememberLastUsed(finalTicket);
     setForm(blank());
     setManualTank(false);
     setManualGpa(false);
@@ -3535,6 +3633,19 @@ export default function App() {
 
   if (dbLoading) return splash;
 
+  // First run: the wizard owns the screen until it's finished or skipped.
+  if (wizardOpen) return (
+    <SetupWizard
+      theme={theme}
+      isMobile={isMobile}
+      orgName={currentOrg?.name || ""}
+      cropOptions={CROPS_LIST}
+      initial={{ farmZip: currentOrg?.farm_zip || "", unitSystem: currentOrg?.unit_system || "imperial", crops: orgCrops }}
+      onComplete={completeWizard}
+      onSkip={() => { setWizardSkipped(true); setWizardOpen(false); setView("log"); }}
+    />
+  );
+
   // Members (Account): shared by the desktop table and the mobile list.
   const changeMemberRole = async (m, newRole) => {
     const { error } = await supabase.from("org_memberships").update({ role: newRole }).eq("id", m.id);
@@ -3585,7 +3696,7 @@ export default function App() {
   const cancelForm = () => { setForm(blank()); setEditingId(null); setManualTank(false); setManualGpa(false); setAcresOverride(""); setShowAcresInput(false); setView("log"); };
   const deskPage = view === "form" ? [editingId ? "Edit Ticket" : "New Ticket",
         editingId ? `Editing · No. ${String(tickets.find(t => t.id === editingId)?.ticketNumber || "").padStart(3, "0")}` : `Draft · No. ${nextTicketNo}`]
-    : view === "log" ? ["Tickets", `${currentOrg?.name || "Anaqua Farms"} · ${tickets.length} record${tickets.length !== 1 ? "s" : ""}`]
+    : view === "log" ? ["Tickets", `${currentOrg?.name || "Your farm"} · ${tickets.length} record${tickets.length !== 1 ? "s" : ""}`]
     : view === "applicator" ? [isViewer ? "Applications" : "Cab", `${queuedCount} queued · live application queue`]
     : view === "fieldMgr" ? ["Fields", "Field library, boundaries & imports"]
     : view === "chemMgr" ? ["Chemicals", "Chemical library & target pests"]
@@ -3632,7 +3743,7 @@ export default function App() {
                 ? (editingId
                     ? `Editing · No. ${String(tickets.find(t=>t.id===editingId)?.ticketNumber || "").padStart(3,"0")}`
                     : `Draft · No. ${String((Math.max(0, ...tickets.map(t=>t.ticketNumber||0)) + 1)).padStart(3,"0")}`)
-                : view === "log" ? `${currentOrg?.name || "Anaqua Farms"} · ${tickets.length} record${tickets.length!==1?"s":""}`
+                : view === "log" ? `${currentOrg?.name || "Your farm"} · ${tickets.length} record${tickets.length!==1?"s":""}`
                 : view === "applicator" ? `${tickets.filter(t=>t.team_view && t.queue_status !== "completed").length} queued · tap a ticket to spray`
                 : null}
             </div>
@@ -3643,17 +3754,29 @@ export default function App() {
               style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", fontSize:13, fontWeight:700, padding:"8px 14px", borderRadius:11, cursor:"pointer" }}>
               Cancel
             </button>
-          ) : (isPro && !isViewer) ? (
-            // Advisor entry on mobile — the desktop floating bubble would sit on the bottom nav.
-            <button onClick={() => setChatOpen(true)} aria-label="Open advisor chat" title="Application Sector Advisor"
-              style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", width:40, height:40, borderRadius:12,
-                cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z" />
-                <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" strokeWidth="2.6" />
-              </svg>
-            </button>
-          ) : null}
+          ) : (
+            // Help, plus the advisor entry on pro — the desktop floating bubble
+            // would sit on the bottom nav.
+            <div style={{ display:"flex", gap:7, flexShrink:0 }}>
+              <button onClick={() => setHelpOpen(true)} aria-label="Open help" title="How to use BoomLog"
+                style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", width:40, height:40, borderRadius:12,
+                  cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.4"/><path d="M12 17h.01" strokeWidth="2.6"/>
+                </svg>
+              </button>
+              {isPro && !isViewer && (
+                <button onClick={() => setChatOpen(true)} aria-label="Open advisor chat" title="Application Sector Advisor"
+                  style={{ background:"rgba(255,255,255,0.14)", border:"none", color:"#fff", width:40, height:40, borderRadius:12,
+                    cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z" />
+                    <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" strokeWidth="2.6" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
           {/* Library sub-nav — lives in the header, right under the "Library" title */}
           {["fieldMgr","equipMgr","chemMgr"].includes(view) && (
             <div style={{ display:"flex", gap:6, width:"100%", marginTop:12 }}>
@@ -3686,7 +3809,7 @@ export default function App() {
           {!isNarrowDesk && (
             <div style={{ minWidth:0 }}>
               <div style={{ fontSize:16, fontWeight:800, color:"#fff", letterSpacing:"-0.01em" }}>BoomLog</div>
-              <div style={{ fontSize:10.5, color: theme.sideMut, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>Office · {currentOrg?.name || "Anaqua Farms"}</div>
+              <div style={{ fontSize:10.5, color: theme.sideMut, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>Office{currentOrg?.name ? ` · ${currentOrg.name}` : ""}</div>
             </div>
           )}
         </div>
@@ -3734,6 +3857,14 @@ export default function App() {
           <div style={{ fontSize:19, fontWeight:800, letterSpacing:"-0.01em", color: theme.ink }}>{deskPage[0]}</div>
           {deskPage[1] && <div style={{ fontSize:12, color: theme.mut, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{deskPage[1]}</div>}
         </div>
+        <button onClick={() => setHelpOpen(true)} title="How to use BoomLog" aria-label="Open help"
+          style={{ display:"flex", alignItems:"center", gap:7, background: theme.fill, color: theme.ink2,
+            border:`1px solid ${theme.line}`, borderRadius:11, padding:"10px 14px", fontSize:13.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.4"/><path d="M12 17h.01" strokeWidth="2.6"/>
+          </svg>
+          Help
+        </button>
         {isPro && !isViewer && (
           <button onClick={() => setChatOpen(o => !o)} title="Application Sector Advisor" aria-label="Open advisor chat"
             style={{ display:"flex", alignItems:"center", gap:7, background: chatOpen ? theme.tintGreen : theme.fill, color: chatOpen ? theme.onGreen : theme.ink2,
@@ -4835,10 +4966,24 @@ export default function App() {
           // the screen edges, so a ticket doesn't change width when it's opened.
           <div style={isMobile ? { margin:"0 -6px" } : undefined}>
 
+            {showSetupCard && (
+              <div style={isMobile ? { margin:"0 6px" } : undefined}>
+                <GetStartedCard
+                  theme={theme}
+                  isMobile={isMobile}
+                  steps={setupSteps}
+                  onGo={goToSetupStep}
+                  onDismiss={() => markSetupDone({ setupHidden: true })}
+                />
+              </div>
+            )}
+
             {tickets.length === 0 ? (
               <div style={{ textAlign:"center", padding: isMobile ? "36px 24px" : "56px 24px", color: theme.mut, fontSize:13.5, lineHeight:1.5, border:`1.5px dashed ${theme.dash}`, borderRadius:16, margin:"4px 2px" }}>
                 <div style={{ fontSize:15, fontWeight:800, color: theme.ink, marginBottom:4 }}>No tickets yet</div>
-                {isMobile
+                {fieldLibrary.length === 0 || chemicals.length === 0 ? (
+                  <>A ticket is built from your fields and chemicals — add those first and this fills up.</>
+                ) : isMobile
                   ? <>Tap <span style={{ fontWeight:700, color: theme.onGreen }}>+</span> below to create your first one.</>
                   : <>Use <span style={{ fontWeight:700, color: theme.onGreen }}>New ticket</span> at the top right to create your first one.</>}
               </div>
@@ -6475,6 +6620,20 @@ export default function App() {
                 </div>
               )}
 
+              {fieldLibrary.length === 0 && (
+                <EmptyLibrary
+                  theme={theme} isMobile={isMobile}
+                  title="No fields yet"
+                  blurb="Fields are what a ticket is written against. Importing is almost always quicker than typing — a boundary file brings the acreage across with it."
+                  actions={isOwner ? [
+                    { label: "Import a boundary file", desc: "A shapefile .zip from FarmMobile, Climate, Granular or the FSA",
+                      onClick: () => fmFileRef.current?.click() },
+                    { label: "Import a CSV", desc: "Any spreadsheet with a field name and acreage",
+                      onClick: () => fieldFileRef.current?.click() },
+                  ] : []}
+                />
+              )}
+
               {isMobile ? (
                 <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
                   {fieldLibrary.filter(f => !fieldCropFilter || f.crop === fieldCropFilter).map(f => {
@@ -6762,15 +6921,16 @@ export default function App() {
             const name = addPersonDraft.name.trim();
             if (!name) return;
             if (addPersonDraft.licensed) {
-              const nextId = licensed.length ? Math.max(...licensed.map(o=>o.id))+1 : 1;
-              const rec = { id: nextId, name, license: addPersonDraft.license.trim() };
+              // id is a global primary key with no sequence, so it can't be numbered
+              // from this org's own rows — a new org would start at 1 and collide
+              // with another farm's record. Date.now() is what chemicals already use.
+              const rec = { id: Date.now(), name, license: addPersonDraft.license.trim() };
               setLicensed(ops => [...ops, rec]);
               supabase.from("licensed_applicators").upsert({ ...rec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
                 if (error) showToast("Failed to save applicator: " + error.message);
               });
             } else {
-              const nextId = nonLicensed.length ? Math.max(...nonLicensed.map(o=>o.id))+1 : 1;
-              const rec = { id: nextId, name };
+              const rec = { id: Date.now(), name };
               setNonLicensed(ops => [...ops, rec]);
               supabase.from("non_licensed_applicators").upsert({ ...rec, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
                 if (error) showToast("Failed to save applicator: " + error.message);
@@ -6804,7 +6964,17 @@ export default function App() {
                   </div>
                 ))}
                 {people.length === 0 && (
-                  <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13, gridColumn:"1 / -1" }}>No applicators added yet.</div>
+                  <EmptyLibrary
+                    theme={theme} isMobile={isMobile}
+                    title="No applicators yet"
+                    blurb="Every ticket names who made the application. Add the licensed applicator with the number exactly as printed on the license — it goes onto each record you file."
+                    actions={isOwner ? [{
+                      label: "Add an applicator",
+                      desc: "Licensed, or an operator running under supervision",
+                      onClick: () => setAddPersonOpen(true),
+                      primary: true,
+                    }] : []}
+                  />
                 )}
               </div>
 
@@ -6881,8 +7051,7 @@ export default function App() {
                   const name = nameEl.value.trim();
                   if (!name) return alert("Enter an equipment name.");
                   const aph = parseFloat(aphEl.value) || 75;
-                  const nextId = equipment.length ? Math.max(...equipment.map(e=>e.id))+1 : 1;
-                  const newEquipRec = { id: nextId, name, acresPerHour: aph };
+                  const newEquipRec = { id: Date.now(), name, acresPerHour: aph };
                   setEquipment(eq => [...eq, newEquipRec]);
                   supabase.from("equipment").upsert({ id: newEquipRec.id, name: newEquipRec.name, acres_per_hour: aph, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
                     if (error) showToast("Failed to save equipment: " + error.message);
@@ -6916,7 +7085,13 @@ export default function App() {
                     </div>
                   ))}
                   {equipment.length === 0 && (
-                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13, gridColumn:"1 / -1" }}>No equipment added yet.</div>
+                    <EmptyLibrary
+                      theme={theme} isMobile={isMobile}
+                      title="No equipment yet"
+                      blurb={isOwner
+                        ? "Add each sprayer you run, using the form above. Acres per hour is what spaces out the start and finish time for every field on a ticket — 75 is a fair opening guess, and tickets will tell you soon enough."
+                        : "No sprayers have been added to this farm yet. An owner can add them here."}
+                    />
                   )}
                 </div>
               )}
@@ -6942,6 +7117,8 @@ export default function App() {
               </div>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                 <button onClick={() => chemFileRef.current.click()} style={{ ...addBtnT(), minHeight:40, padding:"0 18px" }}>📂 Upload CSV</button>
+                <button onClick={downloadChemTemplateCSV} title="Blank CSV with the columns an import expects"
+                  style={{ ...addBtnT(), minHeight:40, padding:"0 18px" }}>⬇ Template</button>
                 <button onClick={() => downloadChemLibraryCSV(chemicals, currentOrg?.name)} disabled={!chemicals.length} style={{
                   ...softBtnT, minHeight:40, padding:"0 18px", border:`1.5px solid ${theme.inputLine}`, background: theme.card, color: theme.onGreen,
                   cursor: chemicals.length ? "pointer" : "not-allowed", opacity: chemicals.length ? 1 : 0.5
@@ -7230,7 +7407,17 @@ export default function App() {
                     );
                   })}
                   {chemicals.length === 0 && (
-                    <div style={{ textAlign:"center", padding:24, color: theme.mut, fontSize:13 }}>No chemicals added yet.</div>
+                    <EmptyLibrary
+                      theme={theme} isMobile={isMobile}
+                      title="No chemicals yet"
+                      blurb="This is the library a ticket draws its tank mix from. Copy each product off its own label — the EPA number and the REI end up on a filed record, so don't work from memory."
+                      actions={isOwner ? [
+                        { label: "Import a CSV", desc: "Quickest if you already have a product list",
+                          onClick: () => chemFileRef.current?.click() },
+                        { label: "Download the template", desc: "A blank CSV with the right columns",
+                          onClick: downloadChemTemplateCSV },
+                      ] : []}
+                    />
                   )}
                 </div>
               ) : (
@@ -7448,6 +7635,31 @@ export default function App() {
             )}
 
             <div style={isMobile ? undefined : { columnCount: isNarrowDesk ? 1 : 2, columnGap:18 }}>
+
+            {/* Setup guide — the way back in once the wizard is finished or the
+                checklist dismissed, so neither is a one-way door. */}
+            {isOwner && (
+              <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
+                <div style={{ ...sectionTitleT, marginBottom:6 }}>Setup Guide</div>
+                <div style={{ ...noteT, marginBottom:10 }}>
+                  Run through the farm basics again, or bring back the Get Started checklist on your Tickets screen.
+                </div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  <button onClick={() => setWizardOpen(true)} style={softBtnT}>Run setup guide</button>
+                  {orgFeatures.setupHidden && !setupComplete && (
+                    <button onClick={() => markSetupDone({ setupHidden: false })} style={softBtnT}>
+                      Show the checklist
+                    </button>
+                  )}
+                </div>
+                {!setupComplete && (
+                  <div style={{ ...noteT, marginTop:9 }}>
+                    {setupSteps.filter(s => !s.done).length} of {setupSteps.length} steps still to do.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Appearance */}
             <div style={{ ...cardT, padding: isMobile ? "10px 12px" : "14px 18px", marginBottom:10 }}>
               <div style={{ ...sectionTitleT, marginBottom:10 }}>Appearance</div>
@@ -8231,6 +8443,10 @@ export default function App() {
             );
           })}
         </div>
+      )}
+
+      {helpOpen && (
+        <HelpDrawer theme={theme} isMobile={isMobile} view={view} onClose={() => setHelpOpen(false)} />
       )}
 
     </div>
