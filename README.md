@@ -50,6 +50,30 @@ npm run dev
 a build. Deploys are static — `netlify.toml` has the SPA redirect and the
 service-worker headers.
 
+## Deploying
+
+The site is static on Netlify; `netlify.toml` has the SPA redirect, the service-worker
+headers, and a 301 from the `*.netlify.app` alias to `boomlog.app`.
+
+That redirect matters more than it looks. The alias serves the identical build, but a
+browser treats it as a separate origin with its own localStorage, supabase session and
+service worker — so a confirmation link that lands there signs the user in somewhere
+`boomlog.app` can't see, and their farm looks empty when they type the real address.
+
+Two settings live in the Supabase dashboard rather than in this repo, and both have to
+point at `https://boomlog.app`:
+
+| Where | Setting |
+|---|---|
+| Authentication → URL Configuration | **Site URL** — the fallback every auth email uses |
+| Authentication → URL Configuration | **Redirect URLs** — allow-list; `emailRedirectTo` is ignored unless the URL matches |
+| Authentication → Emails → SMTP | **Custom SMTP** on a domain you own |
+
+The default sender (`noreply@mail.app.supabase.io`) is a shared address Supabase rates
+as development-only, and signup confirmations from it land in spam. Custom SMTP from
+`boomlog.app`, with SPF/DKIM/DMARC on the domain, is what fixes that — and it makes the
+sender match the link domain, which is most of the spam score.
+
 ## How it's put together
 
 - **React 19 + Vite 8**, no CSS framework — styling is inline-style objects built from design tokens in `src/utils/theme.js` (light/dark, four accents).
