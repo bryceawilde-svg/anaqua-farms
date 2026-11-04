@@ -8,6 +8,7 @@ import ApplicatorView from "./ApplicatorView";
 import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 import { SetupWizard, GetStartedCard, EmptyLibrary } from "./Onboarding";
 import { buildSetupSteps } from "./utils/setupSteps";
+import { authRedirectTo } from "./utils/site";
 import HelpDrawer from "./HelpDrawer";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
@@ -2207,9 +2208,16 @@ export default function App() {
 
   async function handleSignUp() {
     setAuthWorking(true); setAuthError("");
-    const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    // emailRedirectTo pins the confirmation link to boomlog.app. Supabase only
+    // honours it if the URL is on the project's redirect allow-list; otherwise it
+    // quietly falls back to the Site URL, so both have to be set in the dashboard.
+    const { error } = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+      options: { emailRedirectTo: authRedirectTo() },
+    });
     if (error) setAuthError(error.message);
-    else setAuthError("Check your email for a confirmation link.");
+    else setAuthError("Check your email for a confirmation link — it may land in spam.");
     setAuthWorking(false);
   }
 
@@ -2248,13 +2256,20 @@ export default function App() {
 
   // The wizard is only for a genuinely untouched org — an established one is
   // never interrupted by it, whether or not it has the flag.
+  //
+  // This re-checks on every render rather than only when the org id appears. The
+  // org-create screen sets currentOrg straight from the RPC instead of reloading
+  // it, so "the org exists" and "the libraries have settled" land on different
+  // renders; keyed only on the org, this missed its one window and the wizard
+  // showed up on the next visit instead. wizardSkipped and setupDone are what
+  // stop it coming back, so widening the deps can't make it nag.
   useEffect(() => {
-    if (dbLoading || !currentOrg || !isOwner || wizardSkipped) return;
+    if (dbLoading || !currentOrg || !isOwner || wizardSkipped || wizardOpen) return;
     if (orgFeatures.setupDone) return;
     const untouched = !fieldLibrary.length && !chemicals.length && !equipment.length
       && !licensed.length && !tickets.length;
     if (untouched) setWizardOpen(true);
-  }, [dbLoading, currentOrg?.id, isOwner, orgFeatures.setupDone, wizardSkipped]); // eslint-disable-line
+  }, [dbLoading, currentOrg?.id, isOwner, orgFeatures.setupDone, wizardSkipped, wizardOpen, fieldLibrary.length, chemicals.length, equipment.length, licensed.length, tickets.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const markSetupDone = async (patch) => {
     const next = { ...orgFeatures, ...patch };
@@ -2941,7 +2956,7 @@ export default function App() {
 
   // ── Field Manager
   const fieldFileRef = useRef();
-  const [fieldUpMsg,    setFieldUpMsg]    = useState("");
+  const fieldImportRef = useRef();
   const [csvStage,      setCsvStage]      = useState("idle");
   const [csvHeaders,    setCsvHeaders]    = useState([]);
   const [csvRows,       setCsvRows]       = useState([]);
@@ -3088,6 +3103,18 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [isMobile, fmStage, csvStage]);
+
+  // One import box for the Fields screen. Boundaries and spreadsheets used to be
+  // two cards asking the same question, and you had to know which kind of file you
+  // had before you could start. The extension decides instead; both importers keep
+  // their own handler and their own mapping flow from there.
+  const handleFieldImportFile = (file) => {
+    if (!file) return;
+    const name = (file.name || "").toLowerCase();
+    if (/\.(csv|txt)$/.test(name))     return handleFieldCSV({ target: { files: [file], value: "" } });
+    if (/\.(zip|shp|dbf)$/.test(name)) return handleFmZip(file);
+    showToast("That file can't be imported — use a zipped shapefile (.zip) or a .csv.");
+  };
 
   const handleFieldCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -5486,6 +5513,11 @@ export default function App() {
             {/* Always-mounted file inputs so mobile sheet can trigger them */}
             <input ref={fmFileRef} type="file" accept=".zip" style={{ display:"none" }} onChange={e => handleFmZip(e.target.files[0])} />
             <input ref={fieldFileRef} type="file" accept=".csv,.txt" onChange={handleFieldCSV} style={{ display:"none" }}/>
+            {/* The combined box above browses with this one; the two single-purpose
+                inputs stay for the mobile chips and the empty state, which already
+                know which kind of file they're asking for. */}
+            <input ref={fieldImportRef} type="file" accept=".zip,.shp,.dbf,.csv,.txt" style={{ display:"none" }}
+              onChange={e => { handleFieldImportFile(e.target.files[0]); e.target.value = ""; }} />
 
             {/* Mobile: collapsed entry point */}
             {isMobile && isOwner && (
@@ -5747,18 +5779,18 @@ export default function App() {
 
               return (
                 <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
-                  <div style={sectionTitleT}>Import Field Boundaries</div>
+                  <div style={sectionTitleT}>Import Fields</div>
 
                   {/* Stage 1: Upload */}
                   {fmStage === "upload" && (
                     <div>
                       <div
                         onDragOver={e => e.preventDefault()}
-                        onDrop={e => { e.preventDefault(); handleFmZip(e.dataTransfer.files[0]); }}
+                        onDrop={e => { e.preventDefault(); handleFieldImportFile(e.dataTransfer.files[0]); }}
                         style={{ border:`2px dashed ${theme.dash}`, borderRadius:14, padding:"30px 20px",
                           textAlign:"center", color: theme.mut, marginBottom:4, background: theme.fieldTint, cursor:"pointer",
                           display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}
-                        onClick={() => fmFileRef.current.click()}
+                        onClick={() => fieldImportRef.current.click()}
                       >
                         {fmParsing ? (
                           <span style={{ color: theme.onGreen, fontWeight:600 }}>⏳ Parsing shapefile…</span>
@@ -5768,9 +5800,13 @@ export default function App() {
                               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg>
                             </div>
                             <div style={{ fontSize:16, fontWeight:800, color: theme.ink }}>Drag &amp; drop to import</div>
-                            <div style={{ fontSize:13, color: theme.ink2, maxWidth:440 }}>Drop a zipped <b>shapefile</b> (.zip with .shp / .dbf) to import field boundaries &amp; acreage, or click to browse.</div>
+                            <div style={{ fontSize:13, color: theme.ink2, maxWidth:440 }}>
+                              A zipped <b>shapefile</b> (.zip with .shp / .dbf) brings boundaries and acreage across.
+                              A <b>CSV</b> or spreadsheet export needs only a column of field names — acres, crop, lat
+                              and long are picked up if they're there. Drop either one, or click to browse.
+                            </div>
                             <div style={{ display:"flex", gap:7, marginTop:4 }}>
-                              {[".zip", ".shp", ".dbf"].map(x => (
+                              {[".zip", ".shp", ".dbf", ".csv"].map(x => (
                                 <span key={x} style={{ background: theme.card, border:`1px solid ${theme.line}`, color: theme.ink2, borderRadius:7, padding:"3px 9px", fontSize:11, fontWeight:700 }}>{x}</span>
                               ))}
                             </div>
@@ -6178,28 +6214,12 @@ export default function App() {
               );
             })()}
 
-            {(!isMobile || csvStage !== "idle") && (
+            {/* Only from the mapping step on: dropping a CSV in the box above is how
+                this starts now, so an idle "Import from CSV" card would be the second
+                of the two front doors the box replaced. */}
+            {csvStage !== "idle" && (
             <div style={{...cardT, padding: isMobile ? "10px 10px" : "18px 20px"}}>
               <div style={sectionTitleT}>Import Fields from CSV</div>
-
-              {csvStage === "idle" && (
-                <>
-                  <div style={{ fontSize:12, color: theme.ink2, marginBottom:10, lineHeight:1.8 }}>
-                    Upload any CSV or Excel export — any number of columns, any order.<br/>
-                    <strong>Required:</strong> a column with field names.<br/>
-                    <strong>Optional:</strong> Acres, Crop, Lat, Long — all auto-detected.<br/>
-                    Numbers can include <code style={{ background: theme.tintGreen, padding:"1px 4px", borderRadius:3 }}>$</code>, commas, and <code style={{ background: theme.tintGreen, padding:"1px 4px", borderRadius:3 }}>%</code> — they'll be stripped automatically.<br/>
-                    <span style={{ color: theme.mut }}>Excel users: File → Save As → CSV before uploading.</span>
-                  </div>
-                  <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                    <button onClick={() => fieldFileRef.current.click()} style={{
-                      background: theme.green, color:"#fff", border:"none", borderRadius:6,
-                      padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:700
-                    }}>📂 Upload CSV</button>
-                    {fieldUpMsg && <span style={{ color: theme.onGreen, fontSize:13, fontWeight:600 }}>{fieldUpMsg}</span>}
-                  </div>
-                </>
-              )}
 
               {csvStage === "mapping" && (
                 <div>

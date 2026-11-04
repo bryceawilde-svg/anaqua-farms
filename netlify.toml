@@ -1,3 +1,14 @@
+# The .netlify.app alias is a separate browser origin from boomlog.app: separate
+# localStorage, separate supabase session, separate service worker. Netlify does
+# not redirect it on its own even once a primary domain is set, so an auth link or
+# a bookmark landing there strands the user in a signed-out copy of the app. This
+# rule has to stay above the SPA catch-all — first match wins.
+[[redirects]]
+  from = "https://fancy-heliotrope-5cae85.netlify.app/*"
+  to = "https://boomlog.app/:splat"
+  status = 301
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
