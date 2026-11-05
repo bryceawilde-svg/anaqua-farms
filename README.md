@@ -60,19 +60,62 @@ browser treats it as a separate origin with its own localStorage, supabase sessi
 service worker — so a confirmation link that lands there signs the user in somewhere
 `boomlog.app` can't see, and their farm looks empty when they type the real address.
 
-Two settings live in the Supabase dashboard rather than in this repo, and both have to
-point at `https://boomlog.app`:
+Three settings live in the Supabase dashboard rather than in this repo. The first two
+have to point at `https://boomlog.app`:
 
 | Where | Setting |
 |---|---|
 | Authentication → URL Configuration | **Site URL** — the fallback every auth email uses |
 | Authentication → URL Configuration | **Redirect URLs** — allow-list; `emailRedirectTo` is ignored unless the URL matches |
-| Authentication → Emails → SMTP | **Custom SMTP** on a domain you own |
+| Authentication → Emails → SMTP | **Custom SMTP** on a domain you own — see **Mail** below |
 
 The default sender (`noreply@mail.app.supabase.io`) is a shared address Supabase rates
 as development-only, and signup confirmations from it land in spam. Custom SMTP from
 `boomlog.app`, with SPF/DKIM/DMARC on the domain, is what fixes that — and it makes the
 sender match the link domain, which is most of the spam score.
+
+### Mail
+
+Confirmation emails come from `boomlog.app` through [Resend](https://resend.com) as the
+custom SMTP provider. Two halves: the domain has to be authenticated in DNS, and
+Supabase has to be pointed at the SMTP endpoint.
+
+The domain added in Resend is the apex, `boomlog.app` — not a subdomain, because Resend
+prefixes its own. It issues these records, which live in Netlify DNS since Netlify is
+the nameserver:
+
+| Name | Type | Value |
+|---|---|---|
+| `resend._domainkey` | TXT | the DKIM key Resend shows — one long `p=MIGf...` string |
+| `rsend` | CNAME | `rsend.forge.rmta.net` |
+| `send` | CNAME | `send.forge.rmta.net` |
+| `_dmarc` | TXT | `v=DMARC1; p=none; rua=mailto:bryce@boomlog.app;` |
+
+> Resend's published docs still describe an older setup — an SPF `TXT` and a
+> `feedback-smtp...amazonaws.com` MX. Resend has moved off Amazon SES onto its own MTA,
+> so what the dashboard actually issues is the two `forge.rmta.net` CNAMEs above and no
+> SPF record at all. Go by the dashboard, not the docs.
+
+Every one of those is on a subdomain, which matters. The apex already carries ImprovMX's
+two MX records and `v=spf1 include:spf.improvmx.com ~all`, and that is what delivers
+anything sent to `bryce@boomlog.app` — a forwarding alias, not a mailbox. So **leave
+Resend's "Enable receiving" toggle off**: it adds an MX on the apex and would quietly
+take over inbound mail for the whole domain.
+
+Verification runs on Resend's own schedule and can take a few hours on NS1, even once
+the records resolve publicly. Once it's verified, fill in Authentication → Emails →
+SMTP:
+
+| Field | Value |
+|---|---|
+| Host | `smtp.resend.com` |
+| Port | `465` (implicit TLS) |
+| Username | `resend` |
+| Password | a Resend API key, sending permission only |
+| Sender | `noreply@boomlog.app`, name `BoomLog` |
+
+Raise the cap under Authentication → Rate Limits while you're in there. The built-in
+sender's default is a couple of emails an hour, which one afternoon of sign-ups hits.
 
 ## How it's put together
 
