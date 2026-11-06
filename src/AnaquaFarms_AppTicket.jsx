@@ -58,6 +58,33 @@ function useIsMobile(bp = 640) {
   return mobile;
 }
 
+// Is the soft keyboard up?
+//
+// A bar pinned to bottom:0 does not get pushed out of the way by the keyboard.
+// Both mobile browsers keep the layout viewport at full height and shrink only
+// the visual one, so the bar stays at the bottom of a viewport the keyboard is
+// now covering — and iOS lifts it to sit on top of the keys, over the field
+// being typed into. The gap between the two viewports is the keyboard, and it is
+// the only reliable signal: there is no keyboard event on the web.
+function useKeyboardOpen(minPx = 140) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const check = () => setOpen(window.innerHeight - vv.height > minPx);
+    check();
+    // scroll as well as resize: iOS offsets the visual viewport as it scrolls the
+    // focused field into view, and only resize fires on the way back down.
+    vv.addEventListener("resize", check);
+    vv.addEventListener("scroll", check);
+    return () => {
+      vv.removeEventListener("resize", check);
+      vv.removeEventListener("scroll", check);
+    };
+  }, [minPx]);
+  return open;
+}
+
 // Responsive grid: 1 col on mobile, multi col on desktop
 function rGrid(mobileCols, desktopCols, isMobile) {
   const cols = isMobile ? mobileCols : desktopCols;
@@ -1786,6 +1813,7 @@ export default function App() {
   const sideW           = isNarrowDesk ? 76 : 236;
   // New Ticket form: two columns (details | tank setup) once the content area is wide enough.
   const formTwoCol      = !useIsMobile(980);
+  const keyboardOpen    = useKeyboardOpen();
 
   // ── Auth state
   const [session,      setSession]      = useState(null);
@@ -1839,7 +1867,10 @@ export default function App() {
   const [nonLicensed,   setNonLicensed]   = useState([]);
   const [tickets,       setTickets]       = useState([]);
   const [cropSeasons,   setCropSeasons]   = useState({});
-  const [view,          setView]          = useState("form");
+  // Tickets is the home screen: the records you already have, with New Ticket one
+  // tap away. Opening straight into an empty form made the app look like it had
+  // nothing in it.
+  const [view,          setView]          = useState("log");
   const [expandedTicket, setExpandedTicket] = useState(null);  // ticket id
   const [calcTicketId,  setCalcTicketId]  = useState(null);  // partial-load calculator
   const [editingActualTime, setEditingActualTime] = useState(null); // { ticketId, fieldIdx, key }
@@ -8401,8 +8432,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom nav — mobile only, replaces the top tab bar */}
-      {isMobile && !isViewer && (
+      {/* Bottom nav — mobile only, replaces the top tab bar. Hidden while the
+          keyboard is up: it cannot stay below the keys, so the choice is between
+          it covering the field being typed into and it being out of the way until
+          the keyboard closes. */}
+      {isMobile && !isViewer && !keyboardOpen && (
         <div style={{
           position:"fixed", left:0, right:0, bottom:0, zIndex:900,
           background: theme.card, borderTop:`1px solid ${theme.inputLine}`,
