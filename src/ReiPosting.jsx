@@ -46,6 +46,17 @@ function fmtDay(ymd, tz) {
   }
 }
 
+// The SDS link is typed in by hand and rendered as an anchor on a public page,
+// so anything that is not plain http(s) is not a link.
+function safeUrl(raw) {
+  try {
+    const u = new URL(String(raw ?? "").trim());
+    return (u.protocol === "http:" || u.protocol === "https:") ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function fmtRemaining(ms) {
   const mins = Math.ceil(ms / 60000);
   if (mins < 60) return `${mins} min`;
@@ -208,20 +219,65 @@ export default function ReiPosting({ token }) {
         </Section>
       )}
 
+      <PostingContacts contacts={data.postingContacts} />
+
       <ApplicationLog applications={data.applications} windowDays={data.windowDays} tz={tz} />
 
       <div style={{ fontSize: 11.5, color: C.mut, lineHeight: 1.5, marginTop: 18, paddingBottom: 24 }}>
         Re-entry times are the minimum interval stated on each product label, measured from the
         end of application. Where a tank mix was applied, the longest interval governs the field.
-        This posting shows applications recorded in BoomLog for the last {data.windowDays} days and
-        is not a substitute for the product label.
+        Applications stay on this posting for at least {data.displayDaysAfterRei ?? 30} days after
+        their re-entry interval ends. This is not a substitute for the product label.
       </div>
     </Shell>
   );
 }
 
+function PostingContacts({ contacts }) {
+  const medical = contacts?.medical || {};
+  const agency  = contacts?.agency  || {};
+  const has = c => (c.name || "").trim() || (c.phone || "").trim();
+
+  if (!has(medical) && !has(agency)) {
+    return (
+      <Banner tone="amber">
+        This farm has not entered its emergency medical facility or its state pesticide
+        regulator yet, so this posting is incomplete. Ask the office to add them in BoomLog.
+      </Banner>
+    );
+  }
+
+  const block = (label, c, tone) => has(c) && (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", color: tone }}>
+        {label}
+      </div>
+      {c.name    && <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginTop: 2 }}>{c.name}</div>}
+      {c.address && <div style={{ fontSize: 13, color: C.ink2, marginTop: 1 }}>{c.address}</div>}
+      {c.phone   && (
+        <a href={`tel:${String(c.phone).replace(/[^\d+]/g, "")}`}
+           style={{ display: "inline-block", marginTop: 4, fontSize: 16, fontWeight: 800, color: tone, textDecoration: "none" }}>
+          {c.phone}
+        </a>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ ...card, borderColor: C.red, marginTop: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.red, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        In an emergency
+      </div>
+      {block("Nearest medical facility", medical, C.red)}
+      {block("State pesticide regulator", agency, C.ink2)}
+    </div>
+  );
+}
+
 function ApplicationLog({ applications, windowDays, tz }) {
-  const [open, setOpen] = useState(false);
+  // Open by default. This is the application information the posting exists to
+  // display; behind a closed accordion it is not being displayed.
+  const [open, setOpen] = useState(true);
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -231,7 +287,7 @@ function ApplicationLog({ applications, windowDays, tz }) {
         display: "flex", justifyContent: "space-between", alignItems: "center",
         cursor: "pointer", fontFamily: "inherit",
       }}>
-        <span>Applications, last {windowDays} days</span>
+        <span>Application information · last {windowDays} days</span>
         <span style={{ color: C.mut, fontWeight: 600, fontSize: 12.5 }}>
           {applications.length} {open ? "▲" : "▼"}
         </span>
@@ -249,7 +305,8 @@ function ApplicationLog({ applications, windowDays, tz }) {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 14.5, fontWeight: 800, color: C.ink }}>{a.field}</div>
                 <div style={{ fontSize: 12.5, color: C.ink2, whiteSpace: "nowrap" }}>
-                  {fmtDay(a.date, tz)}{a.end ? ` · ended ${a.end}` : ""}
+                  {fmtDay(a.date, tz)}
+                  {a.start || a.end ? ` · ${a.start || "?"} to ${a.end || "?"}` : ""}
                 </div>
               </div>
               <div style={{ fontSize: 13.5, color: C.ink, marginTop: 5, fontWeight: 600 }}>{a.product}</div>
@@ -278,6 +335,18 @@ function ApplicationLog({ applications, windowDays, tz }) {
                 {a.estimated && (
                   <span style={{ fontSize: 11.5, color: C.amber, fontWeight: 700 }}>
                     scheduled time — finish not logged
+                  </span>
+                )}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {safeUrl(a.sdsUrl) ? (
+                  <a href={safeUrl(a.sdsUrl)} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 13, fontWeight: 800, color: C.green }}>
+                    Safety data sheet →
+                  </a>
+                ) : (
+                  <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>
+                    No safety data sheet on file for this product
                   </span>
                 )}
               </div>

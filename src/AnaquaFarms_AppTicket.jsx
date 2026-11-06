@@ -1816,6 +1816,8 @@ export default function App() {
   const [reiWorking,       setReiWorking]       = useState(false);
   const [reiWindowDays,    setReiWindowDays]    = useState(30);
   const [tzDraft,          setTzDraft]          = useState("");
+  const [contactDraft,     setContactDraft]     = useState(null);
+  const [contactSaving,    setContactSaving]    = useState(false);
   const [tzSaving,         setTzSaving]         = useState(false);
   const [exportTokens,     setExportTokens]     = useState([]);
   const [exportWorking,    setExportWorking]    = useState(false);
@@ -2084,7 +2086,7 @@ export default function App() {
     if (!session) return;
     // Fast path: check for active membership without claiming first (saves one RPC round-trip for existing users)
     supabase.from("org_memberships")
-      .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops, timezone)")
+      .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops, timezone, posting_contacts)")
       .eq("user_id", session.user.id)
       .eq("status", "active")
       .limit(1)
@@ -2097,7 +2099,7 @@ export default function App() {
           // No active org — claim pending invites (new user or invite recipient) then re-check
           await supabase.rpc("claim_pending_invites");
           const { data: claimed } = await supabase.from("org_memberships")
-            .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops, timezone)")
+            .select("org_id, role, organizations(id, name, plan, features, unit_system, farm_zip, farm_lat, farm_lng, crops, timezone, posting_contacts)")
             .eq("user_id", session.user.id)
             .eq("status", "active")
             .limit(1)
@@ -2173,6 +2175,22 @@ export default function App() {
     setCurrentOrg(o => ({ ...o, timezone: tz }));
     setTzDraft("");
     showToast(`Re-entry times will be shown in ${tz}.`, "success");
+  };
+
+  // The posting has to carry an emergency medical facility and the state
+  // pesticide regulator alongside the application information. Both are the
+  // farm's to supply: the nearest operating facility is a local fact, and a
+  // guessed phone number on an emergency display is worse than a blank one.
+  const saveOrgContacts = async (next) => {
+    if (!currentOrg?.id) return;
+    setContactSaving(true);
+    const { error } = await supabase.from("organizations")
+      .update({ posting_contacts: next }).eq("id", currentOrg.id);
+    setContactSaving(false);
+    if (error) { showToast("Could not save posting contacts: " + error.message); return; }
+    setCurrentOrg(o => ({ ...o, posting_contacts: next }));
+    setContactDraft(null);
+    showToast("Posting contacts saved.", "success");
   };
 
   const createReiLink = async () => {
@@ -2417,7 +2435,7 @@ export default function App() {
         cs.data.forEach(r => { seasons[r.crop_name] = r.season; });
         setCropSeasons(seasons);
       }
-      setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.form_type || ch.formType || "L", containerSize: ch.container_size ?? ch.containerSize ?? null, activeIngredient: ch.active_ingredient ?? ch.activeIngredient ?? "" })));
+      setChemicals((c.data || []).map(ch => ({ ...ch, formType: ch.form_type || ch.formType || "L", containerSize: ch.container_size ?? ch.containerSize ?? null, activeIngredient: ch.active_ingredient ?? ch.activeIngredient ?? "", sdsUrl: ch.sds_url ?? ch.sdsUrl ?? "" })));
       setPestLibrary(p.data || []);
       setEquipment((e.data || []).map(eq => ({ ...eq, acresPerHour: eq.acres_per_hour || eq.acresPerHour || 75 })));
       setLicensed(la.data || []);
@@ -3336,7 +3354,7 @@ export default function App() {
   const chemFileRef     = useRef();
   const scanLabelRef    = useRef();
   const [chemUpMsg,       setChemUpMsg]       = useState("");
-  const [newChem,         setNewChem]         = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"" });
+  const [newChem,         setNewChem]         = useState({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"", sdsUrl:"" });
   const [scanLabelLoading, setScanLabelLoading] = useState(false);
   const [chemDupWarning,  setChemDupWarning]  = useState("");
   const [editingChemId,   setEditingChemId]   = useState(null);
@@ -3433,8 +3451,8 @@ export default function App() {
         return prev.map(c => byId.get(c.id) || c).concat(recs.filter(r => !seen.has(r.id)));
       });
       supabase.from("chemicals").upsert(recs.map(a => {
-        const { formType: ft, containerSize: cs, activeIngredient: ai, ...rest } = a;
-        return { ...rest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id };
+        const { formType: ft, containerSize: cs, activeIngredient: ai, sdsUrl: sds, ...rest } = a;
+        return { ...rest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, sds_url: sds?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id };
       })).then(({ error }) => {
         if (error) showToast("Failed to import chemicals: " + error.message);
       });
@@ -3454,11 +3472,11 @@ export default function App() {
     setChemDupWarning("");
     const newChemRec = { ...newChem, id: Date.now(), containerSize: newChem.containerSize ? parseFloat(newChem.containerSize) : null };
     setChemicals(c => [...c, newChemRec]);
-    const { formType: ft, containerSize: cs, activeIngredient: ai, ...chemRest } = newChemRec;
-    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    const { formType: ft, containerSize: cs, activeIngredient: ai, sdsUrl: sds, ...chemRest } = newChemRec;
+    supabase.from("chemicals").upsert({ ...chemRest, form_type: ft, container_size: cs ?? null, active_ingredient: ai?.trim() || null, sds_url: sds?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to save chemical: " + error.message);
     });
-    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"" });
+    setNewChem({ name:"", epa:"", rei:"", unit:"oz", formType:"L", containerSize:"", activeIngredient:"", sdsUrl:"" });
   };
   const deleteChem = (id) => {
     if (!confirmDelete(chemicals.find(x => x.id === id)?.name, "chemical")) return;
@@ -3493,8 +3511,8 @@ export default function App() {
       containerSize: editChemDraft.containerSize ? parseFloat(editChemDraft.containerSize) : null,
     };
     setChemicals(c => c.map(x => x.id === updated.id ? updated : x));
-    const { formType, containerSize, activeIngredient, ...rest } = updated;
-    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, active_ingredient: activeIngredient?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
+    const { formType, containerSize, activeIngredient, sdsUrl, ...rest } = updated;
+    supabase.from("chemicals").upsert({ ...rest, form_type: formType, container_size: containerSize ?? null, active_ingredient: activeIngredient?.trim() || null, sds_url: sdsUrl?.trim() || null, user_id: session.user.id, org_id: currentOrg?.id }).then(({ error }) => {
       if (error) showToast("Failed to update chemical: " + error.message);
       else showToast("Chemical saved.", "success");
     });
@@ -7301,6 +7319,15 @@ export default function App() {
                         <input value={newChem.rei} onChange={e => setNewChem(c=>({...c,rei:e.target.value}))} placeholder="e.g. 12 hr" style={inp} />
                       </div>
                     </div>
+                    <div style={{ marginTop:12 }}>
+                      <label style={{ ...labelT, marginBottom:5 }}>Safety data sheet (link)</label>
+                      <input value={newChem.sdsUrl||""} onChange={e => setNewChem(c=>({...c,sdsUrl:e.target.value}))}
+                        placeholder="https://… the manufacturer's SDS page" style={inp} />
+                      <div style={{ fontSize:11.5, color: theme.mut, marginTop:4, lineHeight:1.45 }}>
+                        Shown on the field posting. The re-entry display has to carry an SDS for every
+                        product applied, so a product without one is flagged there.
+                      </div>
+                    </div>
                   </div>
 
                   {chemDupWarning && (
@@ -7388,6 +7415,10 @@ export default function App() {
                             <div>
                               <label style={{ ...labelT, fontSize:10 }}>Container ({draftIsDryOrLb ? "lb" : "gal"})</label>
                               <input type="number" min="0" step="0.01" value={editChemDraft.containerSize||""} onChange={e=>setEditChemDraft(d=>({...d,containerSize:e.target.value}))} style={inp} placeholder="blank=tote" />
+                            </div>
+                            <div>
+                              <label style={{ ...labelT, fontSize:10 }}>Safety data sheet (link)</label>
+                              <input value={editChemDraft.sdsUrl||""} onChange={e=>setEditChemDraft(d=>({...d,sdsUrl:e.target.value}))} style={inp} placeholder="https://…" />
                             </div>
                           </div>
                           <div style={{ display:"flex", gap:8 }}>
@@ -7716,6 +7747,57 @@ export default function App() {
                   restricted and when each becomes safe — recalculated live, no login. The link
                   reaches that posting and nothing else in BoomLog.
                 </div>
+
+                {/* Emergency and regulator contacts — required on the display next to
+                    the application information, so a worker who needs them has them. */}
+                {(() => {
+                  const saved = currentOrg?.posting_contacts || {};
+                  const pc    = contactDraft ?? { medical: saved.medical || {}, agency: saved.agency || {} };
+                  const set   = (group, key, value) =>
+                    setContactDraft({ ...pc, [group]: { ...pc[group], [key]: value } });
+                  const filled = g => ["name","address","phone"].every(k => (pc[g]?.[k] || "").trim());
+                  const field = (group, key, label, placeholder) => (
+                    <div style={{ marginBottom:6 }}>
+                      <label style={{ ...labelT, fontSize:10, marginBottom:3 }}>{label}</label>
+                      <input value={pc[group]?.[key] || ""} onChange={e => set(group, key, e.target.value)}
+                        placeholder={placeholder} style={{ ...inp, padding:"8px 10px", fontSize: isMobile ? 16 : 13 }} />
+                    </div>
+                  );
+                  return (
+                    <div style={{ background: (filled("medical") && filled("agency")) ? theme.fill : theme.tintAmber,
+                                  border:`1.5px solid ${(filled("medical") && filled("agency")) ? theme.inputLine : theme.amber}`,
+                                  borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
+                      <div style={{ fontSize:12.5, fontWeight:800, color:(filled("medical") && filled("agency")) ? theme.ink2 : theme.amber, marginBottom:6 }}>
+                        {(filled("medical") && filled("agency")) ? "Posting contacts" : "Add the posting contacts"}
+                      </div>
+                      <div style={{ ...noteT, marginBottom:9 }}>
+                        The display has to show a nearby operating medical facility and your state
+                        pesticide regulator. BoomLog leaves both blank until you fill them in — a
+                        guessed number on an emergency display is worse than none.
+                      </div>
+                      <div style={{ fontSize:11, fontWeight:800, color: theme.ink2, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:5 }}>
+                        Emergency medical
+                      </div>
+                      {field("medical", "name",    "Facility",  "e.g. Valley Regional Medical Center")}
+                      {field("medical", "address", "Address",   "Street, city, state")}
+                      {field("medical", "phone",   "Phone",     "Including area code")}
+                      <div style={{ fontSize:11, fontWeight:800, color: theme.ink2, textTransform:"uppercase", letterSpacing:"0.06em", margin:"10px 0 5px" }}>
+                        State pesticide regulator
+                      </div>
+                      {field("agency", "name",    "Agency",  "e.g. Texas Department of Agriculture")}
+                      {field("agency", "address", "Address", "Street, city, state")}
+                      {field("agency", "phone",   "Phone",   "Including area code")}
+                      {contactDraft && (
+                        <div style={{ display:"flex", gap:8, marginTop:9 }}>
+                          <button onClick={() => setContactDraft(null)} style={{ ...softBtnT, flex:1, padding:"10px 0", fontSize:13, color: theme.ink2 }}>Cancel</button>
+                          <button onClick={() => saveOrgContacts(pc)} disabled={contactSaving} style={{
+                            ...softBtnT, flex:1, padding:"10px 0", fontSize:13, background: theme.header, color:"#fff",
+                          }}>{contactSaving ? "…" : "Save contacts"}</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Time zone — required, because re-entry is wall-clock on the farm */}
                 <div style={{ background: currentOrg?.timezone ? theme.fill : theme.tintAmber,
