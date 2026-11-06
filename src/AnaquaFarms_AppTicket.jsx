@@ -15,6 +15,12 @@ import * as shapefile from "shapefile";
 import { QRCodeSVG } from "qrcode.react";
 import { buildTheme, ACCENTS, DEFAULT_THEME } from "./utils/theme";
 
+// The auth card has one message slot. These two sentinels mark the messages we
+// raise ourselves, so they can be worded and coloured in the render; anything
+// else in that slot came from supabase and is shown as-is.
+const MSG_CHECK_EMAIL = "auth:check-email";
+const ERR_EMAIL_TAKEN = "auth:email-taken";
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 // Full reference crop list — used as the org crop library default.
 // CROP_TRAITS keys (Cotton, Corn, Soybean, Grain, Grain Sorghum) get
@@ -2211,14 +2217,25 @@ export default function App() {
     // emailRedirectTo pins the confirmation link to boomlog.app. Supabase only
     // honours it if the URL is on the project's redirect allow-list; otherwise it
     // quietly falls back to the Site URL, so both have to be set in the dashboard.
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: authEmail,
       password: authPassword,
       options: { emailRedirectTo: authRedirectTo() },
     });
-    if (error) setAuthError(error.message);
-    else setAuthError("Check your email for a confirmation link — it may land in spam.");
     setAuthWorking(false);
+    if (error) { setAuthError(error.message); return; }
+    // An address that already has an account is not an error here. Supabase
+    // refuses to confirm that an email is taken — enumeration protection — so it
+    // returns a fabricated user with an empty identities array and sends no mail.
+    // To someone who just typed their own address that is indistinguishable from
+    // the button doing nothing, which is how it got reported. The empty array is
+    // the only signal there is, so read it and say what it means.
+    const identities = data?.user?.identities;
+    if (Array.isArray(identities) && identities.length === 0) {
+      setAuthError(ERR_EMAIL_TAKEN);
+      return;
+    }
+    setAuthError(MSG_CHECK_EMAIL);
   }
 
   const isPro      = userPlan === "pro" || currentOrg?.plan === "pro";
@@ -3535,7 +3552,6 @@ export default function App() {
         <div style={{ fontSize:34, fontWeight:800, lineHeight:1.15, letterSpacing:"-0.02em", maxWidth:380 }}>Spray records, from the office to the cab.</div>
         <div style={{ fontSize:14, color: theme.sideInk, marginTop:14, lineHeight:1.6, maxWidth:380 }}>Plan tickets, queue them to the cab, and keep every field's application record in one place.</div>
       </div>
-      <div style={{ fontSize:11.5, color: theme.sideMut }}>Your records are isolated from other organizations.</div>
     </div>
   );
   const entryRight = { flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:24 };
@@ -3586,8 +3602,24 @@ export default function App() {
             onKeyDown={e => e.key==="Enter" && (authView==="login" ? handleSignIn() : handleSignUp())}
             style={entryInput} />
           {authError && (
-            <div style={{ fontSize: isMobile ? 13 : 12.5, color: authError.includes("Check your email") ? (theme.onGreen) : theme.red, lineHeight:1.5 }}>
-              {authError}
+            <div style={{ fontSize: isMobile ? 13 : 12.5, lineHeight:1.5,
+              color: authError === MSG_CHECK_EMAIL ? theme.onGreen : theme.red }}>
+              {authError === MSG_CHECK_EMAIL
+                ? "Check your email for a confirmation link — it may land in spam."
+                : authError === ERR_EMAIL_TAKEN
+                ? (
+                  <>
+                    That email already has an account.{" "}
+                    <button type="button" onClick={() => { setAuthView("login"); setAuthError(""); }}
+                      style={{ background:"none", border:"none", padding:0, cursor:"pointer",
+                        fontFamily:"inherit", fontSize:"inherit", fontWeight:800,
+                        color: theme.green, textDecoration:"underline" }}>
+                      Sign in instead
+                    </button>
+                    {" "}— or if you never confirmed it, check your inbox for the link.
+                  </>
+                )
+                : authError}
             </div>
           )}
           <button onClick={authView==="login" ? handleSignIn : handleSignUp}
@@ -3595,9 +3627,6 @@ export default function App() {
             style={entryBtn(authWorking || !authEmail || !authPassword)}>
             {authWorking ? "…" : authView==="login" ? "Sign In" : "Create Account"}
           </button>
-        </div>
-        <div style={{ fontSize: isMobile ? 11 : 11.5, color: theme.mut, textAlign:"center", marginTop:14, lineHeight:1.6 }}>
-          Your records are isolated from other users.
         </div>
       </div>
       </div>
