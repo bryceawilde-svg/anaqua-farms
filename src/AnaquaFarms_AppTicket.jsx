@@ -9,6 +9,7 @@ import TargetZoneBadge, { isTargetZone } from "./TargetZoneBadge";
 import { SetupWizard, GetStartedCard, EmptyLibrary } from "./Onboarding";
 import { buildSetupSteps } from "./utils/setupSteps";
 import { authRedirectTo } from "./utils/site";
+import { reEntry, fmtReEntry } from "./utils/rei";
 import HelpDrawer from "./HelpDrawer";
 import JSZip from "jszip";
 import * as shapefile from "shapefile";
@@ -1020,6 +1021,159 @@ function downloadTDAReport(allTickets, orgName, chemicals) {
   const a    = document.createElement("a");
   a.href = url;
   a.download = `${(orgName || "Farm").replace(/\s+/g,"_")}_TDA_Report_${new Date().toISOString().slice(0,10)}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// REI Field Re-Entry Report — the layout the farm files, one row per field per
+// product, in the column order of the REI Report sheet this replaces.
+//
+// It is not the gate posting. The posting is a public page a worker scans to ask
+// "can I walk in?"; this is the record, and it carries the applicator's licence
+// number, so it stays behind the login.
+// Both printable reports are filtered on the date the work actually finished,
+// not the date the ticket was written.
+function ticketsInRange(tickets, from, to) {
+  if (!from && !to) return tickets;
+  return tickets.filter(t => {
+    const fs = t.fieldSchedule || [];
+    const appDate = fs.find(s => s.actualDateEnd)?.actualDateEnd
+                 || fs.find(s => s.actualDateStart)?.actualDateStart;
+    if (from && appDate < from) return false;
+    if (to   && appDate > to)   return false;
+    return true;
+  });
+}
+
+function downloadREIReport(allTickets, orgName, chemicals) {
+  const tickets = reportableTickets(allTickets, chemicals);
+  if (!tickets.length) return;
+
+  const now = Date.now();
+  let restrictedRows = 0;
+
+  const rows = tickets.flatMap(t => {
+    const schedule = t.fieldSchedule || buildFieldSchedule(t.selectedFields, t.timeStart, t.acresPerHour || 75);
+    const pest     = Array.isArray(t.targetPest) ? t.targetPest.join(", ") : (t.targetPest || "");
+    const licensee = [t.licensedApplicant, t.licensedApplicantLicense].filter(Boolean).join(" ");
+
+    return schedule.flatMap(fs => {
+      const date  = fs.actualDateEnd || fs.actualDateStart || t.date;
+      const start = fs.actualTimeStart || fs.timeStart || t.timeStart;
+      const end   = fs.actualTimeEnd   || fs.timeEnd   || t.timeEnd;
+      const wind  = [(fs.fieldWeather?.windSpeed ?? t.windSpeed), (fs.fieldWeather?.windDir ?? t.windDir)]
+        .filter(v => v !== "" && v != null);
+      const temp  = fs.fieldWeather?.airTemp ?? t.airTemp;
+      const acresNum = parseFloat(fs.acres);
+
+      return t.chemicals.map(c => {
+        const { at, endAt, known } = reEntry({ date, start, end, hasEndDate: !!fs.actualDateEnd, rei: c.rei });
+        // Red covers both "still restricted" and "we could not read the REI".
+        // An interval that cannot be parsed is not an interval of zero.
+        const restricted = !known || (at && at.getTime() > now);
+        if (restricted) restrictedRows++;
+
+        const rateNum = parseFloat(c.ratePerAcre);
+        const rate    = isFinite(rateNum) ? `${rateNum.toFixed(4)} ${c.unit || ""}/ac`.trim() : "";
+        const total   = isFinite(rateNum) && rateNum > 0 && isFinite(acresNum) && acresNum > 0
+          ? `${(rateNum * acresNum).toFixed(2)} ${c.unit || ""}`.trim()
+          : "";
+
+        return `
+      <tr${restricted ? ' class="restricted"' : ""}>
+        <td class="nowrap">${escHtml(date)}</td>
+        <td class="nowrap">${escHtml(fmtTime(start))}</td>
+        <td class="nowrap">${escHtml(fmtTime(end))}</td>
+        <td><strong>${escHtml(fs.name)}</strong></td>
+        <td class="num">${escHtml(fs.acres)}</td>
+        <td>${escHtml(t.crop)}</td>
+        <td>${escHtml(pest)}</td>
+        <td>${escHtml(c.name)}</td>
+        <td>${escHtml(c.activeIngredient)}</td>
+        <td class="nowrap">${escHtml(c.epa)}</td>
+        <td class="nowrap num">${escHtml(rate)}</td>
+        <td class="nowrap num">${escHtml(total)}</td>
+        <td class="nowrap">${escHtml(c.rei)}</td>
+        <td class="nowrap">${known ? escHtml(fmtReEntry(at, endAt)) : "check label"}</td>
+        <td class="nowrap">${escHtml(wind.length ? `${wind[0]} mph ${wind[1] ?? ""}`.trim() : "")}</td>
+        <td class="nowrap">${temp === "" || temp == null ? "" : escHtml(`${temp}F`)}</td>
+        <td>${escHtml(t.equipmentType)}</td>
+        <td>${escHtml(licensee)}</td>
+        <td>${escHtml(t.notes || "--")}</td>
+      </tr>`;
+      });
+    });
+  }).join("");
+
+  const generated = new Date().toLocaleString("en-US", {
+    month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>${escHtml(orgName || "BoomLog")} – REI Field Re-Entry Report</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; }
+  .page { padding: 22px 26px; }
+  .brand { font-size: 13px; font-weight: 700; color: #2a5c0f; }
+  .report-title { font-size: 19px; font-weight: 700; margin-top: 1px; }
+  .report-meta { font-size: 11px; color: #555; margin-top: 3px; }
+  .legend { font-size: 10px; color: #555; margin: 9px 0 13px; padding: 6px 10px; background: #f6f6f6; border-left: 4px solid #c0392b; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+  thead tr { background: #2a5c0f; color: #fff; }
+  th { padding: 6px 5px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+  td { padding: 4px 5px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  tr.restricted td { background: #f4cccc; }
+  .num { text-align: right; }
+  .nowrap { white-space: nowrap; }
+  .footer { margin-top: 16px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 9px; color: #777; display: flex; justify-content: space-between; }
+  @page { size: landscape; margin: 10mm; }
+  @media print {
+    body { font-size: 9px; }
+    .page { padding: 0; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+    tr.restricted td { background: #f4cccc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="brand">BoomLog</div>
+  <div class="report-title">REI Field Re-Entry Report</div>
+  <div class="report-meta">${escHtml(orgName || "")} · Generated: ${escHtml(generated)} — ${tickets.length} application(s)</div>
+  <div class="legend">
+    RED = field is still restricted &nbsp;|&nbsp; No colour = safe to enter &nbsp;|&nbsp;
+    Re-entry times are minimums per product label REI, measured from the end of application.
+    A product whose REI could not be read off the record is shown red and must be checked against the label.
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Start Time</th><th>Stop Time</th><th>Location / Field</th><th>Acres</th>
+        <th>Crop / Site</th><th>Target Pest</th><th>Product Name</th><th>Active Ingredient</th><th>EPA Reg #</th>
+        <th>Rate / Acre</th><th>Total Applied</th><th>REI</th><th>Earliest Re-Entry</th>
+        <th>Wind</th><th>Air Temp</th><th>Equipment</th><th>Licensed Applicator / License</th><th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">
+    <span>${escHtml(orgName || "BoomLog")} · REI Field Re-Entry Report · ${restrictedRows} row(s) still restricted</span>
+    <span>Printed: ${escHtml(new Date().toLocaleString())}</span>
+  </div>
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = `${(orgName || "Farm").replace(/\s+/g, "_")}_REI_Report_${new Date().toISOString().slice(0, 10)}.html`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -8191,20 +8345,27 @@ export default function App() {
                   cursor: tickets.length ? "pointer" : "default",
                 }}>CSV</button>
                 <button onClick={() => {
-                  const filtered = tickets.filter(t => {
-                    const fs = t.fieldSchedule || [];
-                    const appDate = fs.find(s => s.actualDateEnd)?.actualDateEnd
-                                 || fs.find(s => s.actualDateStart)?.actualDateStart;
-                    if (tdaFrom && appDate < tdaFrom) return false;
-                    if (tdaTo   && appDate > tdaTo)   return false;
-                    return true;
-                  });
+                  const filtered = ticketsInRange(tickets, tdaFrom, tdaTo);
                   if (!filtered.length) return alert("No tickets in selected date range.");
                   downloadTDAReport(filtered, currentOrg?.name, chemicals);
                 }} disabled={!tickets.length} style={{
                   ...softBtnT, flex:1, padding:"13px 0", fontSize:14, background: tickets.length ? theme.header : theme.fill,
                   color: tickets.length ? "#fff" : theme.mut, cursor: tickets.length ? "pointer" : "default",
                 }}>TDA Report</button>
+              </div>
+              <button onClick={() => {
+                const filtered = ticketsInRange(tickets, tdaFrom, tdaTo);
+                if (!filtered.length) return alert("No tickets in selected date range.");
+                downloadREIReport(filtered, currentOrg?.name, chemicals);
+              }} disabled={!tickets.length} style={{
+                ...softBtnT, width:"100%", marginTop:8, padding:"13px 0", fontSize:14,
+                background: tickets.length ? theme.header : theme.fill,
+                color: tickets.length ? "#fff" : theme.mut, cursor: tickets.length ? "pointer" : "default",
+              }}>REI Report</button>
+              <div style={{ fontSize: isMobile ? 11.5 : 11, color: theme.mut, marginTop:6, lineHeight:1.5 }}>
+                The REI report is the re-entry record: one row per field per product, with the
+                earliest re-entry worked out from each label REI. Rows still under an interval
+                print red. It carries licence numbers, so it is not the public gate posting.
               </div>
             </div>
 
