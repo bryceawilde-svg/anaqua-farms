@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
 
   const { data: org } = await db
     .from("organizations")
-    .select("name, timezone")
+    .select("name, timezone, posting_contacts")
     .eq("id", link.org_id)
     .single();
 
@@ -163,11 +163,19 @@ Deno.serve(async (req) => {
   const since = new Date(Date.parse(nowParts + "T00:00:00Z") - windowDays * 86400000)
     .toISOString().slice(0, 10);
 
+  // 40 CFR 170.311(b)(5) keeps an application on the display until 30 days after
+  // its re-entry interval ends, which can be further back than the window the
+  // farm picked. Fetch wide enough to cover both, then filter per row below.
+  const DISPLAY_DAYS_AFTER_REI = 30;
+  const fetchDays = Math.max(windowDays, DISPLAY_DAYS_AFTER_REI + 45);
+  const fetchSince = new Date(Date.parse(nowParts + "T00:00:00Z") - fetchDays * 86400000)
+    .toISOString().slice(0, 10);
+
   const { data: tickets, error: dbError } = await db
     .from("tickets")
     .select("date, field_schedule, selected_fields, chemicals, crop, target_pest, total_acres, time_start, time_end")
     .eq("org_id", link.org_id)
-    .gte("date", since)
+    .gte("date", fetchSince)
     .order("date", { ascending: false });
 
   if (dbError) {
@@ -177,8 +185,18 @@ Deno.serve(async (req) => {
   // Ticket snapshots don't carry the formulation, so classify adjuvants by name.
   const { data: library } = await db
     .from("chemicals")
-    .select("name, form_type")
+    .select("name, form_type, sds_url")
     .eq("org_id", link.org_id);
+
+  // The display needs an SDS per product. Ticket snapshots predate the field, so
+  // resolve it off the library by product name — the same way the adjuvant check
+  // below does, and the reason a rename has to be done in the library, not by
+  // typing a new name onto a ticket.
+  const sdsByName = new Map(
+    (library ?? [])
+      .filter(c => (c.sds_url ?? "").trim())
+      .map(c => [(c.name ?? "").trim().toLowerCase(), (c.sds_url as string).trim()]),
+  );
 
   const adjuvants = new Set(
     (library ?? []).filter(c => c.form_type === "A").map(c => (c.name ?? "").trim().toLowerCase()),
@@ -198,6 +216,7 @@ Deno.serve(async (req) => {
     rate: string;
     totalApplied: string;
     rei: string;
+    sdsUrl: string;
     start: string;
     end: string;
     restrictedUntil: string | null;
@@ -261,6 +280,7 @@ Deno.serve(async (req) => {
           rate: c.ratePerAcre != null && c.ratePerAcre !== "" ? `${c.ratePerAcre} ${c.unit ?? ""}/ac`.trim() : "",
           totalApplied,
           rei: (c.rei ?? "").trim(),
+          sdsUrl: sdsByName.get((c.name ?? "").trim().toLowerCase()) ?? "",
           start: start ? fmtClock(start.h, start.mi) : "",
           end: end ? fmtClock(end.h, end.mi) : "",
           restrictedUntil: endInstant && mins !== null
@@ -273,10 +293,22 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Keep a row while either reason to show it holds: it is inside the window the
+  // farm chose, or the rule still requires it. An REI we could not read has no
+  // computable end, so it stays for the full fetch window rather than dropping
+  // out early on an assumption.
+  const nowMs = Date.now();
+  const displayed = rows.filter(r => {
+    if (r.date >= since) return true;
+    if (!r.reiKnown) return true;
+    if (!r.restrictedUntil) return false;
+    return new Date(r.restrictedUntil).getTime() + DISPLAY_DAYS_AFTER_REI * 86400000 > nowMs;
+  });
+
   // One verdict per field: restricted until the LONGEST re-entry still outstanding
   // on it. A field whose REI could not be read is reported unknown, never safe.
   const byField = new Map<string, { field: string; restrictedUntil: string | null; unknown: boolean; lastApplied: string }>();
-  for (const r of rows) {
+  for (const r of displayed) {
     const cur = byField.get(r.field) ?? { field: r.field, restrictedUntil: null, unknown: false, lastApplied: r.date };
     if (r.restrictedUntil && (!cur.restrictedUntil || r.restrictedUntil > cur.restrictedUntil)) {
       cur.restrictedUntil = r.restrictedUntil;
@@ -286,14 +318,16 @@ Deno.serve(async (req) => {
     byField.set(r.field, cur);
   }
 
-  rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.field.localeCompare(b.field)));
+  displayed.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.field.localeCompare(b.field)));
 
   return new Response(JSON.stringify({
     org: { name: org?.name ?? "", timezone: tz, timezoneSet: !!org?.timezone },
+    postingContacts: org?.posting_contacts ?? null,
+    displayDaysAfterRei: DISPLAY_DAYS_AFTER_REI,
     windowDays,
     generatedAt: new Date().toISOString(),
     fields: Array.from(byField.values()).sort((a, b) => a.field.localeCompare(b.field)),
-    applications: rows,
+    applications: displayed,
   }), {
     headers: { ...JSON_HEADERS, "Cache-Control": "no-store" },
   });
